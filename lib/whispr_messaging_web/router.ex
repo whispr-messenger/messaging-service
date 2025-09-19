@@ -5,6 +5,20 @@ defmodule WhisprMessagingWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Endpoint racine simple
+  scope "/", WhisprMessagingWeb do
+    pipe_through :api
+    
+    get "/", HealthController, :index
+  end
+
+  scope "/api", WhisprMessagingWeb do
+    pipe_through :api
+    
+    # Health check endpoint
+    get "/health", HealthController, :check
+  end
+
   scope "/api/v1", WhisprMessagingWeb do
     pipe_through :api
 

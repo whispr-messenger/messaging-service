@@ -7,6 +7,12 @@ defmodule WhisprMessagingWeb.StatusController do
 
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.Delivery
+  alias WhisprMessaging.Security.AuthPlug
+
+  # Authentification requise pour toutes les actions
+  plug AuthPlug
+
+  action_fallback WhisprMessagingWeb.FallbackController
 
   @doc """
   Obtenir le statut de livraison d'un message
@@ -164,10 +170,14 @@ defmodule WhisprMessagingWeb.StatusController do
 
   # Fonctions privées
 
-  defp get_current_user_id(_conn) do
-    # TODO: Implémenter l'extraction de l'user_id depuis le token JWT
-    # Pour l'instant, utiliser un user_id de test
-    "test_user_id"
+  defp get_current_user_id(conn) do
+    # Récupérer l'user_id depuis le token JWT validé par AuthPlug
+    case conn.assigns[:user_id] do
+      user_id when is_binary(user_id) -> user_id
+      _ -> 
+        # Cela ne devrait jamais arriver si AuthPlug fonctionne correctement
+        raise "User ID not found in connection assigns. Authentication may have failed."
+    end
   end
 
   defp filter_delivery_status_for_user(delivery_status, _user_id) do

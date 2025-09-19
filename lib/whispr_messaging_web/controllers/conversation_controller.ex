@@ -5,7 +5,11 @@ defmodule WhisprMessagingWeb.ConversationController do
   use WhisprMessagingWeb, :controller
 
   alias WhisprMessaging.Conversations
-  alias WhisprMessaging.Conversations.ChatManagement
+  alias WhisprMessaging.Conversations.Conversation
+  alias WhisprMessaging.Security.AuthPlug
+
+  # Authentification requise pour toutes les actions
+  plug AuthPlug
 
   action_fallback WhisprMessagingWeb.FallbackController
 
@@ -334,10 +338,13 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  # TODO: Implémenter l'authentification JWT
   defp get_current_user_id(conn) do
-    # Pour l'instant, retourner un UUID fixe pour les tests
-    # À remplacer par l'extraction du JWT token
-    conn.assigns[:current_user_id] || "00000000-0000-0000-0000-000000000001"
+    # Récupérer l'user_id depuis le token JWT validé par AuthPlug
+    case conn.assigns[:user_id] do
+      user_id when is_binary(user_id) -> user_id
+      _ -> 
+        # Cela ne devrait jamais arriver si AuthPlug fonctionne correctement
+        raise "User ID not found in connection assigns. Authentication may have failed."
+    end
   end
 end

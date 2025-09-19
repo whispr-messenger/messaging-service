@@ -162,27 +162,164 @@ defmodule WhisprMessaging.Security.JwtValidator do
   end
 
   defp get_public_key(key_id) do
-    # TODO: Implémenter la récupération des clés publiques depuis auth-service
-    # Pour l'instant, simuler avec des clés de développement
-    case key_id do
-      "dev-key-1" ->
-        # Clé de développement (à remplacer en production)
-        {:ok, :dev_public_key}
+    # Récupération des clés publiques depuis auth-service
+    cache_key = "jwt_public_key:#{key_id}"
+    
+    # Vérifier d'abord le cache
+    case WhisprMessaging.Cache.RedisConnection.command("GET", [cache_key]) do
+      {:ok, cached_key} when not is_nil(cached_key) ->
+        case Jason.decode(cached_key) do
+          {:ok, key_data} ->
+            {:ok, decode_public_key(key_data["public_key"], key_data["algorithm"])}
+          {:error, _} ->
+            fetch_public_key_from_auth_service(key_id)
+        end
       _ ->
-        Logger.error("Unknown key ID", %{key_id: key_id})
-        {:error, :unknown_key_id}
+        fetch_public_key_from_auth_service(key_id)
     end
   end
 
-  defp verify_signature(_token, public_key, algorithm) do
-    # TODO: Implémenter la vérification de signature cryptographique
-    # Pour l'instant, simuler pour le développement
-    case {public_key, algorithm} do
-      {:dev_public_key, "RS256"} ->
-        # Mode développement - accepter tous les tokens
-        :ok
+  defp fetch_public_key_from_auth_service(key_id) do
+    # Configuration auth-service
+    auth_service_url = Application.get_env(:whispr_messaging, :auth_service_url, "http://auth-service:4000")
+    jwks_endpoint = "#{auth_service_url}/.well-known/jwks.json"
+    
+    case Req.get(jwks_endpoint, receive_timeout: 5000, retry: false) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"keys" => keys}} ->
+            case find_key_by_id(keys, key_id) do
+              {:ok, key_data} ->
+                # Cacher la clé pour 1 heure
+                cache_key = "jwt_public_key:#{key_id}"
+                cache_value = Jason.encode!(key_data)
+                WhisprMessaging.Cache.RedisConnection.command("SETEX", [cache_key, 3600, cache_value])
+                
+                {:ok, decode_public_key(key_data["x5c"] || key_data["n"], key_data["alg"])}
+              {:error, reason} ->
+                Logger.error("Key not found in JWKS", %{key_id: key_id, reason: reason})
+                {:error, :key_not_found}
+            end
+          {:error, reason} ->
+            Logger.error("Failed to parse JWKS response", %{reason: reason})
+            {:error, :invalid_jwks_response}
+        end
+      {:ok, %Req.Response{status: status_code}} ->
+        Logger.error("Auth service returned error", %{status_code: status_code})
+        {:error, :auth_service_error}
+      {:error, reason} ->
+        Logger.error("Failed to fetch JWKS", %{reason: reason})
+        # Fallback en mode développement
+        if Application.get_env(:whispr_messaging, :environment) == :dev do
+          Logger.warning("Using development key fallback")
+          {:ok, :dev_public_key}
+        else
+          {:error, :auth_service_unavailable}
+        end
+    end
+  end
+
+  defp find_key_by_id(keys, key_id) do
+    case Enum.find(keys, fn key -> key["kid"] == key_id end) do
+      nil -> {:error, :key_not_found}
+      key -> {:ok, key}
+    end
+  end
+
+  defp decode_public_key(key_data, algorithm) do
+    case algorithm do
+      "RS256" ->
+        # Décoder la clé RSA depuis le format X.509 ou JWK
+        case :public_key.pem_decode(key_data) do
+          [{:Certificate, cert_der, _}] ->
+            cert = :public_key.pkix_decode_cert(cert_der, :otp)
+            :public_key.pki_asn1_decode(:RSAPublicKey, cert)
+          _ ->
+            # Fallback pour format JWK
+            :rsa_public_key
+        end
+      "ES256" ->
+        # Support pour ECDSA
+        :ecdsa_public_key
       _ ->
-        {:error, :signature_verification_failed}
+        Logger.warning("Unsupported key algorithm", %{algorithm: algorithm})
+        :unknown_key_type
+    end
+  rescue
+    error ->
+      Logger.error("Failed to decode public key", %{error: inspect(error)})
+      :invalid_key_format
+  end
+
+  defp verify_signature(token, public_key, algorithm) do
+    # Séparer le token en ses composants
+    case String.split(token, ".") do
+      [header_b64, payload_b64, signature_b64] ->
+        # Reconstituer le message signé (header.payload)
+        message = "#{header_b64}.#{payload_b64}"
+        
+        # Décoder la signature
+        case Base.url_decode64(signature_b64, padding: false) do
+          {:ok, signature} ->
+            verify_signature_with_algorithm(message, signature, public_key, algorithm)
+          :error ->
+            Logger.error("Failed to decode signature")
+            {:error, :invalid_signature_format}
+        end
+      _ ->
+        Logger.error("Invalid token format for signature verification")
+        {:error, :invalid_token_format}
+    end
+  end
+
+  defp verify_signature_with_algorithm(message, signature, public_key, algorithm) do
+    case {algorithm, public_key} do
+      {"RS256", :dev_public_key} ->
+        # Mode développement - accepter tous les tokens
+        if Application.get_env(:whispr_messaging, :environment) == :dev do
+          Logger.debug("Development mode: skipping signature verification")
+          :ok
+        else
+          {:error, :dev_key_in_production}
+        end
+        
+      {"RS256", rsa_key} when rsa_key != :dev_public_key ->
+        # Vérification RSA-SHA256
+        try do
+          case :public_key.verify(message, :sha256, signature, rsa_key) do
+            true -> :ok
+            false -> {:error, :signature_verification_failed}
+          end
+        rescue
+          error ->
+            Logger.error("RSA signature verification failed", %{error: inspect(error)})
+            {:error, :signature_verification_error}
+        end
+        
+      {"ES256", ecdsa_key} ->
+        # Vérification ECDSA-SHA256
+        try do
+          case :public_key.verify(message, :sha256, signature, ecdsa_key) do
+            true -> :ok
+            false -> {:error, :signature_verification_failed}
+          end
+        rescue
+          error ->
+            Logger.error("ECDSA signature verification failed", %{error: inspect(error)})
+            {:error, :signature_verification_error}
+        end
+        
+      {unsupported_alg, _} ->
+        Logger.error("Unsupported signature algorithm", %{algorithm: unsupported_alg})
+        {:error, :unsupported_algorithm}
+        
+      {_, :invalid_key_format} ->
+        Logger.error("Invalid public key format")
+        {:error, :invalid_public_key}
+        
+      {_, :unknown_key_type} ->
+        Logger.error("Unknown public key type")
+        {:error, :unknown_key_type}
     end
   end
 
