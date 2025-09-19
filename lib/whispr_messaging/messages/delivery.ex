@@ -5,9 +5,11 @@ defmodule WhisprMessaging.Messages.Delivery do
   """
   
   require Logger
+  import Ecto.Query
   
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Messages
+  alias WhisprMessaging.Messages.DeliveryStatus
   alias WhisprMessaging.Grpc.NotificationServiceClient
   alias WhisprMessaging.Cache.RedisConnection
   alias WhisprMessagingWeb.{ConversationChannel, UserChannel}
@@ -251,21 +253,161 @@ defmodule WhisprMessaging.Messages.Delivery do
   defp count_delivery_receipts(_message_id, _status), do: 0
   defp get_total_recipients(_message_id), do: 0
   defp get_scheduled_messages_due(_datetime), do: []
-  defp deliver_scheduled_message(_message) do
+  defp deliver_scheduled_message(message) do
     try do
-      # Simuler la livraison d'un message programmé
-      # TODO: Implémenter la logique réelle de livraison
-      
-      # Pour l'instant, simuler un échec aléatoire pour tester
-      if :rand.uniform(100) > 95 do
-        {:error, "delivery_failed"}
-      else
-        {:ok, :delivered}
+      # Vérifier que le message est prêt à être livré
+      case validate_scheduled_message(message) do
+        :ok ->
+          # Livrer le message via les canaux normaux
+          case deliver_message_to_participants(message) do
+            {:ok, delivery_results} ->
+              # Marquer le message comme livré
+              mark_scheduled_message_delivered(message.id)
+              
+              # Envoyer les notifications push si nécessaire
+              send_push_notifications(message)
+              
+              # Mettre à jour les métriques
+              update_delivery_metrics(message, delivery_results)
+              
+              {:ok, delivery_results}
+            {:error, reason} ->
+              # Marquer comme échec et programmer un retry
+              mark_scheduled_message_failed(message.id, reason)
+              schedule_retry_if_needed(message, reason)
+              {:error, reason}
+          end
+        {:error, reason} ->
+          Logger.warning("Scheduled message validation failed", %{
+            message_id: message.id,
+            reason: reason
+          })
+          {:error, reason}
       end
     rescue
       error ->
+        Logger.error("Scheduled message delivery exception", %{
+          message_id: message.id,
+          error: inspect(error)
+        })
         {:error, "delivery_exception: #{inspect(error)}"}
     end
+  end
+
+  defp validate_scheduled_message(message) do
+    cond do
+      is_nil(message.conversation_id) ->
+        {:error, :missing_conversation}
+      is_nil(message.sender_id) ->
+        {:error, :missing_sender}
+      is_nil(message.content) ->
+        {:error, :missing_content}
+      true ->
+        :ok
+    end
+  end
+
+  defp deliver_message_to_participants(message) do
+    # Récupérer les participants de la conversation
+    participants = get_conversation_participants(message.conversation_id)
+    
+    # Livrer à chaque participant
+    delivery_results = Enum.map(participants, fn participant_id ->
+      case deliver_to_participant(message, participant_id) do
+        :ok -> {participant_id, :delivered}
+        {:error, reason} -> {participant_id, {:failed, reason}}
+      end
+    end)
+    
+    # Vérifier si au moins une livraison a réussi
+    successful_deliveries = Enum.count(delivery_results, fn {_, status} -> status == :delivered end)
+    
+    if successful_deliveries > 0 do
+      {:ok, delivery_results}
+    else
+      {:error, :all_deliveries_failed}
+    end
+  end
+
+  defp deliver_to_participant(message, participant_id) do
+    try do
+      # Diffuser via Phoenix Channels si connecté
+      ConversationChannel.broadcast_to_user(participant_id, "new_message", %{
+        message_id: message.id,
+        conversation_id: message.conversation_id,
+        sender_id: message.sender_id,
+        content: message.content,
+        sent_at: message.sent_at,
+        message_type: message.message_type
+      })
+      
+      # Créer l'entrée de statut de livraison
+       create_delivery_status_entry(message.id, participant_id)
+      
+      :ok
+    rescue
+      error ->
+        Logger.error("Failed to deliver to participant", %{
+          message_id: message.id,
+          participant_id: participant_id,
+          error: inspect(error)
+        })
+        {:error, :delivery_failed}
+    end
+  end
+
+  defp mark_scheduled_message_delivered(message_id) do
+    # Mettre à jour le statut du message programmé
+    Messages.update_message_status(message_id, :delivered)
+  end
+
+  defp mark_scheduled_message_failed(message_id, reason) do
+    # Mettre à jour le statut du message programmé
+    Messages.update_message_status(message_id, :failed, %{reason: reason})
+  end
+
+  defp schedule_retry_if_needed(message, reason) do
+    # Programmer un retry selon la politique de retry
+    retry_count = Map.get(message.metadata || %{}, "retry_count", 0)
+    max_retries = 3
+    
+    if retry_count < max_retries do
+      # Programmer un retry avec backoff exponentiel
+      retry_delay = :math.pow(2, retry_count) * 60 # minutes
+      
+      # Utiliser le scheduling-service pour programmer le retry
+      schedule_message_retry(message.id, retry_delay, retry_count + 1)
+    else
+      Logger.warning("Max retries reached for scheduled message", %{
+        message_id: message.id,
+        reason: reason,
+        retry_count: retry_count
+      })
+    end
+  end
+
+  defp schedule_message_retry(message_id, delay_minutes, retry_count) do
+    # TODO: Intégrer avec le scheduling-service pour programmer le retry
+    Logger.info("Scheduling message retry", %{
+      message_id: message_id,
+      delay_minutes: delay_minutes,
+      retry_count: retry_count
+    })
+  end
+
+  defp update_delivery_metrics(message, delivery_results) do
+    # Mettre à jour les métriques de livraison
+    successful_count = Enum.count(delivery_results, fn {_, status} -> status == :delivered end)
+    failed_count = length(delivery_results) - successful_count
+    
+    :telemetry.execute([:whispr_messaging, :delivery, :scheduled_message], %{
+      delivered: successful_count,
+      failed: failed_count,
+      total: length(delivery_results)
+    }, %{
+      conversation_id: message.conversation_id,
+      message_type: message.message_type
+    })
   end
 
   @doc """
@@ -291,28 +433,134 @@ defmodule WhisprMessaging.Messages.Delivery do
   end
 
   # Fonctions privées pour les statistiques
-  defp count_total_messages(_conversation_id) do
-    # TODO: Implémenter le comptage des messages
-    0
+  defp count_total_messages(conversation_id) do
+    # Compter tous les messages de la conversation
+    from(m in WhisprMessaging.Messages.Message,
+      where: m.conversation_id == ^conversation_id and is_nil(m.deleted_at),
+      select: count(m.id)
+    )
+    |> WhisprMessaging.Repo.one() || 0
   end
 
-  defp count_delivered_messages(_conversation_id) do
-    # TODO: Implémenter le comptage des messages livrés
-    0
+  defp count_delivered_messages(conversation_id) do
+    # Compter les messages avec au moins une livraison confirmée
+    from(m in WhisprMessaging.Messages.Message,
+      join: ds in WhisprMessaging.Messages.DeliveryStatus,
+      on: ds.message_id == m.id,
+      where: m.conversation_id == ^conversation_id and 
+             is_nil(m.deleted_at) and 
+             not is_nil(ds.delivered_at),
+      select: count(m.id, :distinct)
+    )
+    |> WhisprMessaging.Repo.one() || 0
   end
 
-  defp count_read_messages(_conversation_id) do
-    # TODO: Implémenter le comptage des messages lus
-    0
+  defp count_read_messages(conversation_id) do
+    # Compter les messages avec au moins une lecture confirmée
+    from(m in WhisprMessaging.Messages.Message,
+      join: ds in WhisprMessaging.Messages.DeliveryStatus,
+      on: ds.message_id == m.id,
+      where: m.conversation_id == ^conversation_id and 
+             is_nil(m.deleted_at) and 
+             not is_nil(ds.read_at),
+      select: count(m.id, :distinct)
+    )
+    |> WhisprMessaging.Repo.one() || 0
   end
 
-  defp calculate_average_delivery_time(_conversation_id) do
-    # TODO: Implémenter le calcul du temps de livraison moyen
-    0.0
+  defp calculate_average_delivery_time(conversation_id) do
+    # Calculer le temps moyen entre l'envoi et la première livraison
+    query = from(m in WhisprMessaging.Messages.Message,
+      join: ds in WhisprMessaging.Messages.DeliveryStatus,
+      on: ds.message_id == m.id,
+      where: m.conversation_id == ^conversation_id and 
+             is_nil(m.deleted_at) and 
+             not is_nil(ds.delivered_at),
+      select: fragment("EXTRACT(EPOCH FROM (? - ?))", ds.delivered_at, m.sent_at)
+    )
+    
+    delivery_times = WhisprMessaging.Repo.all(query)
+    
+    if length(delivery_times) > 0 do
+      Enum.sum(delivery_times) / length(delivery_times)
+    else
+      0.0
+    end
   end
 
-  defp get_last_activity(_conversation_id) do
-    # TODO: Implémenter la récupération de la dernière activité
-    DateTime.utc_now()
+  defp get_last_activity(conversation_id) do
+    # Récupérer la dernière activité (message ou lecture)
+    last_message_query = from(m in WhisprMessaging.Messages.Message,
+      where: m.conversation_id == ^conversation_id and is_nil(m.deleted_at),
+      select: m.sent_at,
+      order_by: [desc: m.sent_at],
+      limit: 1
+    )
+    
+    last_read_query = from(ds in WhisprMessaging.Messages.DeliveryStatus,
+      join: m in WhisprMessaging.Messages.Message,
+      on: ds.message_id == m.id,
+      where: m.conversation_id == ^conversation_id and not is_nil(ds.read_at),
+      select: ds.read_at,
+      order_by: [desc: ds.read_at],
+      limit: 1
+    )
+    
+    last_message = WhisprMessaging.Repo.one(last_message_query)
+    last_read = WhisprMessaging.Repo.one(last_read_query)
+    
+    case {last_message, last_read} do
+      {nil, nil} -> nil
+      {msg_time, nil} -> msg_time
+      {nil, read_time} -> read_time
+      {msg_time, read_time} -> 
+        if DateTime.compare(msg_time, read_time) == :gt, do: msg_time, else: read_time
+    end || DateTime.utc_now()
+  end
+
+  defp create_delivery_status_entry(message_id, participant_id) do
+    # Créer une entrée de statut de livraison
+    attrs = %{
+      message_id: message_id,
+      user_id: participant_id,
+      status: :sent,
+      sent_at: DateTime.utc_now()
+    }
+    
+    case WhisprMessaging.Repo.insert(%DeliveryStatus{}, attrs) do
+      {:ok, _delivery_status} -> :ok
+      {:error, reason} -> 
+        Logger.error("Failed to create delivery status", %{
+          message_id: message_id,
+          participant_id: participant_id,
+          reason: inspect(reason)
+        })
+        {:error, reason}
+    end
+  end
+
+  defp get_conversation_participants(conversation_id) do
+    # Récupérer les participants de la conversation
+    case WhisprMessaging.Conversations.get_conversation_participants(conversation_id) do
+      {:ok, participants} -> Enum.map(participants, & &1.user_id)
+      {:error, _} -> []
+    end
+  end
+
+  defp send_push_notifications(message) do
+    # Envoyer les notifications push via le notification-service
+    case NotificationServiceClient.send_message_notification(
+      message.conversation_id,
+      message.sender_id,
+      message.content,
+      message.message_type
+    ) do
+      {:ok, _} -> :ok
+      {:error, reason} ->
+        Logger.warning("Failed to send push notifications", %{
+          message_id: message.id,
+          reason: reason
+        })
+    end
   end
 end

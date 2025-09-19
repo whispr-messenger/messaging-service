@@ -359,6 +359,7 @@ sequenceDiagram
             ConversationChannel->>OtherParticipants: hideTypingIndicator(userName)
         end
         
+        
     else Indicateurs de frappe désactivés
         PrivacySettings-->>TypingDetector: typing_indicators: disabled
         TypingDetector->>TypingDetector: Ignorer l'activité de frappe

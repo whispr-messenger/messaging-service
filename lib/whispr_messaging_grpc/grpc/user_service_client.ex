@@ -161,40 +161,106 @@ defmodule WhisprMessaging.Grpc.UserServiceClient do
 
   ## Fonctions privées
 
-  defp make_grpc_call(method, request, _timeout \\ @default_timeout) do
-    case get_connection() do
-      {:ok, _connection} ->
-        try do
-          # Ici nous simulons l'appel gRPC pour l'instant
-          # TODO: Implémenter l'appel gRPC réel avec grpcbox
-          simulate_grpc_call(method, request)
-        catch
-          :exit, reason ->
-            Logger.error("gRPC call failed with exit", %{
-              method: method,
-              reason: reason,
-              service: @service_name
-            })
-            {:error, {:grpc_exit, reason}}
-            
-          kind, reason ->
-            Logger.error("gRPC call failed with exception", %{
-              method: method,
-              kind: kind,
-              reason: reason,
-              service: @service_name
-            })
-            {:error, {:grpc_exception, {kind, reason}}}
-        end
-        
+  defp make_grpc_call(method, request, timeout \\ @default_timeout) do
+    config = get_service_config()
+    
+    try do
+      # Utilisation de grpcbox pour l'appel gRPC réel
+      channel_opts = build_channel_opts(config, timeout)
       
+      case :grpcbox_client.unary(
+        build_channel_name(config),
+        "/user.UserService/#{Macro.camelize(to_string(method))}",
+        request,
+        channel_opts
+      ) do
+        {:ok, response} ->
+          {:ok, response}
+        {:error, reason} ->
+          Logger.error("gRPC call failed", %{
+            method: method,
+            reason: reason,
+            service: @service_name
+          })
+          
+          # Fallback vers simulation en mode développement
+          if Application.get_env(:whispr_messaging, :environment) == :dev do
+            Logger.warning("Falling back to simulation for development")
+            simulate_grpc_call(method, request)
+          else
+            {:error, reason}
+          end
+      end
+    rescue
+      error ->
+        Logger.error("gRPC call exception", %{
+          method: method,
+          error: inspect(error),
+          service: @service_name
+        })
+        
+        # Fallback vers simulation en mode développement
+        if Application.get_env(:whispr_messaging, :environment) == :dev do
+          Logger.warning("Exception occurred, falling back to simulation")
+          simulate_grpc_call(method, request)
+        else
+          {:error, :grpc_exception}
+        end
     end
   end
 
-  defp get_connection do
-    # TODO: Implémenter la gestion des connexions gRPC avec pool
-    # Pour l'instant, simuler une connexion réussie
-    {:ok, :mock_connection}
+  defp get_service_config do
+    %{
+      host: Application.get_env(:whispr_messaging, :user_service_host, "user-service"),
+      port: Application.get_env(:whispr_messaging, :user_service_port, 50052),
+      timeout: Application.get_env(:whispr_messaging, :grpc_timeout, @default_timeout),
+      ssl: Application.get_env(:whispr_messaging, :grpc_ssl, false)
+    }
+  end
+
+  defp build_channel_name(config) do
+    :"#{config.host}_#{config.port}_channel"
+  end
+
+  defp build_channel_opts(config, timeout) do
+    base_opts = [
+      timeout: timeout,
+      deadline: :timer.seconds(timeout / 1000)
+    ]
+    
+    if config.ssl do
+      base_opts ++ [transport: :ssl]
+    else
+      base_opts
+    end
+  end
+
+  @doc """
+  Initialise la connexion gRPC avec le user-service
+  """
+  def start_connection do
+    config = get_service_config()
+    channel_name = build_channel_name(config)
+    
+    channel_opts = [
+      {config.host, config.port, []}
+    ]
+    
+    case :grpcbox_channel.start_link(channel_name, channel_opts) do
+      {:ok, _pid} ->
+        Logger.info("gRPC connection to user-service established", %{
+          host: config.host,
+          port: config.port
+        })
+        :ok
+      {:error, reason} ->
+        Logger.error("Failed to establish gRPC connection to user-service", %{
+          reason: reason,
+          host: config.host,
+          port: config.port
+        })
+        {:error, reason}
+    end
   end
 
   # Simulation temporaire des appels gRPC pour les tests
