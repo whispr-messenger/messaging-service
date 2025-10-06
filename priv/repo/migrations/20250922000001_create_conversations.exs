@@ -18,7 +18,7 @@ defmodule WhisprMessaging.Repo.Migrations.CreateConversations do
 
     # Indexes for conversations
     create index(:conversations, [:type])
-    create index(:conversations, [:external_group_id])
+    create unique_index(:conversations, [:external_group_id], name: :conversations_external_group_id_index)
     create unique_index(:conversations, [:external_group_id], name: :conversations_external_group_id_index)
     create index(:conversations, [:created_at])
     create index(:conversations, [:updated_at])
