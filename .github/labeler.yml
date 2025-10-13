@@ -1,0 +1,314 @@
+# Label configuration for PR auto-labeling
+# See: https://github.com/actions/labeler
+
+# ================================
+# Documentation Labels
+# ================================
+documentation:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.md', 'docs/**/*']
+
+📖 documentation:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.md', 'docs/**/*']
+
+📝 docs:readme:
+  - changed-files:
+    - any-glob-to-any-file: ['README.md', 'CONTRIBUTING.md', 'CHANGELOG.md']
+
+📐 docs:architecture:
+  - changed-files:
+    - any-glob-to-any-file: ['docs/architecture/**/*', 'docs/diagrams/**/*']
+
+🔗 docs:api:
+  - changed-files:
+    - any-glob-to-any-file: ['docs/api/**/*']
+
+📚 docs:ex_doc:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/*.ex']
+
+# ================================
+# CI/CD and DevOps Labels
+# ================================
+ci/cd:
+  - changed-files:
+    - any-glob-to-any-file: ['.github/**/*', 'docker/**/*']
+
+⚡ devops:ci-cd:
+  - changed-files:
+    - any-glob-to-any-file: ['.github/workflows/**/*']
+
+🐳 devops:docker:
+  - changed-files:
+    - any-glob-to-any-file: ['Dockerfile', 'docker/**/*', 'docker-compose*.yml', '.dockerignore']
+
+📜 devops:scripts:
+  - changed-files:
+    - any-glob-to-any-file: ['scripts/**/*', '**/*.sh']
+
+☸️ devops:kubernetes:
+  - changed-files:
+    - any-glob-to-any-file: ['k8s/**/*', 'kubernetes/**/*', 'helm/**/*', 'manifests/**/*']
+
+# ================================
+# Source Code Changes
+# ================================
+feature:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/*.ex', '!test/**/*']
+
+# ================================
+# Testing Labels
+# ================================
+tests:
+  - changed-files:
+    - any-glob-to-any-file: ['test/**/*']
+
+🧪 tests:unit:
+  - changed-files:
+    - any-glob-to-any-file: ['test/**/*_test.exs', '!test/integration/**/*', '!test/**/e2e/**/*']
+
+🔬 tests:e2e:
+  - changed-files:
+    - any-glob-to-any-file: ['test/e2e/**/*', 'test/**/*_e2e_test.exs']
+
+🎯 tests:integration:
+  - changed-files:
+    - any-glob-to-any-file: ['test/integration/**/*']
+
+🏭 tests:factory:
+  - changed-files:
+    - any-glob-to-any-file: ['test/support/factory.ex', 'test/support/factories/**/*']
+
+# ================================
+# Configuration Labels
+# ================================
+config:
+  - changed-files:
+    - any-glob-to-any-file: ['*.json', '*.yml', '*.yaml', '.env*', 'config/**/*', '!.github/**/*']
+
+⚙️ config:
+  - changed-files:
+    - any-glob-to-any-file: ['config/**/*', '.env*']
+
+# ================================
+# Dependencies Labels
+# ================================
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file: ['mix.exs', 'mix.lock']
+
+# ================================
+# Database Labels
+# ================================
+database:
+  - changed-files:
+    - any-glob-to-any-file: ['priv/repo/migrations/**/*', 'lib/**/messages/*.ex', 'lib/**/conversations/*.ex']
+
+🗄️ database:ecto:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/messages/*.ex', 'lib/**/conversations/*.ex', 'lib/**/repo.ex', 'priv/repo/migrations/**/*']
+
+🗄️ database:postgresql:
+  - changed-files:
+    - any-glob-to-any-file: ['priv/repo/migrations/**/*', 'config/config.exs']
+
+🗄️ type:database:
+  - changed-files:
+    - any-glob-to-any-file: ['priv/repo/migrations/**/*', 'lib/**/messages/*.ex', 'lib/**/conversations/*.ex']
+
+# ================================
+# Security Labels
+# ================================
+🔒 type:security:
+  - changed-files:
+    - any-glob-to-any-file: ['**/auth/**/*', 'lib/**/plugs/**/*', 'lib/**/guardian/**/*']
+
+# ================================
+# Messaging Service Specific Labels
+# ================================
+
+# Messaging Core
+💬 messaging:core:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages.ex', 'lib/whispr_messaging/messages/**/*']
+
+# Conversations
+🗨️ conversations:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/conversations.ex', 'lib/whispr_messaging/conversations/**/*', 'lib/whispr_messaging/conversation_server.ex', 'lib/whispr_messaging/conversation_supervisor.ex']
+
+# Phoenix Channels
+📡 channels:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/channels/**/*']
+
+# Presence
+👥 presence:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/channels/presence.ex']
+
+# gRPC Communication
+🔗 grpc:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_grpc/**/*', 'priv/protos/**/*', '**/*.proto']
+
+# Monitoring
+📊 monitoring:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/controllers/health_controller.ex', 'lib/**/telemetry/**/*']
+
+# Redis Cache
+💾 cache:redis:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/cache/**/*', 'config/config.exs']
+
+# Phoenix PubSub
+🔌 pubsub:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/application.ex', 'config/config.exs']
+
+# Message Attachments
+📎 attachments:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/message_attachment.ex']
+
+# Message Reactions
+😊 reactions:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/message_reaction.ex']
+
+# Delivery Status
+✅ delivery-status:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/delivery_status.ex']
+
+# ================================
+# Phoenix Framework Labels
+# ================================
+🔥 phoenix:endpoint:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/endpoint.ex', 'lib/whispr_messaging_grpc/endpoint.ex']
+
+🔥 phoenix:router:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/router.ex']
+
+🔥 phoenix:live-view:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/live/**/*']
+
+🔥 phoenix:controllers:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/controllers/**/*']
+
+# ================================
+# Elixir/OTP Labels
+# ================================
+⚗️ elixir:genserver:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/conversation_server.ex', 'lib/**/server.ex']
+
+⚗️ elixir:supervisor:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/conversation_supervisor.ex', 'lib/whispr_messaging/application.ex', 'lib/**/supervisor.ex']
+
+⚗️ elixir:process:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/server.ex', 'lib/**/worker.ex']
+
+⚗️ elixir:otp:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/application.ex', 'lib/**/supervisor.ex', 'lib/**/server.ex']
+
+# ================================
+# Real-time Features Labels
+# ================================
+⚡ realtime:websocket:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/channels/user_socket.ex', 'lib/whispr_messaging_web/endpoint.ex']
+
+⚡ realtime:broadcast:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/channels/**/*', 'lib/whispr_messaging/conversation_server.ex']
+
+⚡ realtime:sync:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/conversation_server.ex', 'lib/whispr_messaging_web/channels/**/*']
+
+👁️ typing-indicator:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging_web/channels/conversation_channel.ex', 'lib/whispr_messaging_web/channels/presence.ex']
+
+# ================================
+# Message Features Labels
+# ================================
+📝 message:text:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/message.ex']
+
+📸 message:media:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/message_attachment.ex']
+
+📁 message:files:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages/message_attachment.ex']
+
+🔄 message:edit:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages.ex', 'lib/whispr_messaging/messages/message.ex']
+
+🗑️ message:delete:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages.ex', 'lib/whispr_messaging/messages/message.ex']
+
+🔍 message:search:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/messages.ex']
+
+# ================================
+# Code Quality Labels
+# ================================
+✨ quality:credo:
+  - changed-files:
+    - any-glob-to-any-file: ['.credo.exs']
+
+🔍 quality:dialyzer:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/*.ex']
+
+🛡️ quality:sobelow:
+  - changed-files:
+    - any-glob-to-any-file: ['.sobelow-conf']
+
+# ================================
+# Istio Service Mesh Labels
+# ================================
+🔐 istio:mtls:
+  - changed-files:
+    - any-glob-to-any-file: ['k8s/**/mtls/**/*', 'istio/**/*', 'k8s/**/peerauthentication.yaml']
+
+🌐 istio:traffic:
+  - changed-files:
+    - any-glob-to-any-file: ['k8s/**/virtualservice.yaml', 'k8s/**/destinationrule.yaml']
+
+📡 istio:telemetry:
+  - changed-files:
+    - any-glob-to-any-file: ['k8s/**/telemetry/**/*', 'k8s/**/metrics/**/*']
+
+# ================================
+# Performance Labels
+# ================================
+⚡ performance:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/cache/**/*', 'config/prod.exs']
+
+🚀 scalability:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/whispr_messaging/conversation_supervisor.ex', 'lib/whispr_messaging/application.ex']
+
+⏱️ latency:
+  - changed-files:
+    - any-glob-to-any-file: ['lib/**/telemetry/**/*', 'lib/**/cache/**/*']
