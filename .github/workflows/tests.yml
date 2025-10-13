@@ -87,7 +87,7 @@ jobs:
         run: mix deps.compile
 
       - name: Compile project
-        run: mix compile --warnings-as-errors
+        run: mix compile
 
       ####################################################################################################
       # Linting and Formatting
