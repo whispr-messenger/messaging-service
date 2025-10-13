@@ -45,10 +45,7 @@ jobs:
           REDIS_HOST: redis
           MIX_ENV: test
         run: |
-          # Build the messaging-service image
-          docker compose -f docker-compose.dev.yml build messaging-service
-
-          # Start all services (postgres and redis)
+          # Start database services (postgres and redis only)
           docker compose -f docker-compose.dev.yml up -d postgres redis
 
           # Wait for PostgreSQL to be ready
