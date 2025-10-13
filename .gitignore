@@ -2,6 +2,7 @@
 CLAUDE.md
 .claude/
 *.claude
+.mcp.json
 
 # The directory Mix will write compiled artifacts to.
 /_build/
