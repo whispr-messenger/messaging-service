@@ -58,7 +58,6 @@ defmodule WhisprMessaging.MixProject do
 
       # Redis and caching
       {:redix, "~> 1.2"},
-      # {:redix_pubsub, "~> 1.0"}, # Commented out to avoid dependency issues
 
       # gRPC
       {:grpc, "~> 0.7.0"},
@@ -93,6 +92,7 @@ defmodule WhisprMessaging.MixProject do
       # Development tools
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},
 
       # Production monitoring
