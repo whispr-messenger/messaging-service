@@ -1,0 +1,203 @@
+name: 🏷️ Create GitHub Labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/labels.yml'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  create-labels:
+    name: 🔄 Create & Update Labels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              // ================================
+              // Type Labels
+              // ================================
+              { name: '📚 type:documentation', color: '0075ca', description: 'Documentation improvements or additions' },
+              { name: '🔒 type:security', color: 'd93f0b', description: 'Security-related changes or fixes' },
+              { name: '🗄️ type:database', color: '5319e7', description: 'Database schema, migrations, or Ecto schemas' },
+              { name: '💥 breaking-change', color: 'e99695', description: 'Changes that break backward compatibility' },
+
+              // ================================
+              // Priority Labels
+              // ================================
+              { name: '🔥 priority:critical', color: 'b60205', description: 'Critical priority - immediate action required' },
+              { name: '⚠️ priority:high', color: 'd93f0b', description: 'High priority issues or PRs' },
+              { name: '⚡ priority:medium', color: 'fbca04', description: 'Medium priority issues or PRs' },
+              { name: '🟢 priority:low', color: '0e8a16', description: 'Low priority issues or PRs' },
+
+              // ================================
+              // Size Labels
+              // ================================
+              { name: '📏 size:XS', color: 'c2e0c6', description: 'Extra small changes (1-10 lines)' },
+              { name: '📏 size:S', color: '7bcf98', description: 'Small changes (11-50 lines)' },
+              { name: '📏 size:M', color: 'fef2c0', description: 'Medium changes (51-200 lines)' },
+              { name: '📏 size:L', color: 'f9d0c4', description: 'Large changes (201-500 lines)' },
+              { name: '📏 size:XL', color: 'ee9090', description: 'Extra large changes (500+ lines)' },
+
+              // ================================
+              // DevOps Labels
+              // ================================
+              { name: '⚡ devops:ci-cd', color: '1d76db', description: 'CI/CD pipeline and automation' },
+              { name: '🐳 devops:docker', color: '0db7ed', description: 'Docker containers and compose' },
+              { name: '📜 devops:scripts', color: '5319e7', description: 'Build and deployment scripts' },
+              { name: '☸️ devops:kubernetes', color: '326ce5', description: 'Kubernetes manifests and configuration' },
+
+              // ================================
+              // Component Labels - Messaging Service Specific
+              // ================================
+              { name: '💬 messaging:core', color: 'ec4899', description: 'Core messaging logic and message handling' },
+              { name: '🗨️ conversations', color: 'f472b6', description: 'Conversation management and server' },
+              { name: '📡 channels', color: '8b5cf6', description: 'Phoenix Channels and WebSocket communication' },
+              { name: '👥 presence', color: 'a855f7', description: 'User presence and online status tracking' },
+              { name: '🔗 grpc', color: '6366f1', description: 'gRPC services and inter-service communication' },
+              { name: '📊 monitoring', color: '10b981', description: 'Health checks, metrics, and observability' },
+              { name: '🗄️ database:ecto', color: '5319e7', description: 'Ecto schemas, queries, and migrations' },
+              { name: '🗄️ database:postgresql', color: '336791', description: 'PostgreSQL specific queries or optimizations' },
+              { name: '💾 cache:redis', color: 'dc2626', description: 'Redis caching and pub/sub' },
+              { name: '⚙️ config', color: 'fef2c0', description: 'Configuration files and environment setup' },
+              { name: '🔌 pubsub', color: 'f59e0b', description: 'Phoenix PubSub and real-time broadcasting' },
+              { name: '📎 attachments', color: '06b6d4', description: 'Message attachments and file handling' },
+              { name: '😊 reactions', color: 'fbbf24', description: 'Message reactions and emoji handling' },
+              { name: '✅ delivery-status', color: '10b981', description: 'Message delivery tracking and receipts' },
+
+              // ================================
+              // Phoenix Framework Labels
+              // ================================
+              { name: '🔥 phoenix:endpoint', color: 'fd4f00', description: 'Phoenix endpoint configuration' },
+              { name: '🔥 phoenix:router', color: 'fd4f00', description: 'Phoenix router and routing' },
+              { name: '🔥 phoenix:live-view', color: 'fd6e00', description: 'Phoenix LiveView components' },
+              { name: '🔥 phoenix:controllers', color: 'fd5e00', description: 'Phoenix controllers' },
+
+              // ================================
+              // Elixir/OTP Labels
+              // ================================
+              { name: '⚗️ elixir:genserver', color: '4e2a8e', description: 'GenServer implementations' },
+              { name: '⚗️ elixir:supervisor', color: '663399', description: 'Supervisor trees and fault tolerance' },
+              { name: '⚗️ elixir:process', color: '7c3aed', description: 'Process management and concurrency' },
+              { name: '⚗️ elixir:otp', color: '8b5cf6', description: 'OTP behaviors and patterns' },
+
+              // ================================
+              // Real-time Features Labels
+              // ================================
+              { name: '⚡ realtime:websocket', color: 'ef4444', description: 'WebSocket connections and handling' },
+              { name: '⚡ realtime:broadcast', color: 'f97316', description: 'Message broadcasting and pub/sub' },
+              { name: '⚡ realtime:sync', color: 'f59e0b', description: 'Real-time synchronization' },
+              { name: '👁️ typing-indicator', color: 'fbbf24', description: 'Typing indicators and presence updates' },
+
+              // ================================
+              // Message Features Labels
+              // ================================
+              { name: '📝 message:text', color: '64748b', description: 'Text message handling' },
+              { name: '📸 message:media', color: '06b6d4', description: 'Media messages (images, videos, etc.)' },
+              { name: '📁 message:files', color: '0891b2', description: 'File message handling' },
+              { name: '🔄 message:edit', color: '14b8a6', description: 'Message editing functionality' },
+              { name: '🗑️ message:delete', color: 'ef4444', description: 'Message deletion functionality' },
+              { name: '🔍 message:search', color: '8b5cf6', description: 'Message search and filtering' },
+
+              // ================================
+              // Documentation Labels
+              // ================================
+              { name: '📖 documentation', color: '0075ca', description: 'General documentation updates' },
+              { name: '📐 docs:architecture', color: '1d76db', description: 'Architecture documentation and diagrams' },
+              { name: '🔗 docs:api', color: '5319e7', description: 'API documentation and specs' },
+              { name: '📝 docs:readme', color: '0366d6', description: 'README and getting started guides' },
+              { name: '📚 docs:ex_doc', color: '0075ca', description: 'ExDoc documentation and module docs' },
+
+              // ================================
+              // Testing Labels
+              // ================================
+              { name: '🔬 tests:e2e', color: '84b6eb', description: 'End-to-end testing' },
+              { name: '🧪 tests:unit', color: '84b6eb', description: 'Unit testing' },
+              { name: '🎯 tests:integration', color: '84b6eb', description: 'Integration testing' },
+              { name: '🏭 tests:factory', color: '94c5ed', description: 'ExMachina factories and test data' },
+              { name: 'tests', color: '84b6eb', description: 'Test-related changes' },
+
+              // ================================
+              // Performance Labels
+              // ================================
+              { name: '⚡ performance', color: 'fbca04', description: 'Performance improvements and optimizations' },
+              { name: '🚀 scalability', color: 'f97316', description: 'Scalability improvements' },
+              { name: '💾 memory', color: 'dc2626', description: 'Memory optimization and leak fixes' },
+              { name: '⏱️ latency', color: 'f59e0b', description: 'Latency reduction and optimization' },
+
+              // ================================
+              // Code Quality Labels
+              // ================================
+              { name: '✨ quality:credo', color: 'a855f7', description: 'Credo static analysis issues' },
+              { name: '🔍 quality:dialyzer', color: '8b5cf6', description: 'Dialyzer type checking' },
+              { name: '🛡️ quality:sobelow', color: 'd93f0b', description: 'Sobelow security analysis' },
+
+              // ================================
+              // Istio Service Mesh Labels
+              // ================================
+              { name: '🔐 istio:mtls', color: '466bb0', description: 'mTLS and service mesh security' },
+              { name: '🌐 istio:traffic', color: '5c7cfa', description: 'Traffic management and routing' },
+              { name: '📡 istio:telemetry', color: '748ffc', description: 'Service mesh telemetry and observability' },
+
+              // ================================
+              // Auto-labeler Labels
+              // ================================
+              { name: 'feature', color: 'a2eeef', description: 'New feature or functionality' },
+              { name: 'config', color: 'fef2c0', description: 'Configuration changes' },
+              { name: 'ci/cd', color: '1d76db', description: 'CI/CD configuration' },
+
+              // ================================
+              // Standard GitHub Labels
+              // ================================
+              { name: 'bug', color: 'd73a4a', description: 'Something isn\'t working' },
+              { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'dependencies', color: '0366d6', description: 'Pull requests that update a dependency file' },
+              { name: 'good first issue', color: '7057ff', description: 'Good for newcomers' },
+              { name: 'help wanted', color: '008672', description: 'Extra attention is needed' },
+              { name: 'invalid', color: 'e4e669', description: 'This doesn\'t seem right' },
+              { name: 'question', color: 'd876e3', description: 'Further information is requested' },
+              { name: 'wontfix', color: 'ffffff', description: 'This will not be worked on' },
+              { name: 'duplicate', color: 'cfd3d7', description: 'This issue or pull request already exists' }
+            ];
+
+            for (const label of labels) {
+              try {
+                // Try to update the label if it exists
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`✅ Updated label: ${label.name}`);
+              } catch (error) {
+                // If label doesn't exist (404), create it
+                if (error.status === 404) {
+                  try {
+                    await github.rest.issues.createLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label.name,
+                      color: label.color,
+                      description: label.description
+                    });
+                    console.log(`✨ Created label: ${label.name}`);
+                  } catch (createError) {
+                    console.error(`❌ Failed to create label ${label.name}:`, createError.message);
+                  }
+                } else {
+                  console.error(`❌ Failed to update label ${label.name}:`, error.message);
+                }
+              }
+            }
+
+            console.log('🎉 Label synchronization complete!');
