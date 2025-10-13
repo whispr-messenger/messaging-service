@@ -95,7 +95,6 @@ defmodule WhisprMessaging.Messages do
     with {:ok, message} <- get_message(message_id),
          :ok <- validate_edit_permissions(message, user_id),
          true <- Message.editable?(message) do
-
       message
       |> Message.edit_changeset(new_content, metadata)
       |> Repo.update()
@@ -114,7 +113,6 @@ defmodule WhisprMessaging.Messages do
     with {:ok, message} <- get_message(message_id),
          :ok <- validate_delete_permissions(message, user_id),
          true <- Message.deletable?(message) do
-
       message
       |> Message.delete_changeset(delete_for_everyone)
       |> Repo.update()
@@ -210,23 +208,29 @@ defmodule WhisprMessaging.Messages do
     read_time = timestamp || DateTime.utc_now()
 
     # Update delivery statuses for unread messages
-    query = from ds in DeliveryStatus,
-      join: m in Message, on: m.id == ds.message_id,
-      where: m.conversation_id == ^conversation_id,
-      where: ds.user_id == ^user_id,
-      where: is_nil(ds.read_at),
-      where: not is_nil(ds.delivered_at) or is_nil(ds.delivered_at)
+    query =
+      from ds in DeliveryStatus,
+        join: m in Message,
+        on: m.id == ds.message_id,
+        where: m.conversation_id == ^conversation_id,
+        where: ds.user_id == ^user_id,
+        where: is_nil(ds.read_at),
+        where: not is_nil(ds.delivered_at) or is_nil(ds.delivered_at)
 
-    update_query = from ds in DeliveryStatus,
-      join: m in Message, on: m.id == ds.message_id,
-      where: m.conversation_id == ^conversation_id,
-      where: ds.user_id == ^user_id,
-      where: is_nil(ds.read_at),
-      update: [set: [
-        read_at: ^read_time,
-        delivered_at: fragment("COALESCE(?, ?)", ds.delivered_at, ^read_time),
-        updated_at: ^read_time
-      ]]
+    update_query =
+      from ds in DeliveryStatus,
+        join: m in Message,
+        on: m.id == ds.message_id,
+        where: m.conversation_id == ^conversation_id,
+        where: ds.user_id == ^user_id,
+        where: is_nil(ds.read_at),
+        update: [
+          set: [
+            read_at: ^read_time,
+            delivered_at: fragment("COALESCE(?, ?)", ds.delivered_at, ^read_time),
+            updated_at: ^read_time
+          ]
+        ]
 
     case Repo.update_all(update_query, []) do
       {count, _} -> {:ok, count}
@@ -238,13 +242,15 @@ defmodule WhisprMessaging.Messages do
   Gets unread messages for a user.
   """
   def get_unread_messages_for_user(user_id) do
-    query = from ds in DeliveryStatus,
-      where: ds.user_id == ^user_id,
-      where: not is_nil(ds.delivered_at) and is_nil(ds.read_at),
-      join: m in Message, on: m.id == ds.message_id,
-      where: m.is_deleted == false,
-      select: {ds, m},
-      order_by: [asc: m.sent_at]
+    query =
+      from ds in DeliveryStatus,
+        where: ds.user_id == ^user_id,
+        where: not is_nil(ds.delivered_at) and is_nil(ds.read_at),
+        join: m in Message,
+        on: m.id == ds.message_id,
+        where: m.is_deleted == false,
+        select: {ds, m},
+        order_by: [asc: m.sent_at]
 
     {:ok, Repo.all(query)}
   end
@@ -287,10 +293,11 @@ defmodule WhisprMessaging.Messages do
   Removes a reaction from a message.
   """
   def remove_reaction(message_id, user_id, reaction) do
-    query = from r in MessageReaction,
-      where: r.message_id == ^message_id,
-      where: r.user_id == ^user_id,
-      where: r.reaction == ^reaction
+    query =
+      from r in MessageReaction,
+        where: r.message_id == ^message_id,
+        where: r.user_id == ^user_id,
+        where: r.reaction == ^reaction
 
     case Repo.delete_all(query) do
       {0, _} -> {:error, :not_found}
@@ -329,10 +336,16 @@ defmodule WhisprMessaging.Messages do
     end
   end
 
-  defp validate_edit_permissions(%Message{sender_id: sender_id}, user_id) when sender_id == user_id, do: :ok
+  defp validate_edit_permissions(%Message{sender_id: sender_id}, user_id)
+       when sender_id == user_id,
+       do: :ok
+
   defp validate_edit_permissions(_message, _user_id), do: {:error, :unauthorized}
 
-  defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id) when sender_id == user_id, do: :ok
+  defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id)
+       when sender_id == user_id,
+       do: :ok
+
   defp validate_delete_permissions(_message, _user_id), do: {:error, :unauthorized}
 
   # Text message helpers
@@ -340,8 +353,20 @@ defmodule WhisprMessaging.Messages do
   @doc """
   Creates a text message.
   """
-  def create_text_message(conversation_id, sender_id, encrypted_content, client_random, metadata \\ %{}) do
-    Message.create_text_message(conversation_id, sender_id, encrypted_content, client_random, metadata)
+  def create_text_message(
+        conversation_id,
+        sender_id,
+        encrypted_content,
+        client_random,
+        metadata \\ %{}
+      ) do
+    Message.create_text_message(
+      conversation_id,
+      sender_id,
+      encrypted_content,
+      client_random,
+      metadata
+    )
     |> Repo.insert()
   end
 
@@ -349,7 +374,13 @@ defmodule WhisprMessaging.Messages do
   Creates a media message.
   """
   def create_media_message(conversation_id, sender_id, encrypted_content, client_random, metadata) do
-    Message.create_media_message(conversation_id, sender_id, encrypted_content, client_random, metadata)
+    Message.create_media_message(
+      conversation_id,
+      sender_id,
+      encrypted_content,
+      client_random,
+      metadata
+    )
     |> Repo.insert()
   end
 

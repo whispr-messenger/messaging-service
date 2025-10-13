@@ -28,20 +28,32 @@ defmodule WhisprMessaging.ConversationSupervisor do
 
         case DynamicSupervisor.start_child(__MODULE__, child_spec) do
           {:ok, pid} ->
-            Logger.info("Started ConversationServer for conversation #{conversation_id}, PID: #{inspect(pid)}")
+            Logger.info(
+              "Started ConversationServer for conversation #{conversation_id}, PID: #{inspect(pid)}"
+            )
+
             {:ok, pid}
 
           {:error, {:already_started, pid}} ->
-            Logger.debug("ConversationServer for conversation #{conversation_id} already exists, PID: #{inspect(pid)}")
+            Logger.debug(
+              "ConversationServer for conversation #{conversation_id} already exists, PID: #{inspect(pid)}"
+            )
+
             {:ok, pid}
 
           {:error, reason} ->
-            Logger.error("Failed to start ConversationServer for conversation #{conversation_id}: #{inspect(reason)}")
+            Logger.error(
+              "Failed to start ConversationServer for conversation #{conversation_id}: #{inspect(reason)}"
+            )
+
             {:error, reason}
         end
 
       pid ->
-        Logger.debug("ConversationServer for conversation #{conversation_id} already running, PID: #{inspect(pid)}")
+        Logger.debug(
+          "ConversationServer for conversation #{conversation_id} already running, PID: #{inspect(pid)}"
+        )
+
         {:ok, pid}
     end
   end
@@ -62,7 +74,10 @@ defmodule WhisprMessaging.ConversationSupervisor do
             :ok
 
           {:error, reason} ->
-            Logger.error("Failed to stop ConversationServer for conversation #{conversation_id}: #{inspect(reason)}")
+            Logger.error(
+              "Failed to stop ConversationServer for conversation #{conversation_id}: #{inspect(reason)}"
+            )
+
             {:error, reason}
         end
     end
@@ -204,12 +219,13 @@ defmodule WhisprMessaging.ConversationSupervisor do
   def cleanup_idle_conversations(idle_threshold_minutes \\ 30) do
     children = DynamicSupervisor.which_children(__MODULE__)
 
-    idle_conversations = children
-    |> Enum.map(fn {_, pid, _, _} -> pid end)
-    |> Enum.filter(&Process.alive?/1)
-    |> Enum.map(&get_conversation_id_from_pid/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.filter(&conversation_idle?(&1, idle_threshold_minutes))
+    idle_conversations =
+      children
+      |> Enum.map(fn {_, pid, _, _} -> pid end)
+      |> Enum.filter(&Process.alive?/1)
+      |> Enum.map(&get_conversation_id_from_pid/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&conversation_idle?(&1, idle_threshold_minutes))
 
     Enum.each(idle_conversations, fn conversation_id ->
       Logger.info("Stopping idle conversation server: #{conversation_id}")
@@ -234,7 +250,8 @@ defmodule WhisprMessaging.ConversationSupervisor do
           minutes_since_activity = DateTime.diff(DateTime.utc_now(), state.last_activity, :minute)
           minutes_since_activity >= threshold_minutes
         catch
-          :exit, _ -> true # Consider unresponsive processes as idle
+          # Consider unresponsive processes as idle
+          :exit, _ -> true
         end
     end
   end

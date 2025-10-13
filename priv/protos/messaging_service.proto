@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package whispr.messaging.v1;
+
+// MessagingService provides inter-service communication for messaging operations.
+// This service is called by other microservices in the Whispr ecosystem.
+service MessagingService {
+  // Health check endpoint for service discovery
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Get conversation details for external services
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
+
+  // Notify about new group creation from user-service
+  rpc NotifyGroupCreated(NotifyGroupCreatedRequest) returns (NotifyGroupCreatedResponse);
+
+  // Notify about group member changes from user-service
+  rpc NotifyGroupMemberChanged(NotifyGroupMemberChangedRequest) returns (NotifyGroupMemberChangedResponse);
+}
+
+// Health check messages
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+}
+
+// Get conversation messages
+message GetConversationRequest {
+  string conversation_id = 1;
+  string requesting_user_id = 2;
+}
+
+message GetConversationResponse {
+  Conversation conversation = 1;
+  string error = 2;
+}
+
+message Conversation {
+  string id = 1;
+  string type = 2;
+  string external_group_id = 3;
+  map<string, string> metadata = 4;
+  int64 created_at = 5;
+  int64 updated_at = 6;
+  bool is_active = 7;
+}
+
+// Group notifications from user-service
+message NotifyGroupCreatedRequest {
+  string group_id = 1;
+  string group_name = 2;
+  repeated string member_ids = 3;
+  string created_by = 4;
+}
+
+message NotifyGroupCreatedResponse {
+  string conversation_id = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+message NotifyGroupMemberChangedRequest {
+  string group_id = 1;
+  repeated string added_member_ids = 2;
+  repeated string removed_member_ids = 3;
+  string changed_by = 4;
+}
+
+message NotifyGroupMemberChangedResponse {
+  bool success = 1;
+  string error = 2;
+}

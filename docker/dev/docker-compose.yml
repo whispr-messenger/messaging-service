@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: whispr_postgres
+    environment:
+      POSTGRES_DB: whispr_messaging_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whispr_network
+
+  # Redis for caching and pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: whispr_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whispr_network
+
+  # Whispr Messaging Service
+  messaging-service:
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    container_name: whispr_messaging
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: whispr_messaging_dev
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_POOL_SIZE: 10
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+
+      # Phoenix
+      PORT: 4000
+      PHX_HOST: 0.0.0.0
+
+      # gRPC
+      GRPC_PORT: 50052
+
+      # Environment
+      MIX_ENV: dev
+    ports:
+      - "4000:4000"   # Phoenix HTTP/WebSocket
+      - "50052:50052" # gRPC
+    volumes:
+      - ../..:/app
+      - /app/deps
+      - /app/_build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        mix deps.get &&
+        mix ecto.create &&
+        mix ecto.migrate &&
+        mix phx.server
+      "
+    networks:
+      - whispr_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  whispr_network:
+    driver: bridge

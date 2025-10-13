@@ -69,8 +69,10 @@ config :telemetry_poller, :default, period: 5_000
 
 # Development-specific conversation settings
 config :whispr_messaging, :conversations,
-  max_idle_time: 1_800_000,  # 30 minutes
-  cleanup_interval: 300_000,  # 5 minutes
+  # 30 minutes
+  max_idle_time: 1_800_000,
+  # 5 minutes
+  cleanup_interval: 300_000,
   max_message_cache: 50
 
 # Development logging

@@ -84,11 +84,12 @@ defmodule WhisprMessaging.Conversations do
   def create_direct_conversation(user1_id, user2_id, metadata \\ %{}) do
     Repo.transaction(fn ->
       # Create conversation
-      {:ok, conversation} = create_conversation(%{
-        type: "direct",
-        metadata: metadata,
-        is_active: true
-      })
+      {:ok, conversation} =
+        create_conversation(%{
+          type: "direct",
+          metadata: metadata,
+          is_active: true
+        })
 
       # Add both users as members
       {:ok, _member1} = add_conversation_member(conversation.id, user1_id)
@@ -104,12 +105,13 @@ defmodule WhisprMessaging.Conversations do
   def create_group_conversation(creator_id, member_ids, external_group_id \\ nil, metadata \\ %{}) do
     Repo.transaction(fn ->
       # Create conversation
-      {:ok, conversation} = create_conversation(%{
-        type: "group",
-        external_group_id: external_group_id,
-        metadata: metadata,
-        is_active: true
-      })
+      {:ok, conversation} =
+        create_conversation(%{
+          type: "group",
+          external_group_id: external_group_id,
+          metadata: metadata,
+          is_active: true
+        })
 
       # Add creator as member
       {:ok, _creator_member} = add_conversation_member(conversation.id, creator_id)
@@ -195,19 +197,21 @@ defmodule WhisprMessaging.Conversations do
   Lists conversations for a specific user.
   """
   def list_user_conversations(user_id) do
-    conversations = ConversationMember.user_conversations_query(user_id)
-    |> Repo.all()
+    conversations =
+      ConversationMember.user_conversations_query(user_id)
+      |> Repo.all()
 
     # Enrich with additional data
-    enriched_conversations = Enum.map(conversations, fn {member, conversation} ->
-      unread_count = get_unread_count_for_user(conversation.id, user_id, member.last_read_at)
-      last_message = get_last_message(conversation.id)
+    enriched_conversations =
+      Enum.map(conversations, fn {member, conversation} ->
+        unread_count = get_unread_count_for_user(conversation.id, user_id, member.last_read_at)
+        last_message = get_last_message(conversation.id)
 
-      conversation
-      |> Map.put(:unread_count, unread_count)
-      |> Map.put(:last_message, last_message)
-      |> Map.put(:member_info, member)
-    end)
+        conversation
+        |> Map.put(:unread_count, unread_count)
+        |> Map.put(:last_message, last_message)
+        |> Map.put(:member_info, member)
+      end)
 
     {:ok, enriched_conversations}
   end
@@ -217,19 +221,21 @@ defmodule WhisprMessaging.Conversations do
   """
   def get_conversation_summaries(user_id) do
     # Similar to list_user_conversations but with minimal data
-    conversations = ConversationMember.user_conversations_query(user_id)
-    |> Repo.all()
+    conversations =
+      ConversationMember.user_conversations_query(user_id)
+      |> Repo.all()
 
-    summaries = Enum.map(conversations, fn {member, conversation} ->
-      %{
-        id: conversation.id,
-        type: conversation.type,
-        metadata: conversation.metadata,
-        unread_count: get_unread_count_for_user(conversation.id, user_id, member.last_read_at),
-        last_activity: conversation.updated_at,
-        member_count: count_conversation_members(conversation.id)
-      }
-    end)
+    summaries =
+      Enum.map(conversations, fn {member, conversation} ->
+        %{
+          id: conversation.id,
+          type: conversation.type,
+          metadata: conversation.metadata,
+          unread_count: get_unread_count_for_user(conversation.id, user_id, member.last_read_at),
+          last_activity: conversation.updated_at,
+          member_count: count_conversation_members(conversation.id)
+        }
+      end)
 
     {:ok, summaries}
   end
@@ -238,11 +244,13 @@ defmodule WhisprMessaging.Conversations do
   Gets list of conversation IDs where user is active.
   """
   def get_user_active_conversations(user_id) do
-    conversation_ids = from cm in ConversationMember,
-      where: cm.user_id == ^user_id and cm.is_active == true,
-      join: c in Conversation, on: c.id == cm.conversation_id,
-      where: c.is_active == true,
-      select: c.id
+    conversation_ids =
+      from cm in ConversationMember,
+        where: cm.user_id == ^user_id and cm.is_active == true,
+        join: c in Conversation,
+        on: c.id == cm.conversation_id,
+        where: c.is_active == true,
+        select: c.id
 
     {:ok, Repo.all(conversation_ids)}
   end
@@ -306,16 +314,20 @@ defmodule WhisprMessaging.Conversations do
   def get_conversation_stats(conversation_id) do
     member_count = count_conversation_members(conversation_id)
 
-    message_count = from(m in Message,
-      where: m.conversation_id == ^conversation_id and m.is_deleted == false,
-      select: count(m.id)
-    ) |> Repo.one()
+    message_count =
+      from(m in Message,
+        where: m.conversation_id == ^conversation_id and m.is_deleted == false,
+        select: count(m.id)
+      )
+      |> Repo.one()
 
-    last_activity = from(m in Message,
-      where: m.conversation_id == ^conversation_id and m.is_deleted == false,
-      select: max(m.sent_at),
-      limit: 1
-    ) |> Repo.one()
+    last_activity =
+      from(m in Message,
+        where: m.conversation_id == ^conversation_id and m.is_deleted == false,
+        select: max(m.sent_at),
+        limit: 1
+      )
+      |> Repo.one()
 
     %{
       member_count: member_count,
@@ -328,17 +340,18 @@ defmodule WhisprMessaging.Conversations do
   Gets conversation activity metrics for a time period.
   """
   def get_conversation_activity(conversation_id, from_date, to_date) do
-    query = from m in Message,
-      where: m.conversation_id == ^conversation_id,
-      where: m.sent_at >= ^from_date and m.sent_at <= ^to_date,
-      where: m.is_deleted == false,
-      group_by: [fragment("date_trunc('day', ?)", m.sent_at)],
-      select: %{
-        date: fragment("date_trunc('day', ?)", m.sent_at),
-        message_count: count(m.id),
-        unique_senders: count(m.sender_id, :distinct)
-      },
-      order_by: [asc: fragment("date_trunc('day', ?)", m.sent_at)]
+    query =
+      from m in Message,
+        where: m.conversation_id == ^conversation_id,
+        where: m.sent_at >= ^from_date and m.sent_at <= ^to_date,
+        where: m.is_deleted == false,
+        group_by: [fragment("date_trunc('day', ?)", m.sent_at)],
+        select: %{
+          date: fragment("date_trunc('day', ?)", m.sent_at),
+          message_count: count(m.id),
+          unique_senders: count(m.sender_id, :distinct)
+        },
+        order_by: [asc: fragment("date_trunc('day', ?)", m.sent_at)]
 
     Repo.all(query)
   end
@@ -374,11 +387,12 @@ defmodule WhisprMessaging.Conversations do
   def search_conversations(search_term, limit \\ 20) do
     search_pattern = "%#{search_term}%"
 
-    query = from c in Conversation,
-      where: c.is_active == true,
-      where: ilike(fragment("?::text", c.metadata), ^search_pattern),
-      order_by: [desc: c.updated_at],
-      limit: ^limit
+    query =
+      from c in Conversation,
+        where: c.is_active == true,
+        where: ilike(fragment("?::text", c.metadata), ^search_pattern),
+        order_by: [desc: c.updated_at],
+        limit: ^limit
 
     Repo.all(query)
   end
@@ -388,13 +402,16 @@ defmodule WhisprMessaging.Conversations do
   """
   def find_or_create_direct_conversation(user1_id, user2_id) do
     # Try to find existing direct conversation
-    query = from c in Conversation,
-      join: cm1 in ConversationMember, on: cm1.conversation_id == c.id,
-      join: cm2 in ConversationMember, on: cm2.conversation_id == c.id,
-      where: c.type == "direct" and c.is_active == true,
-      where: cm1.user_id == ^user1_id and cm1.is_active == true,
-      where: cm2.user_id == ^user2_id and cm2.is_active == true,
-      where: cm1.user_id != cm2.user_id
+    query =
+      from c in Conversation,
+        join: cm1 in ConversationMember,
+        on: cm1.conversation_id == c.id,
+        join: cm2 in ConversationMember,
+        on: cm2.conversation_id == c.id,
+        where: c.type == "direct" and c.is_active == true,
+        where: cm1.user_id == ^user1_id and cm1.is_active == true,
+        where: cm2.user_id == ^user2_id and cm2.is_active == true,
+        where: cm1.user_id != cm2.user_id
 
     case Repo.one(query) do
       nil ->

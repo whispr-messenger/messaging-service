@@ -19,8 +19,7 @@ defmodule WhisprMessaging.Application do
       WhisprMessaging.Repo,
 
       # Redis connections
-      {Redix, redis_config()},
-      {Redix.PubSub, [name: :redix_pubsub] ++ redis_config()},
+      {Redix, [name: :redix] ++ redis_config()},
 
       # PubSub for Phoenix Channels
       {Phoenix.PubSub, name: WhisprMessaging.PubSub},
@@ -66,11 +65,11 @@ defmodule WhisprMessaging.Application do
   end
 
   defp redis_config do
-    Application.get_env(:whispr_messaging, :redis, [
+    Application.get_env(:whispr_messaging, :redis,
       host: "localhost",
       port: 6379,
       database: 0
-    ])
+    )
   end
 
   defp grpc_server_config do

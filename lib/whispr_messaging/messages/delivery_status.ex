@@ -109,7 +109,8 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
       where: ds.message_id == ^message_id,
       select: %{
         total_recipients: count(ds.id),
-        delivered_count: sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.delivered_at)),
+        delivered_count:
+          sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.delivered_at)),
         read_count: sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.read_at))
       }
   end
