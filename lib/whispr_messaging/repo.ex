@@ -32,13 +32,17 @@ defmodule WhisprMessaging.Repo do
   """
   def connection_info do
     try do
-      query!("""
-        SELECT
-          current_database() as database,
-          current_user as user,
-          version() as version,
-          now() as current_time
-      """, [], timeout: 5_000)
+      query!(
+        """
+          SELECT
+            current_database() as database,
+            current_user as user,
+            version() as version,
+            now() as current_time
+        """,
+        [],
+        timeout: 5_000
+      )
     rescue
       exception ->
         Logger.error("Failed to get connection info: #{inspect(exception)}")

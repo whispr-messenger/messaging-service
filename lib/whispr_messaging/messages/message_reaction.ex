@@ -13,10 +13,10 @@ defmodule WhisprMessaging.Messages.MessageReaction do
   @foreign_key_type :binary_id
 
   schema "message_reactions" do
-    field :user_id, :binary_id
-    field :reaction, :string
+    field(:user_id, :binary_id)
+    field(:reaction, :string)
 
-    belongs_to :message, Message, foreign_key: :message_id
+    belongs_to(:message, Message, foreign_key: :message_id)
 
     timestamps()
   end
@@ -32,16 +32,18 @@ defmodule WhisprMessaging.Messages.MessageReaction do
   end
 
   def by_message_query(message_id) do
-    from r in __MODULE__,
+    from(r in __MODULE__,
       where: r.message_id == ^message_id,
       order_by: [asc: r.inserted_at]
+    )
   end
 
   def reaction_summary_query(message_id) do
-    from r in __MODULE__,
+    from(r in __MODULE__,
       where: r.message_id == ^message_id,
       group_by: r.reaction,
       select: {r.reaction, count(r.id)},
       order_by: [desc: count(r.id)]
+    )
   end
 end

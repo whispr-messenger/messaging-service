@@ -15,11 +15,11 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   @foreign_key_type :binary_id
 
   schema "delivery_statuses" do
-    field :user_id, :binary_id
-    field :delivered_at, :utc_datetime
-    field :read_at, :utc_datetime
+    field(:user_id, :binary_id)
+    field(:delivered_at, :utc_datetime)
+    field(:read_at, :utc_datetime)
 
-    belongs_to :message, Message, foreign_key: :message_id
+    belongs_to(:message, Message, foreign_key: :message_id)
 
     timestamps()
   end
@@ -61,37 +61,40 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   Query to get delivery statuses for a message.
   """
   def by_message_query(message_id) do
-    from ds in __MODULE__,
+    from(ds in __MODULE__,
       where: ds.message_id == ^message_id,
       order_by: [asc: ds.delivered_at]
+    )
   end
 
   @doc """
   Query to get delivery status for a specific user and message.
   """
   def by_message_and_user_query(message_id, user_id) do
-    from ds in __MODULE__,
+    from(ds in __MODULE__,
       where: ds.message_id == ^message_id and ds.user_id == ^user_id
+    )
   end
 
   @doc """
   Query to get undelivered messages for a user.
   """
   def undelivered_for_user_query(user_id) do
-    from ds in __MODULE__,
+    from(ds in __MODULE__,
       where: ds.user_id == ^user_id and is_nil(ds.delivered_at),
       join: m in Message,
       on: m.id == ds.message_id,
       where: m.is_deleted == false,
       select: {ds, m},
       order_by: [asc: m.sent_at]
+    )
   end
 
   @doc """
   Query to get unread messages for a user.
   """
   def unread_for_user_query(user_id) do
-    from ds in __MODULE__,
+    from(ds in __MODULE__,
       where: ds.user_id == ^user_id,
       where: not is_nil(ds.delivered_at) and is_nil(ds.read_at),
       join: m in Message,
@@ -99,19 +102,22 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
       where: m.is_deleted == false,
       select: {ds, m},
       order_by: [asc: m.sent_at]
+    )
   end
 
   @doc """
   Query to get read receipt summary for a message.
   """
   def read_receipt_summary_query(message_id) do
-    from ds in __MODULE__,
+    from(ds in __MODULE__,
       where: ds.message_id == ^message_id,
       select: %{
         total_recipients: count(ds.id),
-        delivered_count: sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.delivered_at)),
+        delivered_count:
+          sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.delivered_at)),
         read_count: sum(fragment("CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END", ds.read_at))
       }
+    )
   end
 
   @doc """

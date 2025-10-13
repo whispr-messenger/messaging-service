@@ -16,9 +16,9 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   @foreign_key_type :binary_id
 
   schema "conversation_settings" do
-    field :settings, :map, default: %{}
+    field(:settings, :map, default: %{})
 
-    belongs_to :conversation, Conversation, foreign_key: :conversation_id
+    belongs_to(:conversation, Conversation, foreign_key: :conversation_id)
 
     timestamps()
   end
@@ -47,8 +47,9 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   Query to get settings by conversation ID.
   """
   def by_conversation_query(conversation_id) do
-    from s in __MODULE__,
+    from(s in __MODULE__,
       where: s.conversation_id == ^conversation_id
+    )
   end
 
   @doc """
@@ -69,14 +70,17 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
     %{
       # Message settings
       "allow_editing" => true,
-      "edit_time_limit" => 86400, # 24 hours in seconds
+      # 24 hours in seconds
+      "edit_time_limit" => 86400,
       "allow_deletion" => true,
-      "delete_time_limit" => 172800, # 48 hours in seconds
+      # 48 hours in seconds
+      "delete_time_limit" => 172_800,
       "delete_for_everyone_enabled" => true,
 
       # Media settings
       "allow_media" => true,
-      "max_file_size" => 104857600, # 100MB in bytes
+      # 100MB in bytes
+      "max_file_size" => 104_857_600,
       "allowed_file_types" => ["image", "video", "audio", "document"],
 
       # Reaction settings
@@ -87,7 +91,8 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
       "encryption_enabled" => true,
       "forward_secrecy" => true,
       "disappearing_messages" => false,
-      "disappearing_timer" => 604800, # 7 days in seconds
+      # 7 days in seconds
+      "disappearing_timer" => 604_800,
 
       # Moderation settings
       "spam_protection" => true,
@@ -102,8 +107,10 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
       "read_receipts" => true,
 
       # Retention settings
-      "message_retention" => 0, # 0 = infinite, otherwise days
-      "media_retention" => 365, # days
+      # 0 = infinite, otherwise days
+      "message_retention" => 0,
+      # days
+      "media_retention" => 365,
       "auto_cleanup" => false,
 
       # Group settings (for group conversations)
@@ -177,6 +184,7 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
     case Map.get(settings, "allowed_file_types") do
       types when is_list(types) ->
         valid_types = ["image", "video", "audio", "document", "text"]
+
         if Enum.all?(types, &(&1 in valid_types)) do
           changeset
         else
@@ -223,7 +231,7 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   """
   def deletion_allowed?(%__MODULE__{} = conv_settings, message_age_seconds) do
     if get_setting(conv_settings, "allow_deletion", true) do
-      time_limit = get_setting(conv_settings, "delete_time_limit", 172800)
+      time_limit = get_setting(conv_settings, "delete_time_limit", 172_800)
       message_age_seconds <= time_limit
     else
       false
@@ -248,14 +256,16 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   Gets the maximum allowed file size.
   """
   def max_file_size(%__MODULE__{} = conv_settings) do
-    get_setting(conv_settings, "max_file_size", 104857600)
+    get_setting(conv_settings, "max_file_size", 104_857_600)
   end
 
   @doc """
   Checks if a file type is allowed.
   """
   def file_type_allowed?(%__MODULE__{} = conv_settings, file_type) do
-    allowed_types = get_setting(conv_settings, "allowed_file_types", ["image", "video", "audio", "document"])
+    allowed_types =
+      get_setting(conv_settings, "allowed_file_types", ["image", "video", "audio", "document"])
+
     file_type in allowed_types
   end
 
@@ -280,6 +290,6 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   Gets the disappearing message timer in seconds.
   """
   def disappearing_timer(%__MODULE__{} = conv_settings) do
-    get_setting(conv_settings, "disappearing_timer", 604800)
+    get_setting(conv_settings, "disappearing_timer", 604_800)
   end
 end

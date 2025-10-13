@@ -16,13 +16,13 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   @foreign_key_type :binary_id
 
   schema "conversation_members" do
-    field :user_id, :binary_id
-    field :settings, :map, default: %{}
-    field :joined_at, :utc_datetime
-    field :last_read_at, :utc_datetime
-    field :is_active, :boolean, default: true
+    field(:user_id, :binary_id)
+    field(:settings, :map, default: %{})
+    field(:joined_at, :utc_datetime)
+    field(:last_read_at, :utc_datetime)
+    field(:is_active, :boolean, default: true)
 
-    belongs_to :conversation, Conversation, foreign_key: :conversation_id
+    belongs_to(:conversation, Conversation, foreign_key: :conversation_id)
 
     timestamps()
   end
@@ -72,48 +72,53 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   Query to find active members of a conversation.
   """
   def active_members_query(conversation_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id and m.is_active == true,
       order_by: [asc: m.joined_at]
+    )
   end
 
   @doc """
   Query to find member by conversation and user ID.
   """
   def by_conversation_and_user_query(conversation_id, user_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id and m.user_id == ^user_id
+    )
   end
 
   @doc """
   Query to find conversations for a specific user.
   """
   def user_conversations_query(user_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.user_id == ^user_id and m.is_active == true,
       join: c in Conversation,
       on: c.id == m.conversation_id,
       where: c.is_active == true,
       select: {m, c},
       order_by: [desc: c.updated_at]
+    )
   end
 
   @doc """
   Query to find members who haven't read recent messages.
   """
   def unread_members_query(conversation_id, since_timestamp) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id and m.is_active == true,
       where: is_nil(m.last_read_at) or m.last_read_at < ^since_timestamp
+    )
   end
 
   @doc """
   Query to count active members in a conversation.
   """
   def count_active_members_query(conversation_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id and m.is_active == true,
       select: count(m.id)
+    )
   end
 
   @doc """

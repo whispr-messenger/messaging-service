@@ -45,11 +45,12 @@ defmodule WhisprMessaging.ConversationsTest do
     end
 
     test "get_conversation/1 returns conversation when it exists" do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
       assert {:ok, fetched_conversation} = Conversations.get_conversation(conversation.id)
       assert fetched_conversation.id == conversation.id
@@ -62,40 +63,47 @@ defmodule WhisprMessaging.ConversationsTest do
     test "get_conversation_by_external_group_id/1 finds conversation by external ID" do
       external_group_id = Ecto.UUID.generate()
 
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        external_group_id: external_group_id,
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          external_group_id: external_group_id,
+          metadata: %{},
+          is_active: true
+        })
 
-      assert {:ok, found_conversation} = Conversations.get_conversation_by_external_group_id(external_group_id)
+      assert {:ok, found_conversation} =
+               Conversations.get_conversation_by_external_group_id(external_group_id)
+
       assert found_conversation.id == conversation.id
     end
 
     test "update_conversation/2 updates conversation attributes" do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{"original" => true},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{"original" => true},
+          is_active: true
+        })
 
       new_attrs = %{
         metadata: %{"updated" => true},
         is_active: false
       }
 
-      assert {:ok, updated_conversation} = Conversations.update_conversation(conversation, new_attrs)
+      assert {:ok, updated_conversation} =
+               Conversations.update_conversation(conversation, new_attrs)
+
       assert updated_conversation.metadata == %{"updated" => true}
       assert updated_conversation.is_active == false
     end
 
     test "deactivate_conversation/1 marks conversation as inactive" do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
       assert {:ok, deactivated_conversation} = Conversations.deactivate_conversation(conversation)
       assert deactivated_conversation.is_active == false
@@ -105,11 +113,12 @@ defmodule WhisprMessaging.ConversationsTest do
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
 
-      assert {:ok, conversation} = Conversations.create_direct_conversation(
-        user1_id,
-        user2_id,
-        %{"created_by" => "test"}
-      )
+      assert {:ok, conversation} =
+               Conversations.create_direct_conversation(
+                 user1_id,
+                 user2_id,
+                 %{"created_by" => "test"}
+               )
 
       assert conversation.type == "direct"
       assert conversation.metadata["created_by"] == "test"
@@ -128,12 +137,13 @@ defmodule WhisprMessaging.ConversationsTest do
       member_ids = [Ecto.UUID.generate(), Ecto.UUID.generate()]
       external_group_id = Ecto.UUID.generate()
 
-      assert {:ok, conversation} = Conversations.create_group_conversation(
-        creator_id,
-        member_ids,
-        external_group_id,
-        %{"name" => "Test Group"}
-      )
+      assert {:ok, conversation} =
+               Conversations.create_group_conversation(
+                 creator_id,
+                 member_ids,
+                 external_group_id,
+                 %{"name" => "Test Group"}
+               )
 
       assert conversation.type == "group"
       assert conversation.external_group_id == external_group_id
@@ -145,6 +155,7 @@ defmodule WhisprMessaging.ConversationsTest do
 
       member_user_ids = Enum.map(members, & &1.user_id)
       assert creator_id in member_user_ids
+
       Enum.each(member_ids, fn member_id ->
         assert member_id in member_user_ids
       end)
@@ -167,18 +178,21 @@ defmodule WhisprMessaging.ConversationsTest do
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
 
-      assert {:ok, conversation} = Conversations.find_or_create_direct_conversation(user1_id, user2_id)
+      assert {:ok, conversation} =
+               Conversations.find_or_create_direct_conversation(user1_id, user2_id)
+
       assert conversation.type == "direct"
     end
   end
 
   describe "conversation members" do
     setup do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{},
+          is_active: true
+        })
 
       %{conversation: conversation}
     end
@@ -186,10 +200,11 @@ defmodule WhisprMessaging.ConversationsTest do
     test "add_conversation_member/3 adds a member to conversation", %{conversation: conversation} do
       user_id = Ecto.UUID.generate()
 
-      assert {:ok, %ConversationMember{} = member} = Conversations.add_conversation_member(
-        conversation.id,
-        user_id
-      )
+      assert {:ok, %ConversationMember{} = member} =
+               Conversations.add_conversation_member(
+                 conversation.id,
+                 user_id
+               )
 
       assert member.conversation_id == conversation.id
       assert member.user_id == user_id
@@ -202,11 +217,12 @@ defmodule WhisprMessaging.ConversationsTest do
       user_id = Ecto.UUID.generate()
       custom_settings = %{"notifications" => false}
 
-      assert {:ok, member} = Conversations.add_conversation_member(
-        conversation.id,
-        user_id,
-        custom_settings
-      )
+      assert {:ok, member} =
+               Conversations.add_conversation_member(
+                 conversation.id,
+                 user_id,
+                 custom_settings
+               )
 
       assert member.settings == custom_settings
     end
@@ -218,10 +234,11 @@ defmodule WhisprMessaging.ConversationsTest do
       assert {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
 
       # Second addition should fail
-      assert {:error, %Ecto.Changeset{}} = Conversations.add_conversation_member(
-        conversation.id,
-        user_id
-      )
+      assert {:error, %Ecto.Changeset{}} =
+               Conversations.add_conversation_member(
+                 conversation.id,
+                 user_id
+               )
     end
 
     test "get_conversation_member/2 returns member when exists", %{conversation: conversation} do
@@ -232,7 +249,9 @@ defmodule WhisprMessaging.ConversationsTest do
       assert fetched_member.id == member.id
     end
 
-    test "get_conversation_member/2 returns nil when member doesn't exist", %{conversation: conversation} do
+    test "get_conversation_member/2 returns nil when member doesn't exist", %{
+      conversation: conversation
+    } do
       user_id = Ecto.UUID.generate()
       assert Conversations.get_conversation_member(conversation.id, user_id) == nil
     end
@@ -266,7 +285,9 @@ defmodule WhisprMessaging.ConversationsTest do
       user_id = Ecto.UUID.generate()
       {:ok, member} = Conversations.add_conversation_member(conversation.id, user_id)
 
-      assert {:ok, updated_member} = Conversations.remove_conversation_member(conversation.id, user_id)
+      assert {:ok, updated_member} =
+               Conversations.remove_conversation_member(conversation.id, user_id)
+
       assert updated_member.is_active == false
 
       # Should not appear in active members list
@@ -320,17 +341,19 @@ defmodule WhisprMessaging.ConversationsTest do
       user_id = Ecto.UUID.generate()
 
       # Create multiple conversations for the user
-      {:ok, conv1} = Conversations.create_direct_conversation(
-        user_id,
-        Ecto.UUID.generate(),
-        %{"name" => "Conversation 1"}
-      )
+      {:ok, conv1} =
+        Conversations.create_direct_conversation(
+          user_id,
+          Ecto.UUID.generate(),
+          %{"name" => "Conversation 1"}
+        )
 
-      {:ok, conv2} = Conversations.create_direct_conversation(
-        user_id,
-        Ecto.UUID.generate(),
-        %{"name" => "Conversation 2"}
-      )
+      {:ok, conv2} =
+        Conversations.create_direct_conversation(
+          user_id,
+          Ecto.UUID.generate(),
+          %{"name" => "Conversation 2"}
+        )
 
       %{user_id: user_id, conversations: [conv1, conv2]}
     end
@@ -344,6 +367,7 @@ defmodule WhisprMessaging.ConversationsTest do
       assert length(user_conversations) == 2
 
       conversation_ids = Enum.map(user_conversations, & &1.id)
+
       Enum.each(conversations, fn conv ->
         assert conv.id in conversation_ids
       end)
@@ -355,6 +379,7 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, summaries} = Conversations.get_conversation_summaries(user_id)
 
       assert length(summaries) == 2
+
       Enum.each(summaries, fn summary ->
         assert Map.has_key?(summary, :id)
         assert Map.has_key?(summary, :type)
@@ -370,6 +395,7 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, conversation_ids} = Conversations.get_user_active_conversations(user_id)
 
       assert length(conversation_ids) == 2
+
       Enum.each(conversations, fn conv ->
         assert conv.id in conversation_ids
       end)
@@ -378,11 +404,12 @@ defmodule WhisprMessaging.ConversationsTest do
 
   describe "conversation settings" do
     setup do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{},
+          is_active: true
+        })
 
       %{conversation: conversation}
     end
@@ -390,9 +417,8 @@ defmodule WhisprMessaging.ConversationsTest do
     test "get_conversation_settings/1 creates default settings if none exist", %{
       conversation: conversation
     } do
-      assert {:ok, %ConversationSettings{} = settings} = Conversations.get_conversation_settings(
-        conversation.id
-      )
+      assert {:ok, %ConversationSettings{} = settings} =
+               Conversations.get_conversation_settings(conversation.id)
 
       assert settings.conversation_id == conversation.id
       assert is_map(settings.settings)
@@ -404,15 +430,17 @@ defmodule WhisprMessaging.ConversationsTest do
     } do
       custom_settings = %{"allow_media" => false, "custom_setting" => "value"}
 
-      assert {:ok, settings} = Conversations.create_conversation_settings(
-        conversation.id,
-        custom_settings
-      )
+      assert {:ok, settings} =
+               Conversations.create_conversation_settings(
+                 conversation.id,
+                 custom_settings
+               )
 
       # Should merge with defaults
       assert settings.settings["allow_media"] == false
       assert settings.settings["custom_setting"] == "value"
-      assert settings.settings["allow_editing"] == true  # Default value
+      # Default value
+      assert settings.settings["allow_editing"] == true
     end
 
     test "update_conversation_settings/2 updates existing settings", %{
@@ -423,10 +451,11 @@ defmodule WhisprMessaging.ConversationsTest do
 
       new_settings = %{"allow_reactions" => false, "new_setting" => "test"}
 
-      assert {:ok, updated_settings} = Conversations.update_conversation_settings(
-        settings,
-        new_settings
-      )
+      assert {:ok, updated_settings} =
+               Conversations.update_conversation_settings(
+                 settings,
+                 new_settings
+               )
 
       assert updated_settings.settings["allow_reactions"] == false
       assert updated_settings.settings["new_setting"] == "test"
@@ -435,11 +464,12 @@ defmodule WhisprMessaging.ConversationsTest do
 
   describe "conversation analytics" do
     setup do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{},
+          is_active: true
+        })
 
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
@@ -456,7 +486,8 @@ defmodule WhisprMessaging.ConversationsTest do
       stats = Conversations.get_conversation_stats(conversation.id)
 
       assert stats.member_count == 2
-      assert stats.message_count == 0  # No messages created yet
+      # No messages created yet
+      assert stats.message_count == 0
       assert stats.last_activity == nil
     end
 
@@ -464,9 +495,10 @@ defmodule WhisprMessaging.ConversationsTest do
       conversation: conversation
     } do
       # Update conversation with searchable metadata
-      {:ok, _} = Conversations.update_conversation(conversation, %{
-        metadata: %{"name" => "Searchable Group", "topic" => "testing"}
-      })
+      {:ok, _} =
+        Conversations.update_conversation(conversation, %{
+          metadata: %{"name" => "Searchable Group", "topic" => "testing"}
+        })
 
       results = Conversations.search_conversations("Searchable")
       assert length(results) == 1

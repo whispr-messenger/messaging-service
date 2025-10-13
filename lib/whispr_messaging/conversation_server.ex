@@ -19,16 +19,16 @@ defmodule WhisprMessaging.ConversationServer do
   alias WhisprMessagingWeb.{Endpoint, Presence}
 
   @typep conversation_state :: %{
-    conversation_id: binary(),
-    conversation: Conversation.t(),
-    members: [ConversationMember.t()],
-    active_members: MapSet.t(),
-    typing_users: MapSet.t(),
-    message_queue: :queue.queue(),
-    settings: map(),
-    last_activity: DateTime.t(),
-    metrics: map()
-  }
+           conversation_id: binary(),
+           conversation: Conversation.t(),
+           members: [ConversationMember.t()],
+           active_members: MapSet.t(),
+           typing_users: MapSet.t(),
+           message_queue: :queue.queue(),
+           settings: map(),
+           last_activity: DateTime.t(),
+           metrics: map()
+         }
 
   # Client API
 
@@ -121,7 +121,10 @@ defmodule WhisprMessaging.ConversationServer do
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error("Failed to initialize ConversationServer for #{conversation_id}: #{inspect(reason)}")
+        Logger.error(
+          "Failed to initialize ConversationServer for #{conversation_id}: #{inspect(reason)}"
+        )
+
         {:stop, reason}
     end
   end
@@ -139,7 +142,10 @@ defmodule WhisprMessaging.ConversationServer do
         {:reply, {:ok, message}, updated_state}
 
       {:error, reason} ->
-        Logger.warning("Failed to process message in conversation #{state.conversation_id}: #{inspect(reason)}")
+        Logger.warning(
+          "Failed to process message in conversation #{state.conversation_id}: #{inspect(reason)}"
+        )
+
         {:reply, {:error, reason}, state}
     end
   end
@@ -248,10 +254,7 @@ defmodule WhisprMessaging.ConversationServer do
     new_active_members = MapSet.delete(state.active_members, user_id)
     new_typing_users = MapSet.delete(state.typing_users, user_id)
 
-    new_state = %{state |
-      active_members: new_active_members,
-      typing_users: new_typing_users
-    }
+    new_state = %{state | active_members: new_active_members, typing_users: new_typing_users}
 
     Logger.debug("Member #{user_id} left conversation #{state.conversation_id}")
     {:noreply, new_state}
@@ -313,10 +316,11 @@ defmodule WhisprMessaging.ConversationServer do
         new_active_members = MapSet.delete(state.active_members, user_id)
         new_typing_users = MapSet.delete(state.typing_users, user_id)
 
-        new_state = %{state |
-          members: new_members,
-          active_members: new_active_members,
-          typing_users: new_typing_users
+        new_state = %{
+          state
+          | members: new_members,
+            active_members: new_active_members,
+            typing_users: new_typing_users
         }
 
         {:ok, new_state}
@@ -338,11 +342,12 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp update_typing_status(user_id, typing, state) do
-    new_typing_users = if typing do
-      MapSet.put(state.typing_users, user_id)
-    else
-      MapSet.delete(state.typing_users, user_id)
-    end
+    new_typing_users =
+      if typing do
+        MapSet.put(state.typing_users, user_id)
+      else
+        MapSet.delete(state.typing_users, user_id)
+      end
 
     %{state | typing_users: new_typing_users}
   end
@@ -470,6 +475,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp schedule_cleanup do
-    Process.send_after(self(), :cleanup, 30_000) # Every 30 seconds
+    # Every 30 seconds
+    Process.send_after(self(), :cleanup, 30_000)
   end
 end
