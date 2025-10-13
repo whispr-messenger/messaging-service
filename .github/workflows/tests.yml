@@ -1,0 +1,155 @@
+name: 🧪 Quality Assurance
+
+on:
+  repository_dispatch:
+    types: [run-tests]
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  ELIXIR_VERSION: '1.15'
+  OTP_VERSION: '26.0'
+  MIX_ENV: test
+
+jobs:
+  test-and-quality:
+    name: 🔍 Code Analysis & Testing
+    runs-on: ubuntu-latest
+
+    steps:
+      ####################################################################################################
+      # Setup
+      ####################################################################################################
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.client_payload.ref }}
+          fetch-depth: 0
+
+      - name: Build and start Docker Compose services
+        env:
+          DB_NAME: whispr_messaging_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_PORT: 5432
+          DB_HOST: postgres
+          REDIS_PORT: 6379
+          REDIS_HOST: redis
+          MIX_ENV: test
+        run: |
+          # Build the messaging-service image
+          docker compose -f docker/dev/docker-compose.yml build messaging-service
+
+          # Start all services (postgres and redis)
+          docker compose -f docker/dev/docker-compose.yml up -d postgres redis
+
+          # Wait for PostgreSQL to be ready
+          echo "Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until docker compose -f docker/dev/docker-compose.yml exec postgres pg_isready -U postgres; do sleep 2; done'
+
+          # Give PostgreSQL time to initialize
+          sleep 3
+
+          # Create test database
+          echo "Creating test database..."
+          docker compose -f docker/dev/docker-compose.yml exec postgres psql -U postgres -c "CREATE DATABASE whispr_messaging_test;" || echo "Test database may already exist"
+
+          # Wait for Redis to be ready
+          echo "Waiting for Redis..."
+          timeout 60 bash -c 'until docker compose -f docker/dev/docker-compose.yml exec redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
+
+          echo "All services are ready!"
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Restore dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile dependencies
+        run: mix deps.compile
+
+      - name: Compile project
+        run: mix compile --warnings-as-errors
+
+      ####################################################################################################
+      # Linting and Formatting
+      ####################################################################################################
+      - name: Check code formatting
+        run: mix format --check-formatted
+
+      - name: Run Credo (static code analysis)
+        run: mix credo --strict
+
+      - name: Run Dialyzer (type checking)
+        run: mix dialyzer
+        continue-on-error: true  # Dialyzer can be strict, allow to continue
+
+      - name: Run Sobelow (security analysis)
+        run: mix sobelow --config
+        continue-on-error: true  # Security warnings shouldn't block CI initially
+
+      ####################################################################################################
+      # Database Setup for Tests
+      ####################################################################################################
+      - name: Set up test database
+        env:
+          DB_HOST: localhost
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: whispr_messaging_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          MIX_ENV: test
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+
+      ####################################################################################################
+      # Unit and Integration Tests
+      ####################################################################################################
+      - name: Run tests with coverage
+        env:
+          DB_HOST: localhost
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: whispr_messaging_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          MIX_ENV: test
+        run: mix coveralls.json --trace
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker/dev/docker-compose.yml down -v
+
+      ####################################################################################################
+      # Upload Coverage Reports
+      ####################################################################################################
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./cover/excoveralls.json
+          flags: unittests
+          name: codecov-whispr-messaging
+          fail_ci_if_error: false
