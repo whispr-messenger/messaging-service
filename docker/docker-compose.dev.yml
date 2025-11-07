@@ -14,7 +14,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ../init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -42,8 +42,8 @@ services:
   # WhisprMessaging Service
   messaging-service:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
       target: build
     environment:
       # Database
@@ -78,7 +78,7 @@ services:
       - "4000:4000"  # HTTP/WebSocket
       - "50052:50052"  # gRPC
     volumes:
-      - .:/app
+      - ..:/app
       - deps:/app/deps
       - build:/app/_build
     depends_on:
@@ -102,62 +102,10 @@ services:
     networks:
       - whispr_network
 
-  # Mailhog for testing email notifications
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web interface
-    networks:
-      - whispr_network
-
-  # Prometheus for monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    networks:
-      - whispr_network
-
-  # Grafana for metrics visualization
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    networks:
-      - whispr_network
-
-  # Jaeger for distributed tracing
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"  # Jaeger UI
-      - "14268:14268"  # Jaeger collector
-    environment:
-      COLLECTOR_ZIPKIN_HTTP_PORT: 9411
-    networks:
-      - whispr_network
-
 volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  grafana_data:
     driver: local
   deps:
     driver: local

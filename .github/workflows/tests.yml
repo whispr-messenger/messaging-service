@@ -46,22 +46,22 @@ jobs:
           MIX_ENV: test
         run: |
           # Start database services (postgres and redis only)
-          docker compose -f docker-compose.dev.yml up -d postgres redis
+          docker compose -f docker/docker-compose.dev.yml up -d postgres redis
 
           # Wait for PostgreSQL to be ready
           echo "Waiting for PostgreSQL..."
-          timeout 60 bash -c 'until docker compose -f docker-compose.dev.yml exec postgres pg_isready -U postgres; do sleep 2; done'
+          timeout 60 bash -c 'until docker compose -f docker/docker-compose.dev.yml exec postgres pg_isready -U postgres; do sleep 2; done'
 
           # Give PostgreSQL time to initialize
           sleep 3
 
           # Create test database
           echo "Creating test database..."
-          docker compose -f docker-compose.dev.yml exec postgres psql -U postgres -c "CREATE DATABASE whispr_messaging_test;" || echo "Test database may already exist"
+          docker compose -f docker/docker-compose.dev.yml exec postgres psql -U postgres -c "CREATE DATABASE whispr_messaging_test;" || echo "Test database may already exist"
 
           # Wait for Redis to be ready
           echo "Waiting for Redis..."
-          timeout 60 bash -c 'until docker compose -f docker-compose.dev.yml exec redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
+          timeout 60 bash -c 'until docker compose -f docker/docker-compose.dev.yml exec redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
 
           echo "All services are ready!"
 
@@ -139,7 +139,7 @@ jobs:
 
       - name: Stop Docker Compose services
         if: always()
-        run: docker compose -f docker-compose.dev.yml down -v
+        run: docker compose -f docker/docker-compose.dev.yml down -v
 
       ####################################################################################################
       # Upload Coverage Reports

@@ -5,8 +5,8 @@ services:
   # WhisprMessaging Service
   messaging-service:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
       target: runtime
     environment:
       # Database (use external managed database in production)
@@ -142,7 +142,7 @@ services:
     environment:
       FLUENTD_CONF: fluent.conf
     volumes:
-      - ./logging/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - ../logging/fluent.conf:/fluentd/etc/fluent.conf:ro
       - app_logs:/fluentd/log
     networks:
       - whispr_network
@@ -156,7 +156,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
-      - ./scripts/backup.sh:/backup.sh:ro
+      - ../scripts/backup.sh:/backup.sh:ro
     command: >
       sh -c "
         apk add --no-cache postgresql-client aws-cli &&
