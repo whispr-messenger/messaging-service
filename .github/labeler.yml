@@ -41,7 +41,7 @@ ci/cd:
 
 🐳 devops:docker:
   - changed-files:
-    - any-glob-to-any-file: ['docker/Dockerfile', 'docker/**/*', 'docker/docker-compose*.yml', '.dockerignore']
+    - any-glob-to-any-file: ['docker/Dockerfile', 'docker/**/*', 'docker/docker-compose*.yml', 'docker/init-db.sql', '.dockerignore']
 
 📜 devops:scripts:
   - changed-files:
