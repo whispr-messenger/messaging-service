@@ -21,21 +21,7 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "development_secret_key_base_please_change_in_production",
-  watchers: [
-    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]}
-  ]
-
-# Watch static and templates for browser reloading.
-config :whispr_messaging, WhisprMessagingWeb.Endpoint,
-  live_reload: [
-    patterns: [
-      ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",
-      ~r"priv/gettext/.*(po)$",
-      ~r"lib/whispr_messaging_web/(controllers|live|components)/.*(ex|heex)$"
-    ]
-  ]
+  secret_key_base: "development_secret_key_base_please_change_in_production"
 
 # Development Redis configuration
 config :whispr_messaging, :redis,
@@ -43,11 +29,7 @@ config :whispr_messaging, :redis,
   port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   database: String.to_integer(System.get_env("REDIS_DB", "0")),
   password: System.get_env("REDIS_PASSWORD"),
-  timeout: 5000,
-  pool_size: 5
-
-# Enable dev routes for dashboard and mailbox
-config :whispr_messaging, dev_routes: true
+  timeout: 5000
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console,
@@ -60,9 +42,6 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
-
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
 
 # Configure telemetry for development
 config :telemetry_poller, :default, period: 5_000
