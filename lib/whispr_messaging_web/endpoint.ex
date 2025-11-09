@@ -29,25 +29,12 @@ defmodule WhisprMessagingWeb.Endpoint do
     longpoll: false
   )
 
-  # Serve static files from the "priv/static" directory
-  plug(Plug.Static,
-    at: "/",
-    from: :whispr_messaging,
-    gzip: false,
-    only: WhisprMessagingWeb.static_paths()
-  )
-
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
     plug(Phoenix.CodeReloader)
     plug(Phoenix.Ecto.CheckRepoStatus, otp_app: :whispr_messaging)
   end
-
-  plug(Phoenix.LiveDashboard.RequestLogger,
-    param_key: "request_logger",
-    cookie_key: "request_logger"
-  )
 
   plug(Plug.RequestId)
   plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
@@ -61,9 +48,6 @@ defmodule WhisprMessagingWeb.Endpoint do
   plug(Plug.MethodOverride)
   plug(Plug.Head)
   plug(Plug.Session, @session_options)
-
-  # gRPC endpoint configuration
-  plug(GRPC.Plug, http_transcode: true)
 
   plug(WhisprMessagingWeb.Router)
 
