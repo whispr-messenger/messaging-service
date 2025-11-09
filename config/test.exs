@@ -20,9 +20,6 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
     "VGVzdGluZ1NlY3JldEtleUJhc2VGb3JXaGlzcHJNZXNzYWdpbmdTZXJ2aWNlVGVzdEVudmlyb25tZW50",
   server: false
 
-# Disable swoosh api client as it is only required for production adapters
-config :swoosh, :api_client, false
-
 # Print only warnings and errors during test
 config :logger, level: :warning
 
