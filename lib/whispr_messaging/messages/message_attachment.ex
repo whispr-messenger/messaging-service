@@ -19,17 +19,17 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
   @max_filename_length 255
 
   schema "message_attachments" do
-    field :filename, :string
-    field :file_type, :string
-    field :file_size, :integer
-    field :mime_type, :string
-    field :storage_url, :string
-    field :thumbnail_url, :string
-    field :metadata, :map, default: %{}
-    field :encryption_key, :binary
-    field :is_deleted, :boolean, default: false
+    field(:filename, :string)
+    field(:file_type, :string)
+    field(:file_size, :integer)
+    field(:mime_type, :string)
+    field(:storage_url, :string)
+    field(:thumbnail_url, :string)
+    field(:metadata, :map, default: %{})
+    field(:encryption_key, :binary)
+    field(:is_deleted, :boolean, default: false)
 
-    belongs_to :message, Message, foreign_key: :message_id
+    belongs_to(:message, Message, foreign_key: :message_id)
 
     timestamps()
   end
@@ -50,7 +50,14 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
       :metadata,
       :encryption_key
     ])
-    |> validate_required([:message_id, :filename, :file_type, :file_size, :mime_type, :storage_url])
+    |> validate_required([
+      :message_id,
+      :filename,
+      :file_type,
+      :file_size,
+      :mime_type,
+      :storage_url
+    ])
     |> validate_inclusion(:file_type, @file_types)
     |> validate_length(:filename, max: @max_filename_length)
     |> validate_number(:file_size, greater_than: 0)
@@ -70,40 +77,45 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
   Query to get attachments for a message.
   """
   def by_message_query(message_id) do
-    from a in __MODULE__,
+    from(a in __MODULE__,
       where: a.message_id == ^message_id and a.is_deleted == false,
       order_by: [asc: a.inserted_at]
+    )
   end
 
   @doc """
   Query to get attachments by file type.
   """
   def by_file_type_query(message_id, file_type) do
-    from a in __MODULE__,
+    from(a in __MODULE__,
       where: a.message_id == ^message_id,
       where: a.file_type == ^file_type,
       where: a.is_deleted == false,
       order_by: [asc: a.inserted_at]
+    )
   end
 
   @doc """
   Query to get total attachment size for a conversation.
   """
   def conversation_storage_size_query(conversation_id) do
-    from a in __MODULE__,
-      join: m in Message, on: m.id == a.message_id,
+    from(a in __MODULE__,
+      join: m in Message,
+      on: m.id == a.message_id,
       where: m.conversation_id == ^conversation_id,
       where: a.is_deleted == false,
       select: sum(a.file_size)
+    )
   end
 
   @doc """
   Query to get attachments older than specified date (for cleanup).
   """
   def older_than_query(date) do
-    from a in __MODULE__,
+    from(a in __MODULE__,
       where: a.inserted_at < ^date,
       where: a.is_deleted == false
+    )
   end
 
   @doc """
@@ -124,7 +136,11 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
     max_size = get_max_file_size(file_type)
 
     if file_size && file_size > max_size do
-      add_error(changeset, :file_size, "exceeds maximum size of #{max_size} bytes for #{file_type} files")
+      add_error(
+        changeset,
+        :file_size,
+        "exceeds maximum size of #{max_size} bytes for #{file_type} files"
+      )
     else
       changeset
     end
@@ -147,9 +163,10 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
   Gets maximum file size for a file type.
   """
   defp get_max_file_size(file_type) do
+    # 100MB default
     Application.get_env(:whispr_messaging, :attachments)[:max_file_sizes][file_type] ||
       Application.get_env(:whispr_messaging, :attachments)[:default_max_size] ||
-      104_857_600 # 100MB default
+      104_857_600
   end
 
   @doc """
@@ -275,7 +292,8 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
   @doc """
   Checks if attachment requires processing (thumbnails, transcoding, etc.).
   """
-  def requires_processing?(%__MODULE__{file_type: file_type}) when file_type in ["image", "video"] do
+  def requires_processing?(%__MODULE__{file_type: file_type})
+      when file_type in ["image", "video"] do
     true
   end
 
@@ -290,7 +308,8 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
     %{
       url: storage_url,
       requires_encryption_key: !is_nil(encryption_key),
-      expires_at: DateTime.add(DateTime.utc_now(), 3600, :second) # 1 hour
+      # 1 hour
+      expires_at: DateTime.add(DateTime.utc_now(), 3600, :second)
     }
   end
 end

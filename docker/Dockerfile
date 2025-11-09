@@ -9,7 +9,8 @@ RUN apk add --no-cache \
     build-base \
     git \
     nodejs \
-    npm
+    npm \
+    erlang-dev
 
 # Set environment variables
 ENV MIX_ENV=prod

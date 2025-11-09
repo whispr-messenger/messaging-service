@@ -1,0 +1,135 @@
+# Docker Compose for WhisprMessaging Development Environment
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: whispr_messaging_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - messaging_service_network
+
+  # Redis for caching and pub/sub
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - messaging_service_network
+
+  # WhisprMessaging Service
+  messaging-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      # Database
+      DB_USERNAME: messaging_service
+      DB_PASSWORD: development_password
+      DB_HOST: postgres
+      DB_NAME: whispr_messaging_dev
+      DB_PORT: 5432
+      DB_POOL_SIZE: 10
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+
+      # Phoenix
+      PHX_HOST: 0.0.0.0
+      PHX_PORT: 4000
+      PORT: 4000
+      SECRET_KEY_BASE: "development_secret_key_base_please_change_in_production"
+
+      # gRPC
+      GRPC_PORT: 50052
+
+      # Environment
+      MIX_ENV: dev
+
+      # Logging
+      LOG_LEVEL: debug
+
+      # External services (update with actual service URLs in your environment)
+      AUTH_SERVICE_HOST: auth-service
+      AUTH_SERVICE_PORT: 50056
+      USER_SERVICE_HOST: user-service
+      USER_SERVICE_PORT: 50055
+      MEDIA_SERVICE_HOST: media-service
+      MEDIA_SERVICE_PORT: 50054
+      NOTIFICATION_SERVICE_HOST: notification-service
+      NOTIFICATION_SERVICE_PORT: 50053
+      MODERATION_SERVICE_HOST: moderation-service
+      MODERATION_SERVICE_PORT: 50057
+
+      # Security (change these in production!)
+      ENCRYPTION_KEY: "your-32-character-encryption-key-here"
+      JWT_SECRET: "your-jwt-secret-here"
+    ports:
+      - "4000:4000"  # HTTP/WebSocket API
+      - "50052:50052"  # gRPC
+    volumes:
+      # Mount project root for hot code reload
+      - ..:/app
+      # Named volumes for faster access to deps and build
+      - deps:/app/deps
+      - build:/app/_build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        mix deps.get &&
+        mix ecto.create --quiet &&
+        mix ecto.migrate --quiet &&
+        mix phx.server
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - messaging_service_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  deps:
+    driver: local
+  build:
+    driver: local
+
+networks:
+  messaging_service_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

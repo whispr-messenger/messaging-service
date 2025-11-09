@@ -20,13 +20,13 @@ defmodule WhisprMessaging.Application do
 
       # Redis connections
       {Redix, redis_config()},
-      {Redix.PubSub, [name: :redix_pubsub] ++ redis_config()},
+      %{
+        id: Redix.PubSub,
+        start: {Redix.PubSub, :start_link, [[name: :redix_pubsub] ++ redis_config()]}
+      },
 
       # PubSub for Phoenix Channels
       {Phoenix.PubSub, name: WhisprMessaging.PubSub},
-
-      # Telemetry supervision tree
-      WhisprMessagingWeb.Telemetry,
 
       # Conversation registry and supervisor
       {Registry, keys: :unique, name: WhisprMessaging.ConversationRegistry},
@@ -36,10 +36,7 @@ defmodule WhisprMessaging.Application do
       WhisprMessagingWeb.Presence,
 
       # Phoenix Endpoint
-      WhisprMessagingWeb.Endpoint,
-
-      # gRPC server
-      {GRPC.Server.Supervisor, grpc_server_config()}
+      WhisprMessagingWeb.Endpoint
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -66,16 +63,10 @@ defmodule WhisprMessaging.Application do
   end
 
   defp redis_config do
-    Application.get_env(:whispr_messaging, :redis, [
+    Application.get_env(:whispr_messaging, :redis,
       host: "localhost",
       port: 6379,
       database: 0
-    ])
-  end
-
-  defp grpc_server_config do
-    port = Application.get_env(:whispr_messaging, :grpc_port, 50052)
-
-    {WhisprMessaging.GRPC.Server, port}
+    )
   end
 end

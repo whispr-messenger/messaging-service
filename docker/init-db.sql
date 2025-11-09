@@ -12,18 +12,18 @@ CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 -- Create application-specific database user (if needed)
 -- Note: In production, this should be handled by your infrastructure/deployment scripts
--- DO $$
--- BEGIN
---     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'whispr_messaging') THEN
---         CREATE ROLE whispr_messaging WITH LOGIN PASSWORD 'secure_password_here';
---     END IF;
--- END
--- $$;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'messaging_service') THEN
+        CREATE ROLE messaging_service WITH LOGIN PASSWORD 'development_password';
+    END IF;
+END
+$$;
 
 -- Grant necessary permissions
--- GRANT CONNECT ON DATABASE whispr_messaging_dev TO whispr_messaging;
--- GRANT USAGE ON SCHEMA public TO whispr_messaging;
--- GRANT CREATE ON SCHEMA public TO whispr_messaging;
+GRANT CONNECT ON DATABASE whispr_messaging_dev TO messaging_service;
+GRANT USAGE ON SCHEMA public TO messaging_service;
+GRANT CREATE ON SCHEMA public TO messaging_service;
 
 -- Set up recommended PostgreSQL settings for messaging workloads
 -- These are development settings; adjust for production

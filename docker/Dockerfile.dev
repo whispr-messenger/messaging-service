@@ -1,0 +1,53 @@
+# Dockerfile.dev - Development image for WhisprMessaging Service
+# Optimized for fast development iterations with hot-reload support
+
+FROM elixir:1.14-alpine
+# Note: This image supports Elixir >= 1.14 as configured in mix.exs
+
+# Install build dependencies for development
+RUN apk add --no-cache \
+    build-base \
+    git \
+    bash \
+    curl \
+    postgresql-client \
+    erlang-dev
+
+# Set environment variables
+ENV MIX_ENV=dev \
+    PHX_HOST=0.0.0.0 \
+    PHX_PORT=4000 \
+    GRPC_PORT=50052 \
+    ERL_AFLAGS="-kernel shell_history enabled"
+
+# Create app directory
+WORKDIR /app
+
+# Copy mix files early for dependency caching
+COPY mix.exs mix.lock ./
+
+# Install hex and rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+# Install dependencies (this layer will be cached unless mix.exs/mix.lock change)
+RUN mix deps.get
+
+# Copy the entire application code
+COPY . .
+
+# Compile dependencies
+RUN mix deps.compile
+
+# Pre-compile the application (optional, but speeds up startup)
+RUN mix compile || true
+
+# Expose ports
+EXPOSE 4000 50052
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:4000/api/v1/health || exit 1
+
+# Default command for development server
+CMD ["mix", "phx.server"]

@@ -19,15 +19,15 @@ defmodule WhisprMessaging.Conversations.Conversation do
   @conversation_types ~w(direct group)
 
   schema "conversations" do
-    field :type, :string
-    field :external_group_id, :binary_id
-    field :metadata, :map, default: %{}
-    field :is_active, :boolean, default: true
+    field(:type, :string)
+    field(:external_group_id, :binary_id)
+    field(:metadata, :map, default: %{})
+    field(:is_active, :boolean, default: true)
 
-    has_many :members, ConversationMember, foreign_key: :conversation_id
-    has_many :messages, Message, foreign_key: :conversation_id
-    has_many :pinned_messages, PinnedMessage, foreign_key: :conversation_id
-    has_one :settings, ConversationSettings, foreign_key: :conversation_id
+    has_many(:members, ConversationMember, foreign_key: :conversation_id)
+    has_many(:messages, Message, foreign_key: :conversation_id)
+    has_many(:pinned_messages, PinnedMessage, foreign_key: :conversation_id)
+    has_one(:settings, ConversationSettings, foreign_key: :conversation_id)
 
     timestamps()
   end
@@ -57,18 +57,19 @@ defmodule WhisprMessaging.Conversations.Conversation do
   Query to find conversations by user ID.
   """
   def by_user_query(user_id) do
-    from c in __MODULE__,
+    from(c in __MODULE__,
       join: m in ConversationMember,
       on: m.conversation_id == c.id,
       where: m.user_id == ^user_id and m.is_active == true and c.is_active == true,
       order_by: [desc: c.updated_at]
+    )
   end
 
   @doc """
   Query to find a direct conversation between two users.
   """
   def direct_conversation_query(user_id1, user_id2) do
-    from c in __MODULE__,
+    from(c in __MODULE__,
       join: m1 in ConversationMember,
       on: m1.conversation_id == c.id,
       join: m2 in ConversationMember,
@@ -77,23 +78,26 @@ defmodule WhisprMessaging.Conversations.Conversation do
       where: m1.user_id == ^user_id1 and m1.is_active == true,
       where: m2.user_id == ^user_id2 and m2.is_active == true,
       where: m1.id != m2.id
+    )
   end
 
   @doc """
   Query to find conversation by external group ID.
   """
   def by_external_group_query(external_group_id) do
-    from c in __MODULE__,
+    from(c in __MODULE__,
       where: c.external_group_id == ^external_group_id and c.is_active == true
+    )
   end
 
   @doc """
   Query to get conversation with members preloaded.
   """
   def with_members_query(conversation_id) do
-    from c in __MODULE__,
+    from(c in __MODULE__,
       where: c.id == ^conversation_id,
       preload: [members: :user]
+    )
   end
 
   @doc """
@@ -101,14 +105,16 @@ defmodule WhisprMessaging.Conversations.Conversation do
   """
   def with_recent_messages_query(conversation_id, limit \\ 50) do
     recent_messages_query =
-      from m in Message,
+      from(m in Message,
         where: m.conversation_id == ^conversation_id and m.is_deleted == false,
         order_by: [desc: m.sent_at],
         limit: ^limit
+      )
 
-    from c in __MODULE__,
+    from(c in __MODULE__,
       where: c.id == ^conversation_id,
       preload: [messages: ^recent_messages_query]
+    )
   end
 
   @doc """

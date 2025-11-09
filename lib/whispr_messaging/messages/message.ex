@@ -19,22 +19,23 @@ defmodule WhisprMessaging.Messages.Message do
   @message_types ~w(text media system)
 
   schema "messages" do
-    field :sender_id, :binary_id
-    field :message_type, :string
-    field :content, :binary  # Encrypted content as BYTEA
-    field :metadata, :map, default: %{}
-    field :client_random, :integer
-    field :sent_at, :utc_datetime
-    field :edited_at, :utc_datetime
-    field :is_deleted, :boolean, default: false
-    field :delete_for_everyone, :boolean, default: false
+    field(:sender_id, :binary_id)
+    field(:message_type, :string)
+    # Encrypted content as BYTEA
+    field(:content, :binary)
+    field(:metadata, :map, default: %{})
+    field(:client_random, :integer)
+    field(:sent_at, :utc_datetime)
+    field(:edited_at, :utc_datetime)
+    field(:is_deleted, :boolean, default: false)
+    field(:delete_for_everyone, :boolean, default: false)
 
-    belongs_to :conversation, Conversation, foreign_key: :conversation_id
-    belongs_to :reply_to, __MODULE__, foreign_key: :reply_to_id
-    has_many :delivery_statuses, DeliveryStatus, foreign_key: :message_id
-    has_many :reactions, MessageReaction, foreign_key: :message_id
-    has_many :attachments, MessageAttachment, foreign_key: :message_id
-    has_many :replies, __MODULE__, foreign_key: :reply_to_id
+    belongs_to(:conversation, Conversation, foreign_key: :conversation_id)
+    belongs_to(:reply_to, __MODULE__, foreign_key: :reply_to_id)
+    has_many(:delivery_statuses, DeliveryStatus, foreign_key: :message_id)
+    has_many(:reactions, MessageReaction, foreign_key: :message_id)
+    has_many(:attachments, MessageAttachment, foreign_key: :message_id)
+    has_many(:replies, __MODULE__, foreign_key: :reply_to_id)
 
     timestamps()
   end
@@ -69,11 +70,14 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def edit_changeset(message, new_content, metadata \\ %{}) do
     message
-    |> cast(%{
-      content: new_content,
-      metadata: Map.merge(message.metadata, metadata),
-      edited_at: DateTime.utc_now()
-    }, [:content, :metadata, :edited_at])
+    |> cast(
+      %{
+        content: new_content,
+        metadata: Map.merge(message.metadata, metadata),
+        edited_at: DateTime.utc_now()
+      },
+      [:content, :metadata, :edited_at]
+    )
     |> validate_content_size()
     |> validate_metadata()
   end
@@ -83,10 +87,13 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def delete_changeset(message, delete_for_everyone \\ false) do
     message
-    |> cast(%{
-      is_deleted: true,
-      delete_for_everyone: delete_for_everyone
-    }, [:is_deleted, :delete_for_everyone])
+    |> cast(
+      %{
+        is_deleted: true,
+        delete_for_everyone: delete_for_everyone
+      },
+      [:is_deleted, :delete_for_everyone]
+    )
   end
 
   @doc """
@@ -94,14 +101,15 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def recent_messages_query(conversation_id, limit \\ 50, before_timestamp \\ nil) do
     query =
-      from m in __MODULE__,
+      from(m in __MODULE__,
         where: m.conversation_id == ^conversation_id and m.is_deleted == false,
         order_by: [desc: m.sent_at],
         limit: ^limit
+      )
 
     case before_timestamp do
       nil -> query
-      timestamp -> from m in query, where: m.sent_at < ^timestamp
+      timestamp -> from(m in query, where: m.sent_at < ^timestamp)
     end
   end
 
@@ -109,18 +117,19 @@ defmodule WhisprMessaging.Messages.Message do
   Query to get messages after a specific timestamp.
   """
   def messages_after_query(conversation_id, timestamp) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id,
       where: m.sent_at > ^timestamp,
       where: m.is_deleted == false,
       order_by: [asc: m.sent_at]
+    )
   end
 
   @doc """
   Query to get undelivered messages for a user.
   """
   def undelivered_messages_query(user_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       left_join: ds in DeliveryStatus,
       on: ds.message_id == m.id and ds.user_id == ^user_id,
       join: c in Conversation,
@@ -130,6 +139,7 @@ defmodule WhisprMessaging.Messages.Message do
       where: is_nil(ds.id) and m.sender_id != ^user_id,
       where: m.is_deleted == false and cm.is_active == true,
       order_by: [asc: m.sent_at]
+    )
   end
 
   @doc """
@@ -139,31 +149,34 @@ defmodule WhisprMessaging.Messages.Message do
     # Note: This is for metadata search only since content is encrypted
     search_pattern = "%#{search_term}%"
 
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id,
       where: m.is_deleted == false,
       where: ilike(fragment("?::text", m.metadata), ^search_pattern),
       order_by: [desc: m.sent_at]
+    )
   end
 
   @doc """
   Query to get message with all related data.
   """
   def with_relations_query(message_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.id == ^message_id,
       preload: [:delivery_statuses, :reactions, :attachments, :reply_to]
+    )
   end
 
   @doc """
   Query to get messages by sender in a conversation.
   """
   def by_sender_query(conversation_id, sender_id) do
-    from m in __MODULE__,
+    from(m in __MODULE__,
       where: m.conversation_id == ^conversation_id,
       where: m.sender_id == ^sender_id,
       where: m.is_deleted == false,
       order_by: [desc: m.sent_at]
+    )
   end
 
   @doc """
@@ -171,22 +184,29 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def unread_count_query(conversation_id, user_id, last_read_at) do
     query =
-      from m in __MODULE__,
+      from(m in __MODULE__,
         where: m.conversation_id == ^conversation_id,
         where: m.sender_id != ^user_id,
         where: m.is_deleted == false,
         select: count(m.id)
+      )
 
     case last_read_at do
       nil -> query
-      timestamp -> from m in query, where: m.sent_at > ^timestamp
+      timestamp -> from(m in query, where: m.sent_at > ^timestamp)
     end
   end
 
   @doc """
   Creates a new text message.
   """
-  def create_text_message(conversation_id, sender_id, encrypted_content, client_random, metadata \\ %{}) do
+  def create_text_message(
+        conversation_id,
+        sender_id,
+        encrypted_content,
+        client_random,
+        metadata \\ %{}
+      ) do
     %__MODULE__{}
     |> changeset(%{
       conversation_id: conversation_id,
@@ -223,7 +243,8 @@ defmodule WhisprMessaging.Messages.Message do
     %__MODULE__{}
     |> changeset(%{
       conversation_id: conversation_id,
-      sender_id: nil,  # System messages have no sender
+      # System messages have no sender
+      sender_id: nil,
       message_type: "system",
       content: content,
       metadata: metadata,
