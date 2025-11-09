@@ -15,11 +15,10 @@ config :whispr_messaging,
 config :whispr_messaging, WhisprMessagingWeb.Endpoint,
   url: [host: "localhost"],
   render_errors: [
-    formats: [html: WhisprMessagingWeb.ErrorHTML, json: WhisprMessagingWeb.ErrorJSON],
+    formats: [json: WhisprMessagingWeb.ErrorJSON],
     layout: false
   ],
   pubsub_server: WhisprMessaging.PubSub,
-  live_view: [signing_salt: "messaging_secret"],
   server: true
 
 # Configure Phoenix Channels
@@ -33,12 +32,17 @@ config :whispr_messaging, :redis,
   host: System.get_env("REDIS_HOST", "localhost"),
   port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   database: String.to_integer(System.get_env("REDIS_DB", "0")),
-  password: System.get_env("REDIS_PASSWORD"),
-  pool_size: String.to_integer(System.get_env("REDIS_POOL_SIZE", "10"))
+  password: System.get_env("REDIS_PASSWORD")
 
 # gRPC configuration
+config :grpc,
+  start_server: true
+
 config :whispr_messaging,
   grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50052"))
+
+config :whispr_messaging, WhisprMessaging.GRPC.Server,
+  port: String.to_integer(System.get_env("GRPC_PORT", "50052"))
 
 # Conversation GenServer configuration
 config :whispr_messaging, :conversations,
@@ -85,9 +89,6 @@ config :phoenix, :json_library, Jason
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
-
-# Configure telemetry - simplified for tests
-config :whispr_messaging, WhisprMessagingWeb.Telemetry, metrics: []
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
