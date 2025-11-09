@@ -1,32 +1,14 @@
 defmodule WhisprMessagingWeb.Router do
   @moduledoc """
-  Phoenix router for WhisprMessaging web interface.
+  Phoenix router for WhisprMessaging API.
 
-  Defines HTTP routes for the messaging service API and health endpoints.
+  Defines HTTP routes for the messaging service API and WebSocket endpoints.
   """
 
   use WhisprMessagingWeb, :router
 
   pipeline :api do
     plug(:accepts, ["json"])
-    plug(:fetch_session)
-    plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers)
-  end
-
-  pipeline :browser do
-    plug(:accepts, ["html"])
-    plug(:fetch_session)
-    plug(:fetch_live_flash)
-    plug(:put_root_layout, html: {WhisprMessagingWeb.Layouts, :root})
-    plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers)
-  end
-
-  scope "/", WhisprMessagingWeb do
-    pipe_through(:browser)
-
-    get("/", PageController, :home)
   end
 
   scope "/api/v1", WhisprMessagingWeb do
@@ -44,16 +26,5 @@ defmodule WhisprMessagingWeb.Router do
     get("/messages/:id", MessageController, :show)
     put("/messages/:id", MessageController, :update)
     delete("/messages/:id", MessageController, :delete)
-  end
-
-  # Enable LiveDashboard in development
-  if Application.compile_env(:whispr_messaging, :dev_routes) do
-    import Phoenix.LiveDashboard.Router
-
-    scope "/dev" do
-      pipe_through(:browser)
-
-      live_dashboard("/dashboard", metrics: WhisprMessagingWeb.Telemetry)
-    end
   end
 end
