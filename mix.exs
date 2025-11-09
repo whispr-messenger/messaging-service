@@ -5,7 +5,7 @@ defmodule WhisprMessaging.MixProject do
     [
       app: :whispr_messaging,
       version: "1.0.0",
-      elixir: "~> 1.15",
+      elixir: ">= 1.14.0",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
@@ -35,11 +35,8 @@ defmodule WhisprMessaging.MixProject do
       # Phoenix and web dependencies
       {:phoenix, "~> 1.7.0"},
       {:phoenix_ecto, "~> 4.4"},
-      {:phoenix_html, "~> 3.3"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 0.19.0"},
-      {:phoenix_live_dashboard, "~> 0.8.0"},
       {:phoenix_pubsub, "~> 2.1"},
+      {:plug_cowboy, "~> 2.7"},
 
       # Database
       {:ecto_sql, "~> 3.10"},
@@ -106,8 +103,7 @@ defmodule WhisprMessaging.MixProject do
       setup: ["deps.get", "ecto.setup"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "assets.deploy": ["esbuild default --minify", "phx.digest"]
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
     ]
   end
 end
