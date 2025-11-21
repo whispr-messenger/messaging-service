@@ -86,7 +86,7 @@ defmodule WhisprMessagingWeb do
       # HTML escaping functionality
       import Phoenix.HTML
       # Core UI components and translation
-      import WhisprMessagingWeb.CoreComponents
+      # import WhisprMessagingWeb.CoreComponents  # TODO: Create CoreComponents module if needed
       import WhisprMessagingWeb.Gettext
 
       # Shortcut for generating JS commands

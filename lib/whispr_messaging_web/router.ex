@@ -44,6 +44,12 @@ defmodule WhisprMessagingWeb.Router do
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+
+    # Attachment routes
+    post "/attachments/upload", AttachmentController, :upload
+    get "/attachments/:id", AttachmentController, :show
+    get "/attachments/:id/download", AttachmentController, :download
+    delete "/attachments/:id", AttachmentController, :delete
   end
 
   # Enable LiveDashboard in development
