@@ -360,4 +360,47 @@ defmodule WhisprMessaging.Messages do
     Message.create_system_message(conversation_id, content, metadata)
     |> Repo.insert()
   end
+
+  # Attachment operations
+
+  @doc """
+  Creates a message attachment record.
+  """
+  def create_attachment(attrs \\ %{}) do
+    %MessageAttachment{}
+    |> MessageAttachment.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets a single attachment by id.
+  """
+  def get_attachment(id) do
+    case Repo.get(MessageAttachment, id) do
+      nil -> {:error, :not_found}
+      attachment -> {:ok, attachment}
+    end
+  end
+
+  @doc """
+  Deletes an attachment.
+  """
+  def delete_attachment(id) do
+    case get_attachment(id) do
+      {:ok, attachment} -> Repo.delete(attachment)
+      error -> error
+    end
+  end
+
+  @doc """
+  Checks if a user can access messages in a conversation.
+  """
+  def user_can_access_message?(conversation_id, user_id) do
+    alias WhisprMessaging.Conversations
+
+    case Conversations.is_conversation_member?(conversation_id, user_id) do
+      {:ok, true} -> true
+      _ -> false
+    end
+  end
 end
