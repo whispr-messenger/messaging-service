@@ -11,7 +11,7 @@ defmodule WhisprMessaging.Conversations.Conversation do
   import Ecto.Query
 
   alias WhisprMessaging.Conversations.{ConversationMember, ConversationSettings}
-  alias WhisprMessaging.Messages.{Message, PinnedMessage}
+  alias WhisprMessaging.Messages.Message
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -26,7 +26,7 @@ defmodule WhisprMessaging.Conversations.Conversation do
 
     has_many :members, ConversationMember, foreign_key: :conversation_id
     has_many :messages, Message, foreign_key: :conversation_id
-    has_many :pinned_messages, PinnedMessage, foreign_key: :conversation_id
+    # has_many :pinned_messages, PinnedMessage, foreign_key: :conversation_id  # TODO: Create PinnedMessage module
     has_one :settings, ConversationSettings, foreign_key: :conversation_id
 
     timestamps()
@@ -85,6 +85,31 @@ defmodule WhisprMessaging.Conversations.Conversation do
   def by_external_group_query(external_group_id) do
     from c in __MODULE__,
       where: c.external_group_id == ^external_group_id and c.is_active == true
+  end
+
+  @doc """
+  Alias for by_external_group_query for backwards compatibility.
+  """
+  def by_external_group_id_query(external_group_id) do
+    by_external_group_query(external_group_id)
+  end
+
+  @doc """
+  Query to get active conversations with a limit.
+  """
+  def active_conversations_query(limit \\ 50) do
+    from c in __MODULE__,
+      where: c.is_active == true,
+      order_by: [desc: c.updated_at],
+      limit: ^limit
+  end
+
+  @doc """
+  Changeset for deactivating a conversation.
+  """
+  def deactivate_changeset(conversation) do
+    conversation
+    |> change(%{is_active: false})
   end
 
   @doc """

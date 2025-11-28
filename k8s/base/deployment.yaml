@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging-service
+  labels:
+    app: messaging-service
+    app.kubernetes.io/name: messaging-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: whispr
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: messaging-service
+  template:
+    metadata:
+      labels:
+        app: messaging-service
+        app.kubernetes.io/name: messaging-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "4000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: messaging-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: messaging-service
+          image: whispr/messaging-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+            - name: grpc
+              containerPort: 4001
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "4000"
+            - name: GRPC_PORT
+              value: "4001"
+            - name: MIX_ENV
+              value: "prod"
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: DB_NAME
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-service-secret
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-service-secret
+                  key: DB_PASSWORD
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-service-secret
+                  key: SECRET_KEY_BASE
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: REDIS_PORT
+            - name: SCHEDULING_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: SCHEDULING_SERVICE_HOST
+            - name: SCHEDULING_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-service-config
+                  key: SCHEDULING_SERVICE_PORT
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health?type=live
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health?type=ready
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: messaging-service
+                topologyKey: kubernetes.io/hostname

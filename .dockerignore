@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+_build/
+deps/
+.elixir_ls/
+
+# Node modules (if any)
+node_modules/
+assets/node_modules/
+
+# Test and development
+test/
+.formatter.exs
+coveralls.json
+
+# Documentation
+doc/
+documentation/
+
+# Environment files
+.env
+.env.*
+*.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker/
+
+# Logs
+logs/
+*.log
+erl_crash.dump
+
+# Temporary files
+tmp/
+temp/
+priv/static/uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude/Cursor config
+CLAUDE.md
+.cursor-rules

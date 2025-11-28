@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: whispr-dev
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: dev
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: messaging-service
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: messaging-service
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: messaging-service
+      spec:
+        minReplicas: 1
+        maxReplicas: 3
+
+configMapGenerator:
+  - name: messaging-service-config
+    behavior: merge
+    literals:
+      - DB_HOST=messaging-postgresql-dev
+      - REDIS_HOST=messaging-redis-dev

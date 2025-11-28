@@ -53,6 +53,9 @@ defmodule WhisprMessaging.MixProject do
       {:httpoison, "~> 2.0"},
       {:finch, "~> 0.16"},
 
+      # Email
+      {:swoosh, "~> 1.11"},
+
       # WebSocket and real-time
       {:websockex, "~> 0.4.3"},
 

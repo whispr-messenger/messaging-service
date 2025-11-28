@@ -14,13 +14,25 @@ defmodule WhisprMessaging.Application do
   def start(_type, _args) do
     Logger.info("Starting WhisprMessaging application...")
 
-    children = [
+    children = base_children() ++ env_specific_children()
+
+    opts = [strategy: :one_for_one, name: WhisprMessaging.Supervisor]
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        Logger.info("WhisprMessaging application started successfully")
+        {:ok, pid}
+
+      {:error, reason} ->
+        Logger.error("Failed to start WhisprMessaging application: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp base_children do
+    [
       # Database
       WhisprMessaging.Repo,
-
-      # Redis connections
-      {Redix, redis_config()},
-      {Redix.PubSub, [name: :redix_pubsub] ++ redis_config()},
 
       # PubSub for Phoenix Channels
       {Phoenix.PubSub, name: WhisprMessaging.PubSub},
@@ -36,24 +48,22 @@ defmodule WhisprMessaging.Application do
       WhisprMessagingWeb.Presence,
 
       # Phoenix Endpoint
-      WhisprMessagingWeb.Endpoint,
-
-      # gRPC server
-      {GRPC.Server.Supervisor, grpc_server_config()}
+      WhisprMessagingWeb.Endpoint
     ]
+  end
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: WhisprMessaging.Supervisor]
+  defp env_specific_children do
+    if Mix.env() == :test do
+      # Skip Redis and gRPC in test environment
+      []
+    else
+      [
+        # Redis connections
+        {Redix, [name: :redix] ++ redis_config()},
 
-    case Supervisor.start_link(children, opts) do
-      {:ok, pid} ->
-        Logger.info("WhisprMessaging application started successfully")
-        {:ok, pid}
-
-      {:error, reason} ->
-        Logger.error("Failed to start WhisprMessaging application: #{inspect(reason)}")
-        {:error, reason}
+        # gRPC server
+        {GRPC.Server.Supervisor, grpc_server_config()}
+      ]
     end
   end
 
@@ -75,7 +85,6 @@ defmodule WhisprMessaging.Application do
 
   defp grpc_server_config do
     port = Application.get_env(:whispr_messaging, :grpc_port, 50052)
-
     {WhisprMessaging.GRPC.Server, port}
   end
 end
