@@ -59,10 +59,9 @@ defmodule WhisprMessaging.Application do
     else
       [
         # Redis connections
-        {Redix, [name: :redix] ++ redis_config()},
-
-        # gRPC server
-        {GRPC.Server.Supervisor, grpc_server_config()}
+        {Redix, [name: :redix] ++ redis_config()}
+        # gRPC server disabled for now - needs config update
+        # {GRPC.Server.Supervisor, grpc_server_config()}
       ]
     end
   end
