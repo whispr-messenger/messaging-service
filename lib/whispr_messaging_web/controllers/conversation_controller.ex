@@ -173,11 +173,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     %{
       id: conversation.id,
       type: conversation.type,
-      name: conversation.name,
+      name: Map.get(conversation.metadata || %{}, "name"),
       external_group_id: conversation.external_group_id,
       metadata: conversation.metadata,
       is_active: conversation.is_active,
-      last_message_at: conversation.last_message_at,
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     }

@@ -58,9 +58,6 @@ defmodule WhisprMessagingWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
 
-  # gRPC endpoint configuration
-  plug GRPC.Plug, http_transcode: true
-
   plug WhisprMessagingWeb.Router
 
   @doc """
