@@ -286,7 +286,7 @@ defmodule WhisprMessaging.Messages.Message do
   defp put_sent_at_if_empty(%Ecto.Changeset{} = changeset) do
     case get_field(changeset, :sent_at) do
       nil ->
-        put_change(changeset, :sent_at, DateTime.utc_now())
+        put_change(changeset, :sent_at, DateTime.utc_now() |> DateTime.truncate(:second))
 
       _ ->
         changeset
