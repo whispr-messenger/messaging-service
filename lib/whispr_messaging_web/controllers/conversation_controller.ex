@@ -57,10 +57,13 @@ defmodule WhisprMessagingWeb.ConversationController do
     "external_group_id": "optional_external_id"
   }
   """
-  def create(conn, %{"conversation" => %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params}) do
+  def create(conn, %{
+        "conversation" => %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params
+      }) do
     metadata = params["metadata"] || %{}
 
-    with {:ok, conversation} <- Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
+    with {:ok, conversation} <-
+           Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
       conn
       |> put_status(:created)
       |> json(%{
@@ -75,7 +78,8 @@ defmodule WhisprMessagingWeb.ConversationController do
     metadata = params["metadata"] || %{}
     external_group_id = params["external_group_id"]
 
-    with {:ok, conversation} <- Conversations.create_group_conversation(name, user_ids, external_group_id, metadata) do
+    with {:ok, conversation} <-
+           Conversations.create_group_conversation(name, user_ids, external_group_id, metadata) do
       conn
       |> put_status(:created)
       |> json(%{
@@ -134,7 +138,8 @@ defmodule WhisprMessagingWeb.ConversationController do
   """
   def update(conn, %{"id" => id, "conversation" => conversation_params}) do
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         {:ok, updated_conversation} <- Conversations.update_conversation(conversation, conversation_params) do
+         {:ok, updated_conversation} <-
+           Conversations.update_conversation(conversation, conversation_params) do
       json(conn, %{
         data: render_conversation(updated_conversation)
       })
@@ -196,6 +201,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp filter_by_type(conversations, nil), do: conversations
+
   defp filter_by_type(conversations, type) do
     Enum.filter(conversations, fn conv -> conv.type == type end)
   end
