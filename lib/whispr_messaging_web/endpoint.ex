@@ -23,7 +23,8 @@ defmodule WhisprMessagingWeb.Endpoint do
       timeout: 45_000,
       transport_log: false,
       compress: true,
-      check_origin: false  # Configure appropriately for production
+      # Configure appropriately for production
+      check_origin: false
     ],
     longpoll: false
 

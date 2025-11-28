@@ -12,15 +12,24 @@ defmodule WhisprMessagingWeb.AttachmentController do
   require Logger
 
   @upload_dir "priv/static/uploads"
-  @max_file_size 50 * 1024 * 1024  # 50 MB
+  # 50 MB
+  @max_file_size 50 * 1024 * 1024
   @allowed_mime_types [
-    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
     "application/pdf",
-    "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "text/plain", "text/csv",
-    "video/mp4", "video/quicktime",
-    "audio/mpeg", "audio/wav"
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain",
+    "text/csv",
+    "video/mp4",
+    "video/quicktime",
+    "audio/mpeg",
+    "audio/wav"
   ]
 
   action_fallback WhisprMessagingWeb.FallbackController
@@ -41,7 +50,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
          :ok <- validate_user_permission(message, user_id),
          {:ok, file_path, file_url} <- save_file(upload),
          {:ok, attachment} <- create_attachment_record(message_id, upload, file_path, file_url) do
-
       Logger.info("File uploaded successfully: #{attachment.id}")
 
       conn
@@ -68,6 +76,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
       {:error, reason} ->
         Logger.error("Upload failed: #{inspect(reason)}")
+
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Upload failed"})
@@ -92,12 +101,14 @@ defmodule WhisprMessagingWeb.AttachmentController do
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
          {:ok, file_content} <- read_file(attachment.file_path) do
-
       Logger.info("File downloaded: #{attachment.id} by user #{user_id}")
 
       conn
       |> put_resp_content_type(attachment.mime_type)
-      |> put_resp_header("content-disposition", "attachment; filename=\"#{attachment.file_name}\"")
+      |> put_resp_header(
+        "content-disposition",
+        "attachment; filename=\"#{attachment.file_name}\""
+      )
       |> put_resp_header("content-length", "#{attachment.file_size}")
       |> send_resp(200, file_content)
     else
@@ -118,6 +129,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
       {:error, reason} ->
         Logger.error("Download failed: #{inspect(reason)}")
+
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Download failed"})
@@ -152,7 +164,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
          :ok <- validate_user_permission(message, user_id),
          :ok <- delete_file(attachment.file_path),
          {:ok, _} <- Messages.delete_attachment(attachment_id) do
-
       Logger.info("Attachment deleted: #{attachment_id}")
 
       json(conn, %{
@@ -169,6 +180,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
       {:error, reason} ->
         Logger.error("Delete failed: #{inspect(reason)}")
+
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Delete failed"})
@@ -188,7 +200,9 @@ defmodule WhisprMessagingWeb.AttachmentController do
   defp validate_mime_type(mime_type) when mime_type in @allowed_mime_types, do: :ok
   defp validate_mime_type(_), do: {:error, :invalid_mime_type}
 
-  defp validate_user_permission(%{sender_id: sender_id}, user_id) when sender_id == user_id, do: :ok
+  defp validate_user_permission(%{sender_id: sender_id}, user_id) when sender_id == user_id,
+    do: :ok
+
   defp validate_user_permission(_, _), do: {:error, :unauthorized}
 
   defp validate_user_access(message, user_id) do
@@ -239,7 +253,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   defp delete_file(file_path) do
     case File.rm(file_path) do
       :ok -> :ok
-      {:error, :enoent} -> :ok  # File already deleted
+      # File already deleted
+      {:error, :enoent} -> :ok
       {:error, reason} -> {:error, reason}
     end
   end

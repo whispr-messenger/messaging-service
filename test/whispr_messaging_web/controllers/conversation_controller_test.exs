@@ -18,16 +18,18 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   describe "GET /api/v1/conversations" do
     test "lists all conversations for a user", %{user1_id: user1_id, user2_id: user2_id} do
       # Create conversations
-      {:ok, conversation1} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, conversation1} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
 
-      {:ok, conversation2} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Test Group",
-        is_active: true
-      })
+      {:ok, conversation2} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Test Group",
+          is_active: true
+        })
 
       # Add user1 as member
       Conversations.add_conversation_member(conversation1.id, user1_id)
@@ -61,16 +63,18 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
     test "supports filtering by type", %{user1_id: user1_id} do
       # Create direct and group conversations
-      {:ok, direct_conv} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, direct_conv} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
 
-      {:ok, group_conv} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Team Group",
-        is_active: true
-      })
+      {:ok, group_conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Team Group",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(direct_conv.id, user1_id)
       Conversations.add_conversation_member(group_conv.id, user1_id)
@@ -230,10 +234,11 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
   describe "GET /api/v1/conversations/:id" do
     test "retrieves a conversation by ID", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
       Conversations.add_conversation_member(conversation.id, user2_id)
@@ -268,10 +273,11 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "returns 403 when user is not a member", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user2_id)
 
@@ -288,10 +294,11 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "includes member list in response", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
       Conversations.add_conversation_member(conversation.id, user2_id)
@@ -312,11 +319,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
   describe "PUT /api/v1/conversations/:id" do
     test "updates a group conversation name", %{user1_id: user1_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Old Name",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Old Name",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
 
@@ -359,11 +367,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "returns 403 when user is not a member", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Original Name",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Original Name",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user2_id)
 
@@ -385,11 +394,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "returns 422 with invalid attributes", %{user1_id: user1_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Original Name",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Original Name",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
 
@@ -413,11 +423,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
   describe "DELETE /api/v1/conversations/:id" do
     test "deactivates a conversation", %{user1_id: user1_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "To Delete",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "To Delete",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
 
@@ -449,11 +460,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "returns 403 when user is not a member", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Not Mine",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Not Mine",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user2_id)
 
@@ -476,11 +488,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       user2_id: user2_id,
       user3_id: user3_id
     } do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Team",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Team",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
       Conversations.add_conversation_member(conversation.id, user2_id)
@@ -511,11 +524,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       user2_id: user2_id,
       user3_id: user3_id
     } do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Team",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Team",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
       Conversations.add_conversation_member(conversation.id, user2_id)
@@ -543,11 +557,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
   describe "DELETE /api/v1/conversations/:id/members/:user_id" do
     test "removes a member from conversation", %{user1_id: user1_id, user2_id: user2_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Team",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Team",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
       Conversations.add_conversation_member(conversation.id, user2_id)
@@ -568,11 +583,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
 
     test "returns 404 for non-existent member", %{user1_id: user1_id} do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Team",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Team",
+          is_active: true
+        })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
 
@@ -586,7 +602,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         delete(
           conn,
-          Routes.api_v1_conversation_member_path(conn, :remove_member, conversation.id, fake_user_id)
+          Routes.api_v1_conversation_member_path(
+            conn,
+            :remove_member,
+            conversation.id,
+            fake_user_id
+          )
         )
         |> json_response(404)
 

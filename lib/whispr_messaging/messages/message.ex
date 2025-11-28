@@ -21,7 +21,8 @@ defmodule WhisprMessaging.Messages.Message do
   schema "messages" do
     field :sender_id, :binary_id
     field :message_type, :string
-    field :content, :binary  # Encrypted content as BYTEA
+    # Encrypted content as BYTEA
+    field :content, :binary
     field :metadata, :map, default: %{}
     field :client_random, :integer
     field :sent_at, :utc_datetime
@@ -69,11 +70,14 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def edit_changeset(message, new_content, metadata \\ %{}) do
     message
-    |> cast(%{
-      content: new_content,
-      metadata: Map.merge(message.metadata, metadata),
-      edited_at: DateTime.utc_now()
-    }, [:content, :metadata, :edited_at])
+    |> cast(
+      %{
+        content: new_content,
+        metadata: Map.merge(message.metadata, metadata),
+        edited_at: DateTime.utc_now()
+      },
+      [:content, :metadata, :edited_at]
+    )
     |> validate_content_size()
     |> validate_metadata()
   end
@@ -83,10 +87,13 @@ defmodule WhisprMessaging.Messages.Message do
   """
   def delete_changeset(message, delete_for_everyone \\ false) do
     message
-    |> cast(%{
-      is_deleted: true,
-      delete_for_everyone: delete_for_everyone
-    }, [:is_deleted, :delete_for_everyone])
+    |> cast(
+      %{
+        is_deleted: true,
+        delete_for_everyone: delete_for_everyone
+      },
+      [:is_deleted, :delete_for_everyone]
+    )
   end
 
   @doc """
@@ -186,7 +193,13 @@ defmodule WhisprMessaging.Messages.Message do
   @doc """
   Creates a new text message.
   """
-  def create_text_message(conversation_id, sender_id, encrypted_content, client_random, metadata \\ %{}) do
+  def create_text_message(
+        conversation_id,
+        sender_id,
+        encrypted_content,
+        client_random,
+        metadata \\ %{}
+      ) do
     %__MODULE__{}
     |> changeset(%{
       conversation_id: conversation_id,
@@ -223,7 +236,8 @@ defmodule WhisprMessaging.Messages.Message do
     %__MODULE__{}
     |> changeset(%{
       conversation_id: conversation_id,
-      sender_id: nil,  # System messages have no sender
+      # System messages have no sender
+      sender_id: nil,
       message_type: "system",
       content: content,
       metadata: metadata,

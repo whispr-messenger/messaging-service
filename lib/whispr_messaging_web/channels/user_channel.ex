@@ -31,10 +31,11 @@ defmodule WhisprMessagingWeb.UserChannel do
     user_id = socket.assigns.user_id
 
     # Track global presence
-    {:ok, _} = Presence.track(socket, user_id, %{
-      online_at: inspect(System.system_time(:second)),
-      status: "online"
-    })
+    {:ok, _} =
+      Presence.track(socket, user_id, %{
+        online_at: inspect(System.system_time(:second)),
+        status: "online"
+      })
 
     # Send any pending delivery confirmations
     send_pending_delivery_statuses(socket)
@@ -47,13 +48,15 @@ defmodule WhisprMessagingWeb.UserChannel do
 
   # Handle user status updates
   @impl true
-  def handle_in("update_status", %{"status" => status}, socket) when status in ["online", "away", "busy", "offline"] do
+  def handle_in("update_status", %{"status" => status}, socket)
+      when status in ["online", "away", "busy", "offline"] do
     user_id = socket.assigns.user_id
 
-    {:ok, _} = Presence.update(socket, user_id, %{
-      online_at: inspect(System.system_time(:second)),
-      status: status
-    })
+    {:ok, _} =
+      Presence.update(socket, user_id, %{
+        online_at: inspect(System.system_time(:second)),
+        status: status
+      })
 
     # Broadcast status change to user's conversations
     broadcast_status_to_conversations(user_id, status)
@@ -165,8 +168,11 @@ defmodule WhisprMessagingWeb.UserChannel do
       case Messages.get_pending_delivery_confirmations(user_id) do
         {:ok, confirmations} ->
           Enum.each(confirmations, fn confirmation ->
-            send(self(), {:delivery_status, confirmation.message_id, confirmation.user_id,
-                         confirmation.status, confirmation.timestamp})
+            send(
+              self(),
+              {:delivery_status, confirmation.message_id, confirmation.user_id,
+               confirmation.status, confirmation.timestamp}
+            )
           end)
 
         _ ->

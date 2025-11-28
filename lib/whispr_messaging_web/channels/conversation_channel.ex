@@ -41,10 +41,11 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     user_id = socket.assigns.user_id
 
     # Track presence
-    {:ok, _} = Presence.track(socket, user_id, %{
-      online_at: inspect(System.system_time(:second)),
-      conversation_id: conversation_id
-    })
+    {:ok, _} =
+      Presence.track(socket, user_id, %{
+        online_at: inspect(System.system_time(:second)),
+        conversation_id: conversation_id
+      })
 
     # Push presence state to client
     push(socket, "presence_state", Presence.list(socket))
@@ -54,23 +55,28 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
   # Handle new message sending
   @impl true
-  def handle_in("new_message", %{
-    "content" => encrypted_content,
-    "message_type" => message_type,
-    "client_random" => client_random,
-    "metadata" => metadata
-  }, socket) do
+  def handle_in(
+        "new_message",
+        %{
+          "content" => encrypted_content,
+          "message_type" => message_type,
+          "client_random" => client_random,
+          "metadata" => metadata
+        },
+        socket
+      ) do
     conversation_id = socket.assigns.conversation_id
     sender_id = socket.assigns.user_id
 
-    with {:ok, message} <- Messages.create_message(%{
-      conversation_id: conversation_id,
-      sender_id: sender_id,
-      message_type: message_type,
-      content: encrypted_content,
-      client_random: client_random,
-      metadata: metadata || %{}
-    }) do
+    with {:ok, message} <-
+           Messages.create_message(%{
+             conversation_id: conversation_id,
+             sender_id: sender_id,
+             message_type: message_type,
+             content: encrypted_content,
+             client_random: client_random,
+             metadata: metadata || %{}
+           }) do
       # Broadcast message to all conversation members
       broadcast_message(socket, message)
 
@@ -89,11 +95,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   # Handle message editing
-  def handle_in("edit_message", %{
-    "message_id" => message_id,
-    "content" => new_content,
-    "metadata" => metadata
-  }, socket) do
+  def handle_in(
+        "edit_message",
+        %{
+          "message_id" => message_id,
+          "content" => new_content,
+          "metadata" => metadata
+        },
+        socket
+      ) do
     user_id = socket.assigns.user_id
 
     case Messages.edit_message(message_id, user_id, new_content, metadata || %{}) do
@@ -101,6 +111,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         broadcast(socket, "message_edited", %{
           message: serialize_message(message)
         })
+
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, :not_found} ->
@@ -115,10 +126,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   # Handle message deletion
-  def handle_in("delete_message", %{
-    "message_id" => message_id,
-    "delete_for_everyone" => delete_for_everyone
-  }, socket) do
+  def handle_in(
+        "delete_message",
+        %{
+          "message_id" => message_id,
+          "delete_for_everyone" => delete_for_everyone
+        },
+        socket
+      ) do
     user_id = socket.assigns.user_id
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
@@ -127,6 +142,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
           message_id: message_id,
           delete_for_everyone: delete_for_everyone
         })
+
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, :not_found} ->
@@ -198,10 +214,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   # Handle message reactions
-  def handle_in("add_reaction", %{
-    "message_id" => message_id,
-    "reaction" => reaction
-  }, socket) do
+  def handle_in(
+        "add_reaction",
+        %{
+          "message_id" => message_id,
+          "reaction" => reaction
+        },
+        socket
+      ) do
     user_id = socket.assigns.user_id
 
     case Messages.add_reaction(message_id, user_id, reaction) do
@@ -211,6 +231,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
           user_id: user_id,
           reaction: reaction
         })
+
         {:reply, {:ok, %{reaction: serialize_reaction(message_reaction)}}, socket}
 
       {:error, changeset} ->
@@ -218,10 +239,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
-  def handle_in("remove_reaction", %{
-    "message_id" => message_id,
-    "reaction" => reaction
-  }, socket) do
+  def handle_in(
+        "remove_reaction",
+        %{
+          "message_id" => message_id,
+          "reaction" => reaction
+        },
+        socket
+      ) do
     user_id = socket.assigns.user_id
 
     case Messages.remove_reaction(message_id, user_id, reaction) do
@@ -231,6 +256,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
           user_id: user_id,
           reaction: reaction
         })
+
         {:reply, {:ok, %{status: "removed"}}, socket}
 
       {:error, :not_found} ->
