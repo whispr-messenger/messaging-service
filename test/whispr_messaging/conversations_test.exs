@@ -33,10 +33,12 @@ defmodule WhisprMessaging.ConversationsTest do
 
   describe "get_conversation/1" do
     setup do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          is_active: true
+        })
+
       %{conversation: conversation}
     end
 
@@ -62,11 +64,13 @@ defmodule WhisprMessaging.ConversationsTest do
 
   describe "update_conversation/2" do
     setup do
-      {:ok, conversation} = Conversations.create_conversation(%{
-        type: "group",
-        name: "Old Name",
-        is_active: true
-      })
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Old Name",
+          is_active: true
+        })
+
       %{conversation: conversation}
     end
 

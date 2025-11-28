@@ -9,11 +9,12 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     user2_id = Ecto.UUID.generate()
 
     # Create test conversation
-    {:ok, conversation} = Conversations.create_conversation(%{
-      type: "direct",
-      metadata: %{"test" => true},
-      is_active: true
-    })
+    {:ok, conversation} =
+      Conversations.create_conversation(%{
+        type: "direct",
+        metadata: %{"test" => true},
+        is_active: true
+      })
 
     # Add members
     {:ok, _member1} = Conversations.add_conversation_member(conversation.id, user1_id)
@@ -278,13 +279,14 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
   describe "PUT /api/v1/messages/:id" do
     setup %{conversation: conversation, user1_id: user1_id} do
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user1_id,
-        message_type: "text",
-        content: "original_content",
-        client_random: 54321
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "original_content",
+          client_random: 54321
+        })
 
       %{message: message}
     end
@@ -387,13 +389,14 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
   describe "DELETE /api/v1/messages/:id" do
     setup %{conversation: conversation, user1_id: user1_id} do
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user1_id,
-        message_type: "text",
-        content: "content_to_delete",
-        client_random: 77777
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "content_to_delete",
+          client_random: 77777
+        })
 
       %{message: message}
     end

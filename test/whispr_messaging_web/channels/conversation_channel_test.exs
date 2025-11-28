@@ -9,11 +9,12 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
     other_user_id = Ecto.UUID.generate()
 
     # Create test conversation
-    {:ok, conversation} = Conversations.create_conversation(%{
-      type: "direct",
-      metadata: %{"test" => true},
-      is_active: true
-    })
+    {:ok, conversation} =
+      Conversations.create_conversation(%{
+        type: "direct",
+        metadata: %{"test" => true},
+        is_active: true
+      })
 
     # Add both users as members
     {:ok, _member1} = Conversations.add_conversation_member(conversation.id, user_id)
@@ -35,48 +36,53 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       socket: socket,
       conversation: conversation
     } do
-      assert {:ok, reply, _socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      assert {:ok, reply, _socket} =
+               subscribe_and_join(
+                 socket,
+                 ConversationChannel,
+                 "conversation:#{conversation.id}"
+               )
 
       assert reply.conversation.id == conversation.id
     end
 
     test "fails to join when user is not a member", %{socket: socket} do
       # Create conversation without adding the user as member
-      {:ok, other_conversation} = Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, other_conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
-      assert {:error, %{reason: "not_authorized"}} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{other_conversation.id}"
-      )
+      assert {:error, %{reason: "not_authorized"}} =
+               subscribe_and_join(
+                 socket,
+                 ConversationChannel,
+                 "conversation:#{other_conversation.id}"
+               )
     end
 
     test "fails to join non-existent conversation", %{socket: socket} do
       fake_id = Ecto.UUID.generate()
 
-      assert {:error, %{reason: "conversation_not_found"}} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{fake_id}"
-      )
+      assert {:error, %{reason: "conversation_not_found"}} =
+               subscribe_and_join(
+                 socket,
+                 ConversationChannel,
+                 "conversation:#{fake_id}"
+               )
     end
   end
 
   describe "new_message" do
     setup %{socket: socket, conversation: conversation} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       %{socket: socket}
     end
@@ -139,20 +145,22 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   describe "edit_message" do
     setup %{socket: socket, conversation: conversation, user_id: user_id} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Create a message to edit
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user_id,
-        message_type: "text",
-        content: "original_content",
-        client_random: 54321
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "original_content",
+          client_random: 54321
+        })
 
       %{socket: socket, message: message}
     end
@@ -198,13 +206,14 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       other_user_id: other_user_id
     } do
       # Create message from other user
-      {:ok, other_message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: other_user_id,
-        message_type: "text",
-        content: "other_content",
-        client_random: 11111
-      })
+      {:ok, other_message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: other_user_id,
+          message_type: "text",
+          content: "other_content",
+          client_random: 11111
+        })
 
       edit_attrs = %{
         "message_id" => other_message.id,
@@ -219,20 +228,22 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   describe "delete_message" do
     setup %{socket: socket, conversation: conversation, user_id: user_id} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Create a message to delete
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user_id,
-        message_type: "text",
-        content: "content_to_delete",
-        client_random: 77777
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "content_to_delete",
+          client_random: 77777
+        })
 
       %{socket: socket, message: message}
     end
@@ -257,6 +268,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
         message_id: message_id,
         delete_for_everyone: true
       }
+
       assert message_id == message.id
     end
 
@@ -275,20 +287,22 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   describe "message delivery and read receipts" do
     setup %{socket: socket, conversation: conversation, user_id: user_id} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Create a message from other user
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: Ecto.UUID.generate(),
-        message_type: "text",
-        content: "test_content",
-        client_random: 33333
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: Ecto.UUID.generate(),
+          message_type: "text",
+          content: "test_content",
+          client_random: 33333
+        })
 
       %{socket: socket, message: message}
     end
@@ -312,16 +326,21 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   describe "typing indicators" do
     setup %{socket: socket, conversation: conversation} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       %{socket: socket}
     end
 
-    test "broadcasts typing start", %{socket: socket, user_id: user_id, conversation: conversation} do
+    test "broadcasts typing start", %{
+      socket: socket,
+      user_id: user_id,
+      conversation: conversation
+    } do
       push(socket, "typing_start", %{})
 
       assert_broadcast "user_typing", %{
@@ -350,20 +369,22 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   describe "reactions" do
     setup %{socket: socket, conversation: conversation, user_id: user_id} do
-      {:ok, _, socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Create a message to react to
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user_id,
-        message_type: "text",
-        content: "message_to_react",
-        client_random: 55555
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "message_to_react",
+          client_random: 55555
+        })
 
       %{socket: socket, message: message}
     end
@@ -460,11 +481,12 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       socket: socket,
       conversation: conversation
     } do
-      {:ok, _, _socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, _socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Should receive presence state
       assert_push "presence_state", _presence_state
@@ -474,11 +496,12 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       socket: socket,
       conversation: conversation
     } do
-      {:ok, _, _socket} = subscribe_and_join(
-        socket,
-        ConversationChannel,
-        "conversation:#{conversation.id}"
-      )
+      {:ok, _, _socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
 
       # Presence diffs would be pushed when other users join/leave
       # This is tested indirectly through the presence system

@@ -32,11 +32,12 @@ defmodule WhisprMessagingWeb.UserSocket do
   # Token verification using Phoenix.Token
   defp verify_auth_token(token) do
     case Phoenix.Token.verify(
-      WhisprMessagingWeb.Endpoint,
-      "user auth",
-      token,
-      max_age: 86400 # 24 hours
-    ) do
+           WhisprMessagingWeb.Endpoint,
+           "user auth",
+           token,
+           # 24 hours
+           max_age: 86400
+         ) do
       {:ok, user_id} when is_binary(user_id) ->
         {:ok, user_id}
 
