@@ -33,8 +33,7 @@ config :whispr_messaging, :redis,
   host: System.get_env("REDIS_HOST", "localhost"),
   port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   database: String.to_integer(System.get_env("REDIS_DB", "0")),
-  password: System.get_env("REDIS_PASSWORD"),
-  pool_size: String.to_integer(System.get_env("REDIS_POOL_SIZE", "10"))
+  password: System.get_env("REDIS_PASSWORD")
 
 # gRPC configuration
 config :whispr_messaging,
