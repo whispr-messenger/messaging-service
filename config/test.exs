@@ -6,8 +6,8 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :whispr_messaging, WhisprMessaging.Repo,
-  username: "postgres",
-  password: "postgres",
+  username: "messaging_service",
+  password: "development_password",
   hostname: "localhost",
   database: "whispr_messaging_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,

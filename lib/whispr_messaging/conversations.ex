@@ -258,6 +258,20 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Alias for member_of_conversation? for backwards compatibility.
+  """
+  def is_conversation_member?(conversation_id, user_id) do
+    member_of_conversation?(conversation_id, user_id)
+  end
+
+  @doc """
+  Lists conversations for a specific user with options.
+  """
+  def list_user_conversations(user_id, _opts) when is_list(_opts) do
+    list_user_conversations(user_id)
+  end
+
+  @doc """
   Gets members who haven't read messages since timestamp.
   """
   def get_unread_members(conversation_id, since_timestamp) do
@@ -381,6 +395,16 @@ defmodule WhisprMessaging.Conversations do
       limit: ^limit
 
     Repo.all(query)
+  end
+
+  @doc """
+  Gets a conversation with members preloaded.
+  """
+  def get_conversation_with_members(conversation_id) do
+    case Repo.one(Conversation.with_members_query(conversation_id)) do
+      nil -> {:error, :not_found}
+      conversation -> {:ok, conversation}
+    end
   end
 
   @doc """
