@@ -34,6 +34,7 @@ defmodule WhisprMessaging.MixProject do
     [
       # Phoenix and web dependencies
       {:phoenix, "~> 1.7.0"},
+      {:plug_cowboy, "~> 2.5"},
       {:phoenix_ecto, "~> 4.4"},
       {:phoenix_html, "~> 3.3"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},

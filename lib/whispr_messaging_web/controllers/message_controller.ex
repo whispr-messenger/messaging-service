@@ -131,10 +131,10 @@ defmodule WhisprMessagingWeb.MessageController do
       message_type: message.message_type,
       metadata: message.metadata,
       reply_to_id: message.reply_to_id,
-      is_edited: message.is_edited,
+      is_edited: message.edited_at != nil,
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,
-      deleted_at: message.deleted_at,
+      sent_at: message.sent_at,
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
