@@ -46,14 +46,18 @@ defmodule WhisprMessagingWeb.ChannelCase do
     user1_id = Ecto.UUID.generate()
     user2_id = Ecto.UUID.generate()
 
-    {:ok, conversation} = WhisprMessaging.Conversations.create_conversation(%{
-      type: "direct",
-      metadata: %{"test" => true},
-      is_active: true
-    })
+    {:ok, conversation} =
+      WhisprMessaging.Conversations.create_conversation(%{
+        type: "direct",
+        metadata: %{"test" => true},
+        is_active: true
+      })
 
-    {:ok, _member1} = WhisprMessaging.Conversations.add_conversation_member(conversation.id, user1_id)
-    {:ok, _member2} = WhisprMessaging.Conversations.add_conversation_member(conversation.id, user2_id)
+    {:ok, _member1} =
+      WhisprMessaging.Conversations.add_conversation_member(conversation.id, user1_id)
+
+    {:ok, _member2} =
+      WhisprMessaging.Conversations.add_conversation_member(conversation.id, user2_id)
 
     {conversation, user1_id, user2_id}
   end

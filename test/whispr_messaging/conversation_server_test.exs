@@ -5,11 +5,12 @@ defmodule WhisprMessaging.ConversationServerTest do
 
   setup do
     # Create test conversation
-    {:ok, conversation} = Conversations.create_conversation(%{
-      type: "group",
-      metadata: %{"name" => "Test Group"},
-      is_active: true
-    })
+    {:ok, conversation} =
+      Conversations.create_conversation(%{
+        type: "group",
+        metadata: %{"name" => "Test Group"},
+        is_active: true
+      })
 
     # Create test users
     user1_id = Ecto.UUID.generate()
@@ -114,7 +115,8 @@ defmodule WhisprMessaging.ConversationServerTest do
         client_random: nil
       }
 
-      assert {:error, _changeset} = ConversationServer.send_message(conversation.id, invalid_attrs)
+      assert {:error, _changeset} =
+               ConversationServer.send_message(conversation.id, invalid_attrs)
     end
   end
 
@@ -142,11 +144,12 @@ defmodule WhisprMessaging.ConversationServerTest do
       new_user_id = Ecto.UUID.generate()
       custom_settings = %{"notifications" => false}
 
-      assert {:ok, member} = ConversationServer.add_member(
-        conversation.id,
-        new_user_id,
-        custom_settings
-      )
+      assert {:ok, member} =
+               ConversationServer.add_member(
+                 conversation.id,
+                 new_user_id,
+                 custom_settings
+               )
 
       assert member.settings == custom_settings
     end
@@ -165,7 +168,8 @@ defmodule WhisprMessaging.ConversationServerTest do
     test "fails to remove non-existent member", %{conversation: conversation} do
       fake_user_id = Ecto.UUID.generate()
 
-      assert {:error, :not_found} = ConversationServer.remove_member(conversation.id, fake_user_id)
+      assert {:error, :not_found} =
+               ConversationServer.remove_member(conversation.id, fake_user_id)
     end
   end
 
@@ -202,13 +206,14 @@ defmodule WhisprMessaging.ConversationServerTest do
       {:ok, _pid} = ConversationSupervisor.start_conversation(conversation.id)
 
       # Create a test message
-      {:ok, message} = Messages.create_message(%{
-        conversation_id: conversation.id,
-        sender_id: user1_id,
-        message_type: "text",
-        content: "test_message",
-        client_random: 99999
-      })
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "test_message",
+          client_random: 99999
+        })
 
       on_exit(fn ->
         ConversationSupervisor.stop_conversation(conversation.id)
@@ -343,26 +348,28 @@ defmodule WhisprMessaging.ConversationServerTest do
       user1_id: user1_id
     } do
       # Send multiple messages rapidly
-      tasks = for i <- 1..10 do
-        Task.async(fn ->
-          ConversationServer.send_message(conversation.id, %{
-            conversation_id: conversation.id,
-            sender_id: user1_id,
-            message_type: "text",
-            content: "message_#{i}",
-            client_random: i + 10000
-          })
-        end)
-      end
+      tasks =
+        for i <- 1..10 do
+          Task.async(fn ->
+            ConversationServer.send_message(conversation.id, %{
+              conversation_id: conversation.id,
+              sender_id: user1_id,
+              message_type: "text",
+              content: "message_#{i}",
+              client_random: i + 10000
+            })
+          end)
+        end
 
       # Wait for all tasks to complete
       results = Enum.map(tasks, &Task.await/1)
 
       # All messages should be created successfully
-      successful_results = Enum.filter(results, fn
-        {:ok, _} -> true
-        _ -> false
-      end)
+      successful_results =
+        Enum.filter(results, fn
+          {:ok, _} -> true
+          _ -> false
+        end)
 
       assert length(successful_results) == 10
     end
