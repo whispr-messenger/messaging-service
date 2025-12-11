@@ -93,6 +93,17 @@ config :whispr_messaging, :phoenix_swagger,
 
 config :phoenix_swagger, json_library: Jason
 
+# Configure Phoenix Swagger
+config :whispr_messaging, :phoenix_swagger,
+  swagger_files: %{
+    "priv/static/swagger.json" => [
+      router: WhisprMessagingWeb.Router,
+      endpoint: WhisprMessagingWeb.Endpoint
+    ]
+  }
+
+config :phoenix_swagger, json_library: Jason
+
 # Configure telemetry - simplified for tests
 config :whispr_messaging, WhisprMessagingWeb.Telemetry, metrics: []
 
