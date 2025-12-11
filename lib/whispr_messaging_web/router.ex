@@ -20,6 +20,12 @@ defmodule WhisprMessagingWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  scope "/api/swagger" do
+    forward "/", PhoenixSwagger.Plug.SwaggerUI,
+      otp_app: :whispr_messaging,
+      swagger_file: "swagger.json"
+  end
+
   scope "/", WhisprMessagingWeb do
     pipe_through :browser
 
@@ -57,6 +63,33 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id", AttachmentController, :show
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
+  end
+
+  def swagger_info do
+    %{
+      info: %{
+        version: "1.0",
+        title: "Whispr Messaging Service API",
+        description: "API documentation for the Whispr Messaging Service",
+        contact: %{
+          name: "Whispr Team",
+          email: "support@whispr.com"
+        }
+      },
+      host: "localhost:8080",
+      basePath: "/api/v1",
+      schemes: ["http"],
+      consumes: ["application/json"],
+      produces: ["application/json"],
+      securityDefinitions: %{
+        Bearer: %{
+          type: "apiKey",
+          name: "Authorization",
+          in: "header",
+          description: "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
+        }
+      }
+    }
   end
 
   # Enable LiveDashboard in development
