@@ -10,6 +10,7 @@ defmodule WhisprMessaging.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      elixirc_options: [warnings_as_errors: false],
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
         coveralls: :test,
@@ -58,16 +59,15 @@ defmodule WhisprMessaging.MixProject do
       {:swoosh, "~> 1.11"},
 
       # WebSocket and real-time
-      {:websockex, "~> 0.4.3"},
+      {:websockex, "~> 0.5.1"},
 
       # Redis and caching
       {:redix, "~> 1.2"},
       # {:redix_pubsub, "~> 1.0"}, # Commented out to avoid dependency issues
 
       # gRPC
-      {:grpc, "~> 0.7.0"},
-      {:protobuf, "~> 0.11.0"},
-      {:google_protos, "~> 0.3.0"},
+      {:grpc, "~> 0.11.5"},
+      {:protobuf, github: "elixir-protobuf/protobuf", ref: "main", override: true},
 
       # UUID generation
       {:uuid, "~> 1.1"},
