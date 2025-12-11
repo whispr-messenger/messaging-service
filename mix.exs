@@ -49,7 +49,7 @@ defmodule WhisprMessaging.MixProject do
 
       # JSON handling
       {:jason, "~> 1.2"},
-      # {:poison, "~> 5.0"}, # Removed in favor of Jason
+      {:poison, "~> 6.0"},
 
       # HTTP client
       # {:httpoison, "~> 2.0"}, # Removed in favor of Finch
@@ -98,6 +98,10 @@ defmodule WhisprMessaging.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},
+
+      # API Documentation
+      {:phoenix_swagger, "~> 0.8"},
+      {:ex_json_schema, "~> 0.10.2"},
 
       # Production monitoring
       {:recon, "~> 2.5"},
