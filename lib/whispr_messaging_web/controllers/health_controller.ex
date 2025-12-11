@@ -9,16 +9,18 @@ defmodule WhisprMessagingWeb.HealthController do
   """
 
   use WhisprMessagingWeb, :controller
+  use PhoenixSwagger
+  require Logger
 
   alias WhisprMessaging.Repo
 
   swagger_path :check do
-    get("/health")
-    summary("Comprehensive health check")
-    description("Returns the health status of the service and all its dependencies")
-    produces("application/json")
-    response(200, "Success", Schema.ref(:HealthResponse))
-    response(500, "Internal Server Error")
+    get "/health"
+    summary "Comprehensive health check"
+    description "Returns the health status of the service and all its dependencies"
+    produces "application/json"
+    response 200, "Success", Schema.ref(:HealthResponse)
+    response 500, "Internal Server Error"
   end
 
   @doc """
@@ -84,8 +86,65 @@ defmodule WhisprMessagingWeb.HealthController do
     end
   end
 
-  def check(conn, _params) do
-    # Default health check with measurements
+  swagger_path :live do
+    get "/health/live"
+    summary "Liveness probe"
+    description "Returns whether the service is alive and responding"
+    produces "application/json"
+    response 200, "Success", Schema.ref(:LivenessResponse)
+  end
+
+  @doc """
+  Liveness probe endpoint.
+
+  Returns whether the service is alive and responding.
+  This should only fail if the application is completely unresponsive.
+
+  ## Response
+  Always returns 200 OK if the application can respond to requests.
+  """
+  def live(conn, _params) do
+    Logger.debug("Liveness check requested")
+
+    uptime_seconds = get_uptime_seconds()
+
+    response = %{
+      status: "alive",
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      service: "whispr-messaging",
+      version: get_version(),
+      uptime: %{
+        seconds: uptime_seconds,
+        human: format_uptime(uptime_seconds)
+      },
+      memory: get_memory_info()
+    }
+
+    json(conn, response)
+  end
+
+  swagger_path :ready do
+    get "/health/ready"
+    summary "Readiness probe"
+    description "Returns whether the service is ready to accept traffic"
+    produces "application/json"
+    response 200, "Service is ready", Schema.ref(:ReadinessResponse)
+    response 503, "Service is not ready"
+  end
+
+  @doc """
+  Readiness probe endpoint.
+
+  Returns whether the service is ready to accept traffic.
+  Checks that all critical dependencies (database and cache) are accessible.
+
+  ## Response
+  - 200 OK: Service is ready to accept traffic
+  - 503 Service Unavailable: Service is not ready (dependencies unavailable)
+  """
+  def ready(conn, _params) do
+    Logger.debug("Readiness check started")
+
     {database_status, database_time} = measure_check(&check_database/0)
     {cache_status, cache_time} = measure_check(&check_redis/0)
 
@@ -225,69 +284,72 @@ defmodule WhisprMessagingWeb.HealthController do
     end
   end
 
+  @doc false
+  defp get_uptime_seconds do
+    {uptime_ms, _} = :erlang.statistics(:wall_clock)
+    div(uptime_ms, 1000)
+  end
+
+  @doc false
+  defp get_version do
+    Application.spec(:whispr_messaging, :vsn)
+    |> to_string()
+  end
+
+  @doc false
+  defp format_uptime(seconds) do
+    days = div(seconds, 86400)
+    hours = div(rem(seconds, 86400), 3600)
+    minutes = div(rem(seconds, 3600), 60)
+    secs = rem(seconds, 60)
+
+    cond do
+      days > 0 -> "#{days}d #{hours}h #{minutes}m #{secs}s"
+      hours > 0 -> "#{hours}h #{minutes}m #{secs}s"
+      minutes > 0 -> "#{minutes}m #{secs}s"
+      true -> "#{secs}s"
+    end
+  end
+
   # Swagger Schema Definitions
   def swagger_definitions do
     %{
-      HealthResponse:
-        swagger_schema do
-          title("Health Response")
-          description("Comprehensive health check response")
-
-          properties do
-            status(:string, "Overall status", example: "ok")
-            timestamp(:string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z")
-            service(:string, "Service name", example: "whispr-messaging")
-            version(:string, "Service version", example: "1.0.0")
-            uptime(:object, "Uptime information")
-            memory(:object, "Memory usage information")
-            services(:object, "Status of dependent services")
-            check_duration_ms(:integer, "Health check duration in milliseconds")
-          end
-        end,
-      LivenessResponse:
-        swagger_schema do
-          title("Liveness Response")
-          description("Liveness probe response")
-
-          properties do
-            status(:string, "Liveness status", example: "alive")
-            timestamp(:string, "ISO8601 timestamp")
-            service(:string, "Service name", example: "whispr-messaging")
-            version(:string, "Service version")
-            uptime(:object, "Uptime information")
-            memory(:object, "Memory usage information")
-          end
-        end,
-      ReadinessResponse:
-        swagger_schema do
-          title("Readiness Response")
-          description("Readiness probe response")
-
-          properties do
-            status(:string, "Readiness status", example: "ready")
-            timestamp(:string, "ISO8601 timestamp")
-            service(:string, "Service name", example: "whispr-messaging")
-            checks(:object, "Status of critical dependencies")
-          end
-        end,
-      DetailedHealthResponse:
-        swagger_schema do
-          title("Detailed Health Response")
-          description("Comprehensive health check with detailed metrics")
-
-          properties do
-            status(:string, "Overall status", example: "ok")
-            timestamp(:string, "ISO8601 timestamp")
-            service(:string, "Service name", example: "whispr-messaging")
-            version(:string, "Service version")
-            uptime(:object, "Uptime information")
-            memory(:object, "Memory usage information")
-            processes(:object, "Process count and limits")
-            services(:object, "Status of dependent services")
-            conversations(:object, "Conversation server metrics")
-            check_duration_ms(:integer, "Health check duration in milliseconds")
-          end
+      HealthResponse: swagger_schema do
+        title "Health Response"
+        description "Comprehensive health check response"
+        properties do
+          status :string, "Overall status", example: "ok"
+          timestamp :string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z"
+          service :string, "Service name", example: "whispr-messaging"
+          version :string, "Service version", example: "1.0.0"
+          uptime :object, "Uptime information"
+          memory :object, "Memory usage information"
+          services :object, "Status of dependent services"
+          check_duration_ms :integer, "Health check duration in milliseconds"
         end
+      end,
+      LivenessResponse: swagger_schema do
+        title "Liveness Response"
+        description "Liveness probe response"
+        properties do
+          status :string, "Liveness status", example: "alive"
+          timestamp :string, "ISO8601 timestamp"
+          service :string, "Service name", example: "whispr-messaging"
+          version :string, "Service version"
+          uptime :object, "Uptime information"
+          memory :object, "Memory usage information"
+        end
+      end,
+      ReadinessResponse: swagger_schema do
+        title "Readiness Response"
+        description "Readiness probe response"
+        properties do
+          status :string, "Readiness status", example: "ready"
+          timestamp :string, "ISO8601 timestamp"
+          service :string, "Service name", example: "whispr-messaging"
+          checks :object, "Status of critical dependencies"
+        end
+      end
     }
   end
 end
