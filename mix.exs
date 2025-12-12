@@ -5,13 +5,19 @@ defmodule WhisprMessaging.MixProject do
     [
       app: :whispr_messaging,
       version: "1.0.0",
-      elixir: "~> 1.15",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
+      elixirc_options: [warnings_as_errors: false],
+      test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
@@ -48,7 +54,7 @@ defmodule WhisprMessaging.MixProject do
 
       # JSON handling
       {:jason, "~> 1.2"},
-      # {:poison, "~> 5.0"}, # Removed in favor of Jason
+      {:poison, "~> 6.0"},
 
       # HTTP client
       # {:httpoison, "~> 2.0"}, # Removed in favor of Finch
@@ -58,16 +64,15 @@ defmodule WhisprMessaging.MixProject do
       {:swoosh, "~> 1.11"},
 
       # WebSocket and real-time
-      {:websockex, "~> 0.4.3"},
+      {:websockex, "~> 0.5.1"},
 
       # Redis and caching
       {:redix, "~> 1.2"},
       # {:redix_pubsub, "~> 1.0"}, # Commented out to avoid dependency issues
 
       # gRPC
-      {:grpc, "~> 0.7.0"},
-      {:protobuf, "~> 0.11.0"},
-      {:google_protos, "~> 0.3.0"},
+      {:grpc, "~> 0.11.5"},
+      {:protobuf, github: "elixir-protobuf/protobuf", ref: "main", override: true},
 
       # UUID generation
       {:uuid, "~> 1.1"},
@@ -98,6 +103,10 @@ defmodule WhisprMessaging.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},
+
+      # API Documentation
+      {:phoenix_swagger, "~> 0.8"},
+      {:ex_json_schema, "~> 0.10.2"},
 
       # Production monitoring
       {:recon, "~> 2.5"},

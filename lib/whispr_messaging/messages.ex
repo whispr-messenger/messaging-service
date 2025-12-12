@@ -7,10 +7,18 @@ defmodule WhisprMessaging.Messages do
   """
 
   import Ecto.Query, warn: false
-  alias WhisprMessaging.Repo
 
-  alias WhisprMessaging.Messages.{Message, DeliveryStatus, MessageReaction, MessageAttachment}
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
+
+  alias WhisprMessaging.Messages.{
+    Attachment,
+    DeliveryStatus,
+    Message,
+    MessageAttachment,
+    MessageReaction
+  }
+
+  alias WhisprMessaging.Repo
 
   require Logger
 
@@ -448,6 +456,6 @@ defmodule WhisprMessaging.Messages do
   """
   def user_can_access_message?(conversation_id, user_id) do
     alias WhisprMessaging.Conversations
-    Conversations.is_conversation_member?(conversation_id, user_id)
+    Conversations.conversation_member?(conversation_id, user_id)
   end
 end

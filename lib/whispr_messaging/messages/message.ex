@@ -11,7 +11,7 @@ defmodule WhisprMessaging.Messages.Message do
   import Ecto.Query
 
   alias WhisprMessaging.Conversations.Conversation
-  alias WhisprMessaging.Messages.{DeliveryStatus, MessageReaction, MessageAttachment}
+  alias WhisprMessaging.Messages.{DeliveryStatus, MessageAttachment, MessageReaction}
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

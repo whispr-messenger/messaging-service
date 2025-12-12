@@ -289,7 +289,7 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Alias for member_of_conversation? for backwards compatibility.
   """
-  def is_conversation_member?(conversation_id, user_id) do
+  def conversation_member?(conversation_id, user_id) do
     member_of_conversation?(conversation_id, user_id)
   end
 
