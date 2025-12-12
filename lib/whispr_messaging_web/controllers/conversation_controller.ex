@@ -436,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     Enum.any?(conversation.members, fn member -> member.user_id == user_id end)
   end
 
-  defp is_member?(conversation_id, user_id) do
+  defp member?(conversation_id, user_id) do
     case Conversations.get_conversation_member(conversation_id, user_id) do
       nil -> false
       _ -> true

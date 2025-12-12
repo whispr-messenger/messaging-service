@@ -182,8 +182,8 @@ defmodule WhisprMessagingWeb.UserChannel do
   defp send_delivery_status(confirmation) do
     send(
       self(),
-      {:delivery_status, confirmation.message_id, confirmation.user_id,
-       confirmation.status, confirmation.timestamp}
+      {:delivery_status, confirmation.message_id, confirmation.user_id, confirmation.status,
+       confirmation.timestamp}
     )
   end
 
