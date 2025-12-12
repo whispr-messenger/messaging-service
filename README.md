@@ -16,7 +16,7 @@ This microservice is responsible of all messaging tasks for the Whispr Messenger
 
 ## Installation
 
-The repository uses `just` a cutom recipe runner (like `make` in C lang) to provide useful scripts.
+The repository uses `just` a custom recipe runner (like `make` in C lang) to provide useful scripts.
 
 Once you have `just` and `docker` installed on your computer you can start the development server with:
 
