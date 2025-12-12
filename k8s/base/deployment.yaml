@@ -1,11 +1,12 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: messaging-service
+  namespace: whispr-prod
   labels:
     app: messaging-service
     app.kubernetes.io/name: messaging-service
-    app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: whispr
 spec:
   replicas: 2
@@ -23,6 +24,8 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: messaging-service
+      imagePullSecrets:
+        - name: ghcr-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -30,8 +33,8 @@ spec:
         fsGroup: 1000
       containers:
         - name: messaging-service
-          image: whispr/messaging-service:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/whispr-messenger/messaging-service:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 4000
@@ -39,85 +42,33 @@ spec:
             - name: grpc
               containerPort: 4001
               protocol: TCP
-          env:
-            - name: PORT
-              value: "4000"
-            - name: GRPC_PORT
-              value: "4001"
-            - name: MIX_ENV
-              value: "prod"
-            - name: DB_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: DB_HOST
-            - name: DB_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: DB_PORT
-            - name: DB_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: DB_NAME
-            - name: DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: messaging-service-secret
-                  key: DB_USERNAME
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: messaging-service-secret
-                  key: DB_PASSWORD
-            - name: SECRET_KEY_BASE
-              valueFrom:
-                secretKeyRef:
-                  name: messaging-service-secret
-                  key: SECRET_KEY_BASE
-            - name: REDIS_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: REDIS_HOST
-            - name: REDIS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: REDIS_PORT
-            - name: SCHEDULING_SERVICE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: SCHEDULING_SERVICE_HOST
-            - name: SCHEDULING_SERVICE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: messaging-service-config
-                  key: SCHEDULING_SERVICE_PORT
+          envFrom:
+            - configMapRef:
+                name: messaging-service-config
+            - secretRef:
+                name: messaging-service-secrets
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "100m"
+              memory: "256Mi"
             limits:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "500m"
+              memory: "512Mi"
           livenessProbe:
             httpGet:
-              path: /api/v1/health?type=live
+              path: /api/v1/health
               port: http
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /api/v1/health?type=ready
               port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false

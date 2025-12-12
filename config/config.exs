@@ -82,9 +82,6 @@ config :logger, :console,
 # Phoenix LiveView configuration
 config :phoenix, :json_library, Jason
 
-# Use Jason for JSON parsing in Phoenix
-config :phoenix, :json_library, Jason
-
 # Configure telemetry - simplified for tests
 config :whispr_messaging, WhisprMessagingWeb.Telemetry, metrics: []
 

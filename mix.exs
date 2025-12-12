@@ -48,10 +48,10 @@ defmodule WhisprMessaging.MixProject do
 
       # JSON handling
       {:jason, "~> 1.2"},
-      {:poison, "~> 5.0"},
+      # {:poison, "~> 5.0"}, # Removed in favor of Jason
 
       # HTTP client
-      {:httpoison, "~> 2.0"},
+      # {:httpoison, "~> 2.0"}, # Removed in favor of Finch
       {:finch, "~> 0.16"},
 
       # Email

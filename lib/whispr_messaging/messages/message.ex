@@ -63,6 +63,7 @@ defmodule WhisprMessaging.Messages.Message do
     |> unique_constraint([:sender_id, :client_random],
       name: :messages_sender_id_client_random_index
     )
+    |> foreign_key_constraint(:conversation_id, name: :messages_conversation_id_fkey)
   end
 
   @doc """
@@ -78,6 +79,7 @@ defmodule WhisprMessaging.Messages.Message do
       },
       [:content, :metadata, :edited_at]
     )
+    |> validate_required([:content])
     |> validate_content_size()
     |> validate_metadata()
   end
