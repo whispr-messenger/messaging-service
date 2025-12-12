@@ -278,8 +278,8 @@ defmodule WhisprMessagingWeb.HealthController do
 
   @doc false
   defp format_uptime(seconds) do
-    days = div(seconds, 86400)
-    hours = div(rem(seconds, 86400), 3600)
+    days = div(seconds, 86_400)
+    hours = div(rem(seconds, 86_400), 3600)
     minutes = div(rem(seconds, 3600), 60)
     secs = rem(seconds, 60)
 

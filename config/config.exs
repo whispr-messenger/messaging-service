@@ -77,7 +77,7 @@ config :whispr_messaging, :services,
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id, :conversation_id, :user_id]
+  metadata: [:request_id, :conversation_id, :user_id, :query, :params]
 
 # Phoenix LiveView configuration
 config :phoenix, :json_library, Jason
