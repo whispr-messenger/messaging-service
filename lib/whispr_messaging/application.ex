@@ -14,6 +14,9 @@ defmodule WhisprMessaging.Application do
   def start(_type, _args) do
     Logger.info("Starting WhisprMessaging application...")
 
+    # Store application start time
+    :persistent_term.put(:app_start_time, System.monotonic_time(:second))
+
     children = base_children() ++ env_specific_children()
 
     opts = [strategy: :one_for_one, name: WhisprMessaging.Supervisor]

@@ -98,3 +98,6 @@ Thumbs.db
 
 # Phoenix LiveView uploads
 /priv/uploads/
+
+# mdBook generated documentation
+/documentation/book/

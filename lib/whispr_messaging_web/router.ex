@@ -29,11 +29,13 @@ defmodule WhisprMessagingWeb.Router do
   scope "/api/v1", WhisprMessagingWeb do
     pipe_through :api
 
+    # Health check endpoints
     get "/health", HealthController, :check
     get "/health/live", HealthController, :live
     get "/health/ready", HealthController, :ready
     get "/health/detailed", HealthController, :detailed
 
+    # Conversation routes
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
     get "/conversations/:id", ConversationController, :show
