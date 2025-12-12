@@ -1,0 +1,89 @@
+# Docker Compose for WhisprMessaging Development Environment
+name: whispr-messaging
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: whispr-messaging-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    expose:
+      - ${POSTGRES_PORT}
+    networks:
+      - whispr-messaging-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: whispr-messaging-redis
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    expose:
+      - ${REDIS_PORT}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+     postgres:
+      condition: service_healthy
+      restart: true
+    networks:
+      - whispr-messaging-network
+
+  messaging-service:
+    build:
+      context: ../..
+      dockerfile: docker/dev/Dockerfile
+    container_name: whispr-messaging-api
+    env_file: .env
+    volumes:
+      - ../..:/app
+      - deps:/app/deps
+      - build:/app/_build
+    ports:
+      - "8080:${HTTP_PORT}"  # HTTP/WebSocket
+      - "8443:${HTTPS_PORT}" # HTTPS
+      - "50052:50052"  # gRPC
+    networks:
+      - whispr-messaging-network
+      - whispr-common-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${HTTP_PORT}/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  deps:
+    driver: local
+  build:
+    driver: local
+
+networks:
+  whispr-messaging-network:
+  whispr-common-network:
+    driver: bridge

@@ -13,9 +13,9 @@ defmodule WhisprMessaging.ConversationServer do
   use GenServer
   require Logger
 
-  alias WhisprMessaging.{Messages, Conversations}
-  alias WhisprMessaging.Messages.Message
+  alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
+  alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.{Endpoint, Presence}
 
   @typep conversation_state :: %{

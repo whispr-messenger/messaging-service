@@ -5,11 +5,32 @@ defmodule WhisprMessagingWeb.MessageController do
   """
 
   use WhisprMessagingWeb, :controller
+  use PhoenixSwagger
 
-  alias WhisprMessaging.Messages
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Messages
 
   action_fallback WhisprMessagingWeb.FallbackController
+
+  swagger_path :index do
+    get("/conversations/{id}/messages")
+    summary("List conversation messages")
+    description("Lists recent messages for a specific conversation with pagination")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+
+    parameter(:limit, :query, :integer, "Maximum number of messages to return (max: 100)",
+      required: false
+    )
+
+    parameter(:before, :query, :string, "Timestamp to get messages before (for pagination)",
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:MessagesResponse))
+    response(404, "Conversation Not Found")
+  end
 
   @doc """
   Lists messages for a conversation.
@@ -53,6 +74,23 @@ defmodule WhisprMessagingWeb.MessageController do
           |> json(%{error: "Unauthorized"})
       end
     end
+  end
+
+  swagger_path :create do
+    post("/conversations/{id}/messages")
+    summary("Create a new message")
+    description("Creates a new message in a conversation")
+    produces("application/json")
+    consumes("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+
+    parameter(:message, :body, Schema.ref(:MessageCreateRequest), "Message parameters",
+      required: true
+    )
+
+    security([%{Bearer: []}])
+    response(201, "Created", Schema.ref(:MessageResponse))
+    response(404, "Conversation Not Found")
   end
 
   @doc """
@@ -103,6 +141,17 @@ defmodule WhisprMessagingWeb.MessageController do
     end
   end
 
+  swagger_path :show do
+    get("/messages/{id}")
+    summary("Get a message")
+    description("Retrieves a specific message by ID with relations")
+    produces("application/json")
+    parameter(:id, :path, :string, "Message UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:MessageResponse))
+    response(404, "Not Found")
+  end
+
   @doc """
   Gets a single message by ID.
   GET /api/v1/messages/:id
@@ -113,6 +162,24 @@ defmodule WhisprMessagingWeb.MessageController do
         data: render_message(message)
       })
     end
+  end
+
+  swagger_path :update do
+    put("/messages/{id}")
+    summary("Update a message")
+    description("Updates (edits) the content of a message")
+    produces("application/json")
+    consumes("application/json")
+    parameter(:id, :path, :string, "Message UUID", required: true)
+
+    parameter(:message, :body, Schema.ref(:MessageUpdateRequest), "Message update parameters",
+      required: true
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:MessageUpdateResponse))
+    response(403, "Forbidden - User cannot edit this message")
+    response(404, "Not Found")
   end
 
   @doc """
@@ -145,6 +212,19 @@ defmodule WhisprMessagingWeb.MessageController do
         })
       end
     end
+  end
+
+  swagger_path :delete do
+    PhoenixSwagger.Path.delete("/messages/{id}")
+    summary("Delete a message")
+    description("Deletes a message (soft delete)")
+    produces("application/json")
+    parameter(:id, :path, :string, "Message UUID", required: true)
+    parameter(:user_id, :query, :string, "User UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:MessageDeleteResponse))
+    response(403, "Forbidden - User cannot delete this message")
+    response(404, "Not Found")
   end
 
   @doc """
@@ -214,5 +294,89 @@ defmodule WhisprMessagingWeb.MessageController do
       ["Bearer test_token_" <> user_id] -> user_id
       _ -> nil
     end
+  end
+
+  # Swagger Schema Definitions
+  def swagger_definitions do
+    %{
+      MessageCreateRequest:
+        swagger_schema do
+          title("Message Create Request")
+          description("Request body for creating a message")
+
+          properties do
+            message(:object, "Message parameters")
+          end
+        end,
+      MessageUpdateRequest:
+        swagger_schema do
+          title("Message Update Request")
+          description("Request body for updating a message")
+
+          properties do
+            message(:object, "Message update parameters")
+          end
+        end,
+      Message:
+        swagger_schema do
+          title("Message")
+          description("A message object")
+
+          properties do
+            id(:string, "Message UUID")
+            conversation_id(:string, "Conversation UUID")
+            sender_id(:string, "Sender UUID")
+            content(:string, "Message content")
+            message_type(:string, "Message type")
+            metadata(:object, "Additional metadata")
+            reply_to_id(:string, "UUID of message being replied to")
+            is_edited(:boolean, "Whether the message has been edited")
+            edited_at(:string, "Edit timestamp")
+            is_deleted(:boolean, "Whether the message is deleted")
+            sent_at(:string, "Sent timestamp")
+            inserted_at(:string, "Creation timestamp")
+            updated_at(:string, "Last update timestamp")
+          end
+        end,
+      MessagesResponse:
+        swagger_schema do
+          title("Messages Response")
+          description("Response containing a list of messages")
+
+          properties do
+            data(:array, "List of messages")
+            meta(:object, "Metadata")
+          end
+        end,
+      MessageResponse:
+        swagger_schema do
+          title("Message Response")
+          description("Response containing a single message")
+
+          properties do
+            data(:object, "Message object")
+            meta(:object, "Metadata")
+          end
+        end,
+      MessageUpdateResponse:
+        swagger_schema do
+          title("Message Update Response")
+          description("Response after updating a message")
+
+          properties do
+            data(:object, "Updated message object")
+            meta(:object, "Metadata")
+          end
+        end,
+      MessageDeleteResponse:
+        swagger_schema do
+          title("Message Delete Response")
+          description("Response after deleting a message")
+
+          properties do
+            data(:object, "Delete result")
+          end
+        end
+    }
   end
 end

@@ -110,10 +110,9 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         build_conn()
         |> json_conn()
 
-      response =
-        get(conn, ~p"/api/v1/health/ready")
-        # Should return 200 if database is available, 503 if not
-        |> (fn resp -> {resp.status, Jason.decode!(resp.resp_body)} end).()
+      resp = get(conn, ~p"/api/v1/health/ready")
+      # Should return 200 if database is available, 503 if not
+      response = {resp.status, Jason.decode!(resp.resp_body)}
 
       case response do
         {200, data} ->

@@ -27,7 +27,7 @@ defmodule WhisprMessaging.Conversations.Conversation do
     has_many :members, ConversationMember, foreign_key: :conversation_id
     has_many :messages, Message, foreign_key: :conversation_id
 
-    # has_many :pinned_messages, PinnedMessage, foreign_key: :conversation_id  # TODO: Create PinnedMessage module
+    # has_many :pinned_messages, PinnedMessage, foreign_key: :conversation_id
     has_one :settings, ConversationSettings, foreign_key: :conversation_id
 
     timestamps()

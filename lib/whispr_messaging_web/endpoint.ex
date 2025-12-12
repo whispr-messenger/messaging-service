@@ -39,7 +39,7 @@ defmodule WhisprMessagingWeb.Endpoint do
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
     plug Phoenix.CodeReloader
-    plug Phoenix.Ecto.CheckRepoStatus, otp_app: :whispr_messaging
+    # plug Phoenix.Ecto.CheckRepoStatus, otp_app: :whispr_messaging
   end
 
   plug Phoenix.LiveDashboard.RequestLogger,

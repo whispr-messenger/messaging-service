@@ -1,8 +1,8 @@
 defmodule WhisprMessaging.MessagesTest do
   use WhisprMessaging.DataCase, async: true
 
-  alias WhisprMessaging.{Messages, Conversations}
-  alias WhisprMessaging.Messages.{Message, DeliveryStatus, MessageReaction}
+  alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.Messages.{DeliveryStatus, Message, MessageReaction}
 
   describe "messages" do
     setup do
@@ -37,7 +37,7 @@ defmodule WhisprMessaging.MessagesTest do
         sender_id: user1_id,
         message_type: "text",
         content: "encrypted_test_content",
-        client_random: 12345,
+        client_random: 12_345,
         metadata: %{"test" => true}
       }
 
@@ -46,7 +46,7 @@ defmodule WhisprMessaging.MessagesTest do
       assert message.sender_id == user1_id
       assert message.message_type == "text"
       assert message.content == "encrypted_test_content"
-      assert message.client_random == 12345
+      assert message.client_random == 12_345
       assert message.metadata == %{"test" => true}
       assert message.is_deleted == false
       assert message.sent_at != nil
@@ -73,7 +73,7 @@ defmodule WhisprMessaging.MessagesTest do
         sender_id: user1_id,
         message_type: "text",
         content: "test_content",
-        client_random: 12345
+        client_random: 12_345
       }
 
       # First message should succeed
@@ -93,7 +93,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "test_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       assert {:ok, fetched_message} = Messages.get_message(message.id)
@@ -114,7 +114,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "original_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       new_content = "updated_content"
@@ -139,7 +139,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "original_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       assert {:error, :forbidden} = Messages.edit_message(message.id, user2_id, "new_content")
@@ -155,7 +155,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "test_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       assert {:ok, deleted_message} = Messages.delete_message(message.id, user1_id, true)
@@ -250,7 +250,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "test_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       %{
@@ -362,7 +362,7 @@ defmodule WhisprMessaging.MessagesTest do
           sender_id: user1_id,
           message_type: "text",
           content: "test_content",
-          client_random: 12345
+          client_random: 12_345
         })
 
       %{
@@ -446,7 +446,7 @@ defmodule WhisprMessaging.MessagesTest do
                  conversation_id,
                  sender_id,
                  "encrypted_content",
-                 12345,
+                 12_345,
                  %{
                    "test" => true
                  }
@@ -454,7 +454,7 @@ defmodule WhisprMessaging.MessagesTest do
 
       assert message.message_type == "text"
       assert message.content == "encrypted_content"
-      assert message.client_random == 12345
+      assert message.client_random == 12_345
       assert message.metadata["test"] == true
     end
 
@@ -477,7 +477,7 @@ defmodule WhisprMessaging.MessagesTest do
                  conversation_id,
                  sender_id,
                  "encrypted_url",
-                 67890,
+                 67_890,
                  %{
                    "width" => 800
                  }
