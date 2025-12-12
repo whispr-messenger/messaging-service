@@ -56,17 +56,12 @@ defmodule WhisprMessaging.Application do
   end
 
   defp env_specific_children do
-    if Mix.env() == :test do
-      # Skip Redis and gRPC in test environment
-      []
-    else
-      [
-        # Redis connections
-        {Redix, [name: :redix] ++ redis_config()}
-        # gRPC server disabled for now - needs config update
-        # {GRPC.Server.Supervisor, grpc_server_config()}
-      ]
-    end
+    [
+      # Redis connections (enabled for all environments)
+      {Redix, [name: :redix] ++ redis_config()}
+      # gRPC server disabled for now - needs config update
+      # {GRPC.Server.Supervisor, grpc_server_config()}
+    ]
   end
 
   # Tell Phoenix to update the endpoint configuration

@@ -48,6 +48,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/dev/Dockerfile
+      cache_from:
+        - whispr-messaging-api:latest
     container_name: whispr-messaging-api
     env_file: .env
     volumes:

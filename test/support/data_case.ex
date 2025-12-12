@@ -49,6 +49,17 @@ defmodule WhisprMessaging.DataCase do
   end
 
   @doc """
+  Generate a unique client_random value for messages to avoid duplicate key violations.
+  Uses a combination of timestamp and random number to ensure uniqueness across tests.
+  """
+  def unique_client_random do
+    # Combine current time in microseconds with a random number
+    timestamp = System.system_time(:microsecond)
+    random = :rand.uniform(10_000)
+    rem(timestamp + random, 2_147_483_647)  # Keep within integer range
+  end
+
+  @doc """
   Creates a test conversation with default attributes.
   """
   def create_test_conversation(attrs \\ %{}) do

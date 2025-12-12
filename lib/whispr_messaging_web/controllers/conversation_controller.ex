@@ -112,16 +112,58 @@ defmodule WhisprMessagingWeb.ConversationController do
     do_create(conn, conversation_params)
   end
 
+  # Handle direct conversation with other_user_id (authenticated user is implied)
+  defp do_create(conn, %{"type" => "direct", "other_user_id" => other_user_id} = params) do
+    current_user_id = get_current_user_id(conn, params)
+    metadata = params["metadata"] || %{}
+
+    if is_nil(current_user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Authentication required"})
+    else
+      case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
+        {:ok, conversation} ->
+          conn
+          |> put_status(:created)
+          |> json(%{
+            data: render_conversation(conversation)
+          })
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
+  # Handle direct conversation with explicit user_ids list
   defp do_create(conn, %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params) do
     metadata = params["metadata"] || %{}
 
-    with {:ok, conversation} <-
-           Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
-      conn
-      |> put_status(:created)
-      |> json(%{
-        data: render_conversation(conversation)
-      })
+    case Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
+      {:ok, conversation} ->
+        conn
+        |> put_status(:created)
+        |> json(%{
+          data: render_conversation(conversation)
+        })
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: translate_errors(changeset)})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: reason})
     end
   end
 
@@ -146,19 +188,29 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> put_status(:unprocessable_entity)
         |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
       else
-        with {:ok, conversation} <-
-               Conversations.create_group_conversation(
-                 creator_id,
-                 member_ids,
-                 name,
-                 external_group_id,
-                 metadata
-               ) do
-          conn
-          |> put_status(:created)
-          |> json(%{
-            data: render_conversation(conversation)
-          })
+        case Conversations.create_group_conversation(
+               creator_id,
+               member_ids,
+               name,
+               external_group_id,
+               metadata
+             ) do
+          {:ok, conversation} ->
+            conn
+            |> put_status(:created)
+            |> json(%{
+              data: render_conversation(conversation)
+            })
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: translate_errors(changeset)})
+
+          {:error, reason} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: inspect(reason)})
         end
       end
     end
@@ -275,11 +327,21 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       conversation_params = Map.put(conversation_params, "metadata", merged_metadata)
 
-      with {:ok, updated_conversation} <-
-             Conversations.update_conversation(conversation, conversation_params) do
-        json(conn, %{
-          data: render_conversation(updated_conversation)
-        })
+      case Conversations.update_conversation(conversation, conversation_params) do
+        {:ok, updated_conversation} ->
+          json(conn, %{
+            data: render_conversation(updated_conversation)
+          })
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: inspect(reason)})
       end
     else
       false ->
@@ -291,9 +353,6 @@ defmodule WhisprMessagingWeb.ConversationController do
         conn
         |> put_status(:not_found)
         |> json(%{error: "Conversation not found"})
-
-      error ->
-        error
     end
   end
 
@@ -374,14 +433,29 @@ defmodule WhisprMessagingWeb.ConversationController do
     current_user_id = get_current_user_id(conn, params)
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
+         {:member_exists, {:ok, _member}} <-
+           {:member_exists, Conversations.get_conversation_member(id, member_id) |> case do
+             nil -> {:error, :not_found}
+             member -> {:ok, member}
+           end},
          true <- can_manage_members?(conversation, current_user_id),
          {:ok, _} <- Conversations.remove_conversation_member(id, member_id) do
       send_resp(conn, :no_content, "")
     else
+      {:member_exists, {:error, :not_found}} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Member not found"})
+
       false ->
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Not authorized to remove members"})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Conversation not found"})
 
       error ->
         error
@@ -422,7 +496,8 @@ defmodule WhisprMessagingWeb.ConversationController do
     %{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
-      joined_at: member.joined_at
+      joined_at: member.joined_at,
+      is_active: member.is_active
     }
   end
 
@@ -576,5 +651,14 @@ defmodule WhisprMessagingWeb.ConversationController do
           end
         end
     }
+  end
+
+  # Helper to translate Ecto changeset errors
+  defp translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 end
