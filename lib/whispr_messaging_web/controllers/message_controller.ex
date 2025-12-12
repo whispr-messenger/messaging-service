@@ -202,14 +202,35 @@ defmodule WhisprMessagingWeb.MessageController do
       |> put_status(:unauthorized)
       |> json(%{error: "User ID required"})
     else
-      with {:ok, message} <- Messages.edit_message(id, user_id, content, metadata) do
-        json(conn, %{
-          data: render_message(message),
-          meta: %{
-            edited: true,
-            edited_at: message.edited_at
-          }
-        })
+      case Messages.edit_message(id, user_id, content, metadata) do
+        {:ok, message} ->
+          json(conn, %{
+            data: render_message(message),
+            meta: %{
+              edited: true,
+              edited_at: message.edited_at
+            }
+          })
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "Forbidden"})
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Message not found"})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: inspect(reason)})
       end
     end
   end
@@ -378,5 +399,14 @@ defmodule WhisprMessagingWeb.MessageController do
           end
         end
     }
+  end
+
+  # Helper to translate Ecto changeset errors
+  defp translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 end

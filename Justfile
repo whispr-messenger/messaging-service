@@ -9,8 +9,10 @@ up ENV:
         docker compose -f docker/prod/compose.yml up --detach --build
     elif [ "{{ENV}}" = "doc" ]; then
         docker compose -f docker/doc/compose.yml up --detach
+    elif [ "{{ENV}}" = "test" ]; then
+        docker compose -f docker/test/compose.yml up --abort-on-container-exit --build
     else
-        echo "{{ENV}}: Accepted values are 'dev', 'prod' or 'doc'." >&2
+        echo "{{ENV}}: Accepted values are 'dev', 'prod', 'doc' or 'test'." >&2
     fi
 
 down ENV:
@@ -21,8 +23,10 @@ down ENV:
         docker compose -f docker/prod/compose.yml down --volumes
     elif [ "{{ENV}}" = "doc" ]; then
         docker compose -f docker/doc/compose.yml down --volumes
+    elif [ "{{ENV}}" = "test" ]; then
+        docker compose -f docker/test/compose.yml down --volumes
     else
-        echo "{{ENV}}: Accepted values are 'dev', 'prod' or 'doc'." >&2
+        echo "{{ENV}}: Accepted values are 'dev', 'prod', 'doc' or 'test'." >&2
     fi
 
 logs ENV:
@@ -40,4 +44,4 @@ shell:
     docker compose -f docker/dev/compose.yml exec -it messaging-service bash
 
 test:
-    docker compose -f docker/dev/compose.yml exec -it messaging-service mix test
+    docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner --build

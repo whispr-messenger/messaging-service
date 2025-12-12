@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 # STAGE 1: Build
 # -----------------------------------------------------------------------------
-FROM elixir:1.15-alpine AS builder
+FROM elixir:1.19-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -31,8 +31,10 @@ RUN mix local.hex --force && \
 COPY mix.exs mix.lock ./
 COPY config config
 
-# Install dependencies
-RUN mix deps.get --only prod && \
+# Install dependencies with BuildKit cache mounts
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix deps.get --only prod && \
     mix deps.compile
 
 # Copy application code
