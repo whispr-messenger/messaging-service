@@ -105,7 +105,13 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
       else
         with {:ok, conversation} <-
-               Conversations.create_group_conversation(creator_id, member_ids, name, external_group_id, metadata) do
+               Conversations.create_group_conversation(
+                 creator_id,
+                 member_ids,
+                 name,
+                 external_group_id,
+                 metadata
+               ) do
           conn
           |> put_status(:created)
           |> json(%{
@@ -184,11 +190,12 @@ defmodule WhisprMessagingWeb.ConversationController do
       new_metadata = conversation_params["metadata"] || %{}
       merged_metadata = Map.merge(existing_metadata, new_metadata)
 
-      merged_metadata = if name = conversation_params["name"] do
-        Map.put(merged_metadata, "name", name)
-      else
-        merged_metadata
-      end
+      merged_metadata =
+        if name = conversation_params["name"] do
+          Map.put(merged_metadata, "name", name)
+        else
+          merged_metadata
+        end
 
       conversation_params = Map.put(conversation_params, "metadata", merged_metadata)
 
@@ -203,10 +210,12 @@ defmodule WhisprMessagingWeb.ConversationController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Unauthorized"})
+
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
         |> json(%{error: "Conversation not found"})
+
       error ->
         error
     end
@@ -234,10 +243,12 @@ defmodule WhisprMessagingWeb.ConversationController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Unauthorized"})
+
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
         |> json(%{error: "Conversation not found"})
+
       error ->
         error
     end
@@ -262,6 +273,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Not authorized to add members"})
+
       error ->
         error
     end
@@ -283,6 +295,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Not authorized to remove members"})
+
       error ->
         error
     end
@@ -344,12 +357,15 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp can_manage_members?(_conversation, nil), do: false
+
   defp can_manage_members?(conversation, user_id) do
     case Conversations.get_conversation_member(conversation.id, user_id) do
       %{settings: settings} ->
         role = Map.get(settings || %{}, "role", "member")
         role in ["admin", "owner"]
-      _ -> false
+
+      _ ->
+        false
     end
   end
 

@@ -178,6 +178,7 @@ defmodule WhisprMessaging.Messages do
       _ -> uuid
     end
   end
+
   defp ensure_uuid_binary(uuid), do: uuid
 
   @doc """

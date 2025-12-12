@@ -102,7 +102,13 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Creates a group conversation.
   """
-  def create_group_conversation(creator_id, member_ids, name, external_group_id \\ nil, metadata \\ %{}) do
+  def create_group_conversation(
+        creator_id,
+        member_ids,
+        name,
+        external_group_id \\ nil,
+        metadata \\ %{}
+      ) do
     Repo.transaction(fn ->
       # Create conversation
       # Add name to metadata if not present or override it to ensure consistency
@@ -118,7 +124,9 @@ defmodule WhisprMessaging.Conversations do
 
       # Add creator as member with admin role
       creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
-      {:ok, _creator_member} = add_conversation_member(conversation.id, creator_id, creator_settings)
+
+      {:ok, _creator_member} =
+        add_conversation_member(conversation.id, creator_id, creator_settings)
 
       # Add other members
       Enum.each(member_ids, fn member_id ->
@@ -203,7 +211,7 @@ defmodule WhisprMessaging.Conversations do
   def list_user_conversations(user_id, opts \\ [])
 
   def list_user_conversations(user_id, limit) when is_integer(limit) do
-    list_user_conversations(user_id, [limit: limit])
+    list_user_conversations(user_id, limit: limit)
   end
 
   def list_user_conversations(user_id, opts) do
@@ -284,8 +292,6 @@ defmodule WhisprMessaging.Conversations do
   def is_conversation_member?(conversation_id, user_id) do
     member_of_conversation?(conversation_id, user_id)
   end
-
-
 
   @doc """
   Gets members who haven't read messages since timestamp.

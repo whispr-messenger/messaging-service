@@ -75,7 +75,11 @@ defmodule WhisprMessaging.ConversationsTest do
     end
 
     test "updates conversation name", %{conversation: conversation} do
-      assert {:ok, updated} = Conversations.update_conversation(conversation, %{metadata: %{"name" => "New Name"}})
+      assert {:ok, updated} =
+               Conversations.update_conversation(conversation, %{
+                 metadata: %{"name" => "New Name"}
+               })
+
       assert updated.metadata["name"] == "New Name"
     end
   end
