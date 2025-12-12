@@ -70,7 +70,7 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
       # Message settings
       "allow_editing" => true,
       # 24 hours in seconds
-      "edit_time_limit" => 86400,
+      "edit_time_limit" => 86_400,
       "allow_deletion" => true,
       # 48 hours in seconds
       "delete_time_limit" => 172_800,
@@ -218,7 +218,7 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
   """
   def editing_allowed?(%__MODULE__{} = conv_settings, message_age_seconds) do
     if get_setting(conv_settings, "allow_editing", true) do
-      time_limit = get_setting(conv_settings, "edit_time_limit", 86400)
+      time_limit = get_setting(conv_settings, "edit_time_limit", 86_400)
       message_age_seconds <= time_limit
     else
       false

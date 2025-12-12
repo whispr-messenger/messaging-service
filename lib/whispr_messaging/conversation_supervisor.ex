@@ -179,17 +179,19 @@ defmodule WhisprMessaging.ConversationSupervisor do
 
   defp get_total_memory_usage(children) do
     children
-    |> Enum.map(fn {_, pid, _, _} ->
-      if Process.alive?(pid) do
-        case Process.info(pid, :memory) do
-          {:memory, memory} -> memory
-          _ -> 0
-        end
-      else
-        0
-      end
-    end)
+    |> Enum.map(fn {_, pid, _, _} -> get_process_memory(pid) end)
     |> Enum.sum()
+  end
+
+  defp get_process_memory(pid) do
+    if Process.alive?(pid) do
+      case Process.info(pid, :memory) do
+        {:memory, memory} -> memory
+        _ -> 0
+      end
+    else
+      0
+    end
   end
 
   # Management functions for operations
