@@ -1,7 +1,7 @@
 defmodule WhisprMessaging.ConversationServerTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias WhisprMessaging.{ConversationServer, ConversationSupervisor, Conversations, Messages}
+  alias WhisprMessaging.{Conversations, ConversationServer, ConversationSupervisor, Messages}
 
   setup do
     # Create test conversation
@@ -92,7 +92,7 @@ defmodule WhisprMessaging.ConversationServerTest do
         sender_id: user1_id,
         message_type: "text",
         content: "test_message",
-        client_random: 12345
+        client_random: 12_345
       }
 
       assert {:ok, message} = ConversationServer.send_message(conversation.id, message_params)
@@ -182,7 +182,7 @@ defmodule WhisprMessaging.ConversationServerTest do
           sender_id: user1_id,
           message_type: "text",
           content: "test_message",
-          client_random: 99999
+          client_random: 99_999
         })
 
       %{message: message}
@@ -315,7 +315,7 @@ defmodule WhisprMessaging.ConversationServerTest do
               sender_id: user1_id,
               message_type: "text",
               content: "message_#{i}",
-              client_random: i + 10000
+              client_random: i + 10_000
             })
           end)
         end

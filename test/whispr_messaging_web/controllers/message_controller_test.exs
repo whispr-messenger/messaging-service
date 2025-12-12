@@ -139,7 +139,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       message_attrs = %{
         "content" => "encrypted_content",
         "message_type" => "text",
-        "client_random" => 12345,
+        "client_random" => 12_345,
         "metadata" => %{"test" => true},
         "sender_id" => user1_id
       }
@@ -198,7 +198,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       message_attrs = %{
         "content" => "test",
         "message_type" => "text",
-        "client_random" => 12345,
+        "client_random" => 12_345,
         "sender_id" => user1_id
       }
 
@@ -224,7 +224,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       message_attrs = %{
         "content" => "test",
         "message_type" => "text",
-        "client_random" => 12345,
+        "client_random" => 12_345,
         "sender_id" => unauthorized_user
       }
 
@@ -251,7 +251,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       message_attrs = %{
         "content" => "test",
         "message_type" => "text",
-        "client_random" => 99999,
+        "client_random" => 99_999,
         "sender_id" => user1_id
       }
 
@@ -290,7 +290,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
           sender_id: user1_id,
           message_type: "text",
           content: "original_content",
-          client_random: 54321
+          client_random: 54_321
         })
 
       %{message: message}
@@ -408,7 +408,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
           sender_id: user1_id,
           message_type: "text",
           content: "content_to_delete",
-          client_random: 77777
+          client_random: 77_777
         })
 
       %{message: message}

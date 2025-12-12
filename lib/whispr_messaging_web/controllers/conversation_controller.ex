@@ -260,7 +260,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = get_current_user_id(conn, params)
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- is_member?(conversation.id, user_id) do
+         true <- member?(conversation.id, user_id) do
       # Handle metadata merging and name update
       existing_metadata = conversation.metadata || %{}
       new_metadata = conversation_params["metadata"] || %{}
@@ -316,7 +316,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = get_current_user_id(conn, params)
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- is_member?(conversation.id, user_id),
+         true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
         data: %{
