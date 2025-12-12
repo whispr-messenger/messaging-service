@@ -36,20 +36,24 @@ defmodule WhisprMessagingWeb.AttachmentController do
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :upload do
-    post "/attachments/upload"
-    summary "Upload a file attachment"
-    description "Uploads a file attachment to a message. Supports images, documents, audio, and video files up to 50MB"
-    consumes "multipart/form-data"
-    produces "application/json"
-    parameter :file, :formData, :file, "The file to upload", required: true
-    parameter :message_id, :formData, :string, "UUID of the message", required: true
-    parameter :user_id, :formData, :string, "UUID of the user uploading", required: true
-    security [%{Bearer: []}]
-    response 201, "Created", Schema.ref(:AttachmentResponse)
-    response 400, "Bad Request"
-    response 403, "Forbidden - User cannot upload to this message"
-    response 413, "File too large (max 50MB)"
-    response 415, "Unsupported media type"
+    post("/attachments/upload")
+    summary("Upload a file attachment")
+
+    description(
+      "Uploads a file attachment to a message. Supports images, documents, audio, and video files up to 50MB"
+    )
+
+    consumes("multipart/form-data")
+    produces("application/json")
+    parameter(:file, :formData, :file, "The file to upload", required: true)
+    parameter(:message_id, :formData, :string, "UUID of the message", required: true)
+    parameter(:user_id, :formData, :string, "UUID of the user uploading", required: true)
+    security([%{Bearer: []}])
+    response(201, "Created", Schema.ref(:AttachmentResponse))
+    response(400, "Bad Request")
+    response(403, "Forbidden - User cannot upload to this message")
+    response(413, "File too large (max 50MB)")
+    response(415, "Unsupported media type")
   end
 
   @doc """
@@ -111,16 +115,16 @@ defmodule WhisprMessagingWeb.AttachmentController do
   end
 
   swagger_path :download do
-    get "/attachments/{id}/download"
-    summary "Download a file attachment"
-    description "Downloads a file attachment by ID"
-    produces "application/octet-stream"
-    parameter :id, :path, :string, "Attachment UUID", required: true
-    parameter :user_id, :query, :string, "User UUID", required: true
-    security [%{Bearer: []}]
-    response 200, "Success - File content"
-    response 403, "Forbidden - User cannot access this file"
-    response 404, "Not Found"
+    get("/attachments/{id}/download")
+    summary("Download a file attachment")
+    description("Downloads a file attachment by ID")
+    produces("application/octet-stream")
+    parameter(:id, :path, :string, "Attachment UUID", required: true)
+    parameter(:user_id, :query, :string, "User UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - File content")
+    response(403, "Forbidden - User cannot access this file")
+    response(404, "Not Found")
   end
 
   @doc """
@@ -174,14 +178,14 @@ defmodule WhisprMessagingWeb.AttachmentController do
   end
 
   swagger_path :show do
-    get "/attachments/{id}"
-    summary "Get attachment metadata"
-    description "Retrieves metadata for a file attachment"
-    produces "application/json"
-    parameter :id, :path, :string, "Attachment UUID", required: true
-    security [%{Bearer: []}]
-    response 200, "Success", Schema.ref(:AttachmentResponse)
-    response 404, "Not Found"
+    get("/attachments/{id}")
+    summary("Get attachment metadata")
+    description("Retrieves metadata for a file attachment")
+    produces("application/json")
+    parameter(:id, :path, :string, "Attachment UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:AttachmentResponse))
+    response(404, "Not Found")
   end
 
   @doc """
@@ -197,16 +201,16 @@ defmodule WhisprMessagingWeb.AttachmentController do
   end
 
   swagger_path :delete do
-    PhoenixSwagger.Path.delete "/attachments/{id}"
-    summary "Delete an attachment"
-    description "Deletes a file attachment and removes the file from storage"
-    produces "application/json"
-    parameter :id, :path, :string, "Attachment UUID", required: true
-    parameter :user_id, :query, :string, "User UUID", required: true
-    security [%{Bearer: []}]
-    response 200, "Success", Schema.ref(:AttachmentDeleteResponse)
-    response 403, "Forbidden - User cannot delete this attachment"
-    response 404, "Not Found"
+    PhoenixSwagger.Path.delete("/attachments/{id}")
+    summary("Delete an attachment")
+    description("Deletes a file attachment and removes the file from storage")
+    produces("application/json")
+    parameter(:id, :path, :string, "Attachment UUID", required: true)
+    parameter(:user_id, :query, :string, "User UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:AttachmentDeleteResponse))
+    response(403, "Forbidden - User cannot delete this attachment")
+    response(404, "Not Found")
   end
 
   @doc """
@@ -329,34 +333,40 @@ defmodule WhisprMessagingWeb.AttachmentController do
   # Swagger Schema Definitions
   def swagger_definitions do
     %{
-      Attachment: swagger_schema do
-        title "Attachment"
-        description "A file attachment object"
-        properties do
-          id :string, "Attachment UUID"
-          message_id :string, "Message UUID"
-          file_name :string, "Original filename"
-          file_url :string, "URL to access the file"
-          file_size :integer, "File size in bytes"
-          mime_type :string, "MIME type of the file"
-          uploaded_at :string, "Upload timestamp"
+      Attachment:
+        swagger_schema do
+          title("Attachment")
+          description("A file attachment object")
+
+          properties do
+            id(:string, "Attachment UUID")
+            message_id(:string, "Message UUID")
+            file_name(:string, "Original filename")
+            file_url(:string, "URL to access the file")
+            file_size(:integer, "File size in bytes")
+            mime_type(:string, "MIME type of the file")
+            uploaded_at(:string, "Upload timestamp")
+          end
+        end,
+      AttachmentResponse:
+        swagger_schema do
+          title("Attachment Response")
+          description("Response containing an attachment object")
+
+          properties do
+            data(:object, "Attachment object")
+            message(:string, "Success message")
+          end
+        end,
+      AttachmentDeleteResponse:
+        swagger_schema do
+          title("Attachment Delete Response")
+          description("Response after deleting an attachment")
+
+          properties do
+            data(:object, "Delete result")
+          end
         end
-      end,
-      AttachmentResponse: swagger_schema do
-        title "Attachment Response"
-        description "Response containing an attachment object"
-        properties do
-          data :object, "Attachment object"
-          message :string, "Success message"
-        end
-      end,
-      AttachmentDeleteResponse: swagger_schema do
-        title "Attachment Delete Response"
-        description "Response after deleting an attachment"
-        properties do
-          data :object, "Delete result"
-        end
-      end
     }
   end
 end
