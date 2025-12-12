@@ -119,7 +119,7 @@ defmodule WhisprMessaging.Conversations.Conversation do
   def with_members_query(conversation_id) do
     from c in __MODULE__,
       where: c.id == ^conversation_id,
-      preload: [members: :user]
+      preload: [:members]
   end
 
   @doc """
