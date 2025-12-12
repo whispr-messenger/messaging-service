@@ -41,6 +41,9 @@ defmodule WhisprMessaging.ConversationServerTest do
       assert :ok = ConversationSupervisor.stop_conversation(conversation.id)
       refute Process.alive?(pid)
 
+      # Wait for Registry cleanup
+      Process.sleep(50)
+
       # Verify server is no longer registered
       assert ConversationSupervisor.get_conversation_pid(conversation.id) == nil
     end
@@ -117,13 +120,14 @@ defmodule WhisprMessaging.ConversationServerTest do
 
   describe "member management" do
     setup %{conversation: conversation} do
-      pid = start_supervised!({ConversationServer, conversation.id})
+      {:ok, pid} = ConversationSupervisor.start_conversation(conversation.id)
+      on_exit(fn -> ConversationSupervisor.stop_conversation(conversation.id) end)
       %{pid: pid}
     end
 
-    test "adds member to conversation", %{pid: pid, conversation: conversation} do
+    test "adds member to conversation", %{conversation: conversation} do
       new_user_id = Ecto.UUID.generate()
-      assert {:ok, _} = ConversationServer.add_member(pid, new_user_id)
+      assert {:ok, _} = ConversationServer.add_member(conversation.id, new_user_id)
 
       # Verify in DB
       member = Conversations.get_conversation_member(conversation.id, new_user_id)
@@ -132,42 +136,43 @@ defmodule WhisprMessaging.ConversationServerTest do
     end
 
     test "removes member from conversation", %{
-      pid: pid,
       conversation: conversation,
       user1_id: user1_id
     } do
-      assert {:ok, _} = ConversationServer.remove_member(pid, user1_id)
+      assert {:ok, _} = ConversationServer.remove_member(conversation.id, user1_id)
 
       # Verify in DB
       member = Conversations.get_conversation_member(conversation.id, user1_id)
       assert member.is_active == false
     end
 
-    test "fails to remove non-existent member", %{pid: pid} do
+    test "fails to remove non-existent member", %{conversation: conversation} do
       fake_user_id = Ecto.UUID.generate()
-      assert {:error, :not_found} = ConversationServer.remove_member(pid, fake_user_id)
+      assert {:error, :not_found} = ConversationServer.remove_member(conversation.id, fake_user_id)
     end
   end
 
   describe "typing indicators" do
     setup %{conversation: conversation} do
-      pid = start_supervised!({ConversationServer, conversation.id})
+      {:ok, pid} = ConversationSupervisor.start_conversation(conversation.id)
+      on_exit(fn -> ConversationSupervisor.stop_conversation(conversation.id) end)
       %{pid: pid}
     end
 
-    test "updates typing status", %{pid: pid, user1_id: user1_id} do
+    test "updates typing status", %{pid: pid, conversation: conversation, user1_id: user1_id} do
       # Start typing
-      assert :ok = ConversationServer.update_typing(pid, user1_id, true)
+      assert :ok = ConversationServer.update_typing(conversation.id, user1_id, true)
 
       # Check state (internal function call for testing)
       state = :sys.get_state(pid)
-      assert Map.has_key?(state.typing_users, user1_id)
+      # typing_users is now a MapSet, not a Map
+      assert MapSet.member?(state.typing_users, user1_id)
 
       # Stop typing
-      assert :ok = ConversationServer.update_typing(pid, user1_id, false)
+      assert :ok = ConversationServer.update_typing(conversation.id, user1_id, false)
 
       state = :sys.get_state(pid)
-      refute Map.has_key?(state.typing_users, user1_id)
+      refute MapSet.member?(state.typing_users, user1_id)
     end
   end
 
@@ -276,8 +281,8 @@ defmodule WhisprMessaging.ConversationServerTest do
       # Kill the process
       Process.exit(pid, :kill)
 
-      # Wait a moment for supervisor to detect failure
-      Process.sleep(100)
+      # Wait for supervisor to detect failure and Registry to clean up
+      Process.sleep(150)
 
       # Should be able to restart
       # For test stability, we manually restart instead of relying on supervisor auto-restart
@@ -285,6 +290,7 @@ defmodule WhisprMessaging.ConversationServerTest do
 
       # Clean up previous instance if it was restarted by supervisor
       ConversationSupervisor.stop_conversation(conversation.id)
+      Process.sleep(50)
 
       # Start new instance
       assert {:ok, new_pid} = ConversationSupervisor.start_conversation(conversation.id)
@@ -293,6 +299,7 @@ defmodule WhisprMessaging.ConversationServerTest do
 
       # Clean up
       ConversationSupervisor.stop_conversation(conversation.id)
+      Process.sleep(50)
     end
   end
 
