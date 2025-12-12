@@ -82,21 +82,30 @@ defmodule WhisprMessaging.Conversations do
   Creates a direct conversation between two users.
   """
   def create_direct_conversation(user1_id, user2_id, metadata \\ %{}) do
-    Repo.transaction(fn ->
-      # Create conversation
-      {:ok, conversation} =
-        create_conversation(%{
-          type: "direct",
-          metadata: metadata,
-          is_active: true
-        })
+    if user1_id == user2_id do
+      changeset =
+        %Conversation{}
+        |> Conversation.changeset(%{})
+        |> Ecto.Changeset.add_error(:base, "Cannot create conversation with yourself")
 
-      # Add both users as members
-      {:ok, _member1} = add_conversation_member(conversation.id, user1_id)
-      {:ok, _member2} = add_conversation_member(conversation.id, user2_id)
+      {:error, changeset}
+    else
+      Repo.transaction(fn ->
+        # Create conversation
+        {:ok, conversation} =
+          create_conversation(%{
+            type: "direct",
+            metadata: metadata,
+            is_active: true
+          })
 
-      conversation
-    end)
+        # Add both users as members
+        {:ok, _member1} = add_conversation_member(conversation.id, user1_id)
+        {:ok, _member2} = add_conversation_member(conversation.id, user2_id)
+
+        conversation
+      end)
+    end
   end
 
   @doc """
@@ -114,26 +123,32 @@ defmodule WhisprMessaging.Conversations do
       # Add name to metadata if not present or override it to ensure consistency
       group_metadata = Map.put(metadata, "name", name)
 
-      {:ok, conversation} =
-        create_conversation(%{
-          type: "group",
-          external_group_id: external_group_id,
-          metadata: group_metadata,
-          is_active: true
-        })
+      case create_conversation(%{
+             type: "group",
+             external_group_id: external_group_id,
+             metadata: group_metadata,
+             is_active: true
+           }) do
+        {:ok, conversation} ->
+          # Add creator as member with admin role
+          creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
 
-      # Add creator as member with admin role
-      creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
+          case add_conversation_member(conversation.id, creator_id, creator_settings) do
+            {:ok, _creator_member} ->
+              # Add other members
+              Enum.each(member_ids, fn member_id ->
+                {:ok, _member} = add_conversation_member(conversation.id, member_id)
+              end)
 
-      {:ok, _creator_member} =
-        add_conversation_member(conversation.id, creator_id, creator_settings)
+              conversation
 
-      # Add other members
-      Enum.each(member_ids, fn member_id ->
-        {:ok, _member} = add_conversation_member(conversation.id, member_id)
-      end)
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
 
-      conversation
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
     end)
   end
 

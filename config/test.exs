@@ -6,10 +6,10 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :whispr_messaging, WhisprMessaging.Repo,
-  username: "messaging_service",
-  password: "development_password",
-  hostname: "localhost",
-  database: "whispr_messaging_test#{System.get_env("MIX_TEST_PARTITION")}",
+  username: System.get_env("DB_USERNAME", "postgres"),
+  password: System.get_env("DB_PASSWORD", "postgres"),
+  hostname: System.get_env("DB_HOST", "localhost"),
+  database: System.get_env("DB_NAME", "whispr_messaging_test#{System.get_env("MIX_TEST_PARTITION")}"),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
@@ -28,8 +28,8 @@ config :logger, level: :warning
 
 # Configure Redis for testing
 config :whispr_messaging, :redis,
-  host: "localhost",
-  port: 6379,
+  host: System.get_env("REDIS_HOST", "localhost"),
+  port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   # Different database for tests
   database: 1
 

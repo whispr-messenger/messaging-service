@@ -2,9 +2,10 @@ FROM elixir:1.19
 
 WORKDIR /app
 
-COPY ./docker/dev/requirements.txt .
-
-RUN apt-get update && apt-get install -y $(cat requirements.txt) \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install hex and rebar with cache
@@ -19,9 +20,7 @@ COPY mix.exs mix.lock ./
 # Get dependencies with cache
 RUN --mount=type=cache,target=/root/.hex \
     --mount=type=cache,target=/root/.mix \
-    mix deps.get
+    mix deps.get --only test
 
-COPY ./docker/dev/entrypoint.sh /tmp/entrypoint.sh
-RUN chmod +x /tmp/entrypoint.sh
-
-ENTRYPOINT [ "/usr/bin/tini", "--", "/bin/bash", "/tmp/entrypoint.sh" ]
+# Set test environment
+ENV MIX_ENV=test

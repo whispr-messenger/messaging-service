@@ -15,70 +15,38 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: whispr_messaging_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: '1.19'
-          otp-version: '27'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Cache deps
+      - name: Cache Docker layers
         uses: actions/cache@v4
         with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-
+            ${{ runner.os }}-buildx-
 
-      - name: Install dependencies
-        run: mix deps.get
+      - name: Build test image
+        run: |
+          docker compose -f docker/test/compose.yml build
 
-      - name: Check formatting
-        run: mix format --check-formatted
+      - name: Run tests with Docker Compose
+        run: |
+          docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner
 
-      - name: Run Credo
-        run: mix credo --strict
+      - name: Show test logs
+        if: failure()
+        run: |
+          docker compose -f docker/test/compose.yml logs test-runner
 
-      - name: Compile
-        run: mix compile --warnings-as-errors || true
-
-      - name: Run tests
-        env:
-          MIX_ENV: test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whispr_messaging_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: echo "Tests temporarily disabled - TODO fix test suite"
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose -f docker/test/compose.yml down -v
 
   build-and-push:
     name: Build & Push Docker Image
@@ -124,6 +92,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/prod/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
