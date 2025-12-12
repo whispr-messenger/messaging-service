@@ -30,11 +30,19 @@ defmodule WhisprMessagingWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :check
+    get "/health/live", HealthController, :live
+    get "/health/ready", HealthController, :ready
+    get "/health/detailed", HealthController, :detailed
+
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
+
+    # Conversation members
+    post "/conversations/:id/members", ConversationController, :add_member
+    delete "/conversations/:id/members/:user_id", ConversationController, :remove_member
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create

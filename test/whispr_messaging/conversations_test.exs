@@ -20,14 +20,13 @@ defmodule WhisprMessaging.ConversationsTest do
     test "creates a group conversation with name" do
       attrs = %{
         type: "group",
-        name: "Team Chat",
-        metadata: %{},
+        metadata: %{"name" => "Team Chat"},
         is_active: true
       }
 
       assert {:ok, %Conversation{} = conversation} = Conversations.create_conversation(attrs)
       assert conversation.type == "group"
-      assert conversation.name == "Team Chat"
+      assert conversation.metadata["name"] == "Team Chat"
     end
   end
 
@@ -36,6 +35,7 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
@@ -67,7 +67,7 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Old Name",
+          metadata: %{"name" => "Old Name"},
           is_active: true
         })
 
@@ -75,8 +75,12 @@ defmodule WhisprMessaging.ConversationsTest do
     end
 
     test "updates conversation name", %{conversation: conversation} do
-      assert {:ok, updated} = Conversations.update_conversation(conversation, %{name: "New Name"})
-      assert updated.name == "New Name"
+      assert {:ok, updated} =
+               Conversations.update_conversation(conversation, %{
+                 metadata: %{"name" => "New Name"}
+               })
+
+      assert updated.metadata["name"] == "New Name"
     end
   end
 end
