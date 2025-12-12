@@ -67,10 +67,10 @@ jobs:
         run: mix format --check-formatted
 
       - name: Run Credo
-        run: mix credo --strict || true
+        run: mix credo --strict
 
       - name: Compile
-        run: mix compile --warnings-as-errors || true
+        run: mix compile --warnings-as-errors
 
       - name: Run tests
         env:

@@ -9,8 +9,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   use WhisprMessagingWeb, :channel
 
   alias WhisprMessaging.{Conversations, Messages}
-  alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Conversations.ConversationMember
+  alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.Presence
 
   require Logger
@@ -68,27 +68,27 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     sender_id = socket.assigns.user_id
     metadata = Map.get(payload, "metadata", %{})
 
-    with {:ok, message} <-
-           Messages.create_message(%{
-             conversation_id: conversation_id,
-             sender_id: sender_id,
-             message_type: message_type,
-             content: encrypted_content,
-             client_random: client_random,
-             metadata: metadata
-           }) do
-      # Broadcast message to all conversation members
-      broadcast_message(socket, message)
+    case Messages.create_message(%{
+           conversation_id: conversation_id,
+           sender_id: sender_id,
+           message_type: message_type,
+           content: encrypted_content,
+           client_random: client_random,
+           metadata: metadata
+         }) do
+      {:ok, message} ->
+        # Broadcast message to all conversation members
+        broadcast_message(socket, message)
 
-      # Create delivery statuses for recipients
-      Messages.create_delivery_statuses_for_conversation(
-        message.id,
-        conversation_id,
-        sender_id
-      )
+        # Create delivery statuses for recipients
+        Messages.create_delivery_statuses_for_conversation(
+          message.id,
+          conversation_id,
+          sender_id
+        )
 
-      {:reply, {:ok, %{message: serialize_message(message)}}, socket}
-    else
+        {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+
       {:error, changeset} ->
         {:reply, {:error, %{errors: format_changeset_errors(changeset)}}, socket}
     end

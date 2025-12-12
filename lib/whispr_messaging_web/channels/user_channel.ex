@@ -8,7 +8,7 @@ defmodule WhisprMessagingWeb.UserChannel do
 
   use WhisprMessagingWeb, :channel
 
-  alias WhisprMessaging.{Messages, Conversations}
+  alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessagingWeb.Presence
 
   require Logger

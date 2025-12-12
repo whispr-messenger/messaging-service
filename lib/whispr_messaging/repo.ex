@@ -17,37 +17,33 @@ defmodule WhisprMessaging.Repo do
   Health check for the database connection.
   """
   def health_check do
-    try do
-      query!("SELECT 1", [], timeout: 5_000)
-      :ok
-    rescue
-      exception ->
-        Logger.error("Database health check failed: #{inspect(exception)}")
-        {:error, exception}
-    end
+    query!("SELECT 1", [], timeout: 5_000)
+    :ok
+  rescue
+    exception ->
+      Logger.error("Database health check failed: #{inspect(exception)}")
+      {:error, exception}
   end
 
   @doc """
   Get connection information for monitoring.
   """
   def connection_info do
-    try do
-      query!(
-        """
-          SELECT
-            current_database() as database,
-            current_user as user,
-            version() as version,
-            now() as current_time
-        """,
-        [],
-        timeout: 5_000
-      )
-    rescue
-      exception ->
-        Logger.error("Failed to get connection info: #{inspect(exception)}")
-        {:error, exception}
-    end
+    query!(
+      """
+        SELECT
+          current_database() as database,
+          current_user as user,
+          version() as version,
+          now() as current_time
+      """,
+      [],
+      timeout: 5_000
+    )
+  rescue
+    exception ->
+      Logger.error("Failed to get connection info: #{inspect(exception)}")
+      {:error, exception}
   end
 
   @doc """
