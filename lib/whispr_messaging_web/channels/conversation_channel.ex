@@ -96,7 +96,12 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
   # Handle invalid new_message payload
   def handle_in("new_message", _payload, socket) do
-    {:reply, {:error, %{reason: "invalid_payload", details: "content, message_type, and client_random are required"}}, socket}
+    {:reply,
+     {:error,
+      %{
+        reason: "invalid_payload",
+        details: "content, message_type, and client_random are required"
+      }}, socket}
   end
 
   # Handle message editing

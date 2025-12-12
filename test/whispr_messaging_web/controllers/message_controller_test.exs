@@ -369,7 +369,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
           ~p"/api/v1/messages/#{message.id}",
           update_attrs
         )
-        |> json_response(403) # FallbackController might be rendering 403 correctly now
+        # FallbackController might be rendering 403 correctly now
+        |> json_response(403)
 
       assert response["error"] == "Forbidden"
     end

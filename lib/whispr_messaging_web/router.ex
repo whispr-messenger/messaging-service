@@ -39,7 +39,7 @@ defmodule WhisprMessagingWeb.Router do
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
-    
+
     # Conversation members
     post "/conversations/:id/members", ConversationController, :add_member
     delete "/conversations/:id/members/:user_id", ConversationController, :remove_member
