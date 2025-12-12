@@ -15,12 +15,12 @@ defmodule WhisprMessagingWeb.HealthController do
   alias WhisprMessaging.Repo
 
   swagger_path :check do
-    get "/health"
-    summary "Comprehensive health check"
-    description "Returns the health status of the service and all its dependencies"
-    produces "application/json"
-    response 200, "Success", Schema.ref(:HealthResponse)
-    response 500, "Internal Server Error"
+    get("/health")
+    summary("Comprehensive health check")
+    description("Returns the health status of the service and all its dependencies")
+    produces("application/json")
+    response(200, "Success", Schema.ref(:HealthResponse))
+    response(500, "Internal Server Error")
   end
 
   @doc """
@@ -90,11 +90,11 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   swagger_path :live do
-    get "/health/live"
-    summary "Liveness probe"
-    description "Returns whether the service is alive and responding"
-    produces "application/json"
-    response 200, "Success", Schema.ref(:LivenessResponse)
+    get("/health/live")
+    summary("Liveness probe")
+    description("Returns whether the service is alive and responding")
+    produces("application/json")
+    response(200, "Success", Schema.ref(:LivenessResponse))
   end
 
   @doc """
@@ -127,12 +127,12 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   swagger_path :ready do
-    get "/health/ready"
-    summary "Readiness probe"
-    description "Returns whether the service is ready to accept traffic"
-    produces "application/json"
-    response 200, "Service is ready", Schema.ref(:ReadinessResponse)
-    response 503, "Service is not ready"
+    get("/health/ready")
+    summary("Readiness probe")
+    description("Returns whether the service is ready to accept traffic")
+    produces("application/json")
+    response(200, "Service is ready", Schema.ref(:ReadinessResponse))
+    response(503, "Service is not ready")
   end
 
   @doc """
@@ -294,42 +294,48 @@ defmodule WhisprMessagingWeb.HealthController do
   # Swagger Schema Definitions
   def swagger_definitions do
     %{
-      HealthResponse: swagger_schema do
-        title "Health Response"
-        description "Comprehensive health check response"
-        properties do
-          status :string, "Overall status", example: "ok"
-          timestamp :string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z"
-          service :string, "Service name", example: "whispr-messaging"
-          version :string, "Service version", example: "1.0.0"
-          uptime :object, "Uptime information"
-          memory :object, "Memory usage information"
-          services :object, "Status of dependent services"
-          check_duration_ms :integer, "Health check duration in milliseconds"
+      HealthResponse:
+        swagger_schema do
+          title("Health Response")
+          description("Comprehensive health check response")
+
+          properties do
+            status(:string, "Overall status", example: "ok")
+            timestamp(:string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z")
+            service(:string, "Service name", example: "whispr-messaging")
+            version(:string, "Service version", example: "1.0.0")
+            uptime(:object, "Uptime information")
+            memory(:object, "Memory usage information")
+            services(:object, "Status of dependent services")
+            check_duration_ms(:integer, "Health check duration in milliseconds")
+          end
+        end,
+      LivenessResponse:
+        swagger_schema do
+          title("Liveness Response")
+          description("Liveness probe response")
+
+          properties do
+            status(:string, "Liveness status", example: "alive")
+            timestamp(:string, "ISO8601 timestamp")
+            service(:string, "Service name", example: "whispr-messaging")
+            version(:string, "Service version")
+            uptime(:object, "Uptime information")
+            memory(:object, "Memory usage information")
+          end
+        end,
+      ReadinessResponse:
+        swagger_schema do
+          title("Readiness Response")
+          description("Readiness probe response")
+
+          properties do
+            status(:string, "Readiness status", example: "ready")
+            timestamp(:string, "ISO8601 timestamp")
+            service(:string, "Service name", example: "whispr-messaging")
+            checks(:object, "Status of critical dependencies")
+          end
         end
-      end,
-      LivenessResponse: swagger_schema do
-        title "Liveness Response"
-        description "Liveness probe response"
-        properties do
-          status :string, "Liveness status", example: "alive"
-          timestamp :string, "ISO8601 timestamp"
-          service :string, "Service name", example: "whispr-messaging"
-          version :string, "Service version"
-          uptime :object, "Uptime information"
-          memory :object, "Memory usage information"
-        end
-      end,
-      ReadinessResponse: swagger_schema do
-        title "Readiness Response"
-        description "Readiness probe response"
-        properties do
-          status :string, "Readiness status", example: "ready"
-          timestamp :string, "ISO8601 timestamp"
-          service :string, "Service name", example: "whispr-messaging"
-          checks :object, "Status of critical dependencies"
-        end
-      end
     }
   end
 end
