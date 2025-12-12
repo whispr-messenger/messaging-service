@@ -20,7 +20,7 @@ down ENV:
     elif [ "{{ENV}}" = "prod" ]; then
         docker compose -f docker/prod/compose.yml down --volumes
     elif [ "{{ENV}}" = "doc" ]; then
-        docker compose -f docker/doc/compose.yml up --detach
+        docker compose -f docker/doc/compose.yml down --volumes
     else
         echo "{{ENV}}: Accepted values are 'dev', 'prod' or 'doc'." >&2
     fi
