@@ -86,7 +86,7 @@ defmodule WhisprMessaging.Application do
   end
 
   defp grpc_server_config do
-    port = Application.get_env(:whispr_messaging, :grpc_port, 50052)
+    port = Application.get_env(:whispr_messaging, :grpc_port, 50_052)
     {WhisprMessaging.GRPC.Server, port}
   end
 end
