@@ -60,13 +60,13 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         %{
           "content" => encrypted_content,
           "message_type" => message_type,
-          "client_random" => client_random,
-          "metadata" => metadata
-        },
+          "client_random" => client_random
+        } = payload,
         socket
       ) do
     conversation_id = socket.assigns.conversation_id
     sender_id = socket.assigns.user_id
+    metadata = Map.get(payload, "metadata", %{})
 
     with {:ok, message} <-
            Messages.create_message(%{
@@ -75,7 +75,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
              message_type: message_type,
              content: encrypted_content,
              client_random: client_random,
-             metadata: metadata || %{}
+             metadata: metadata
            }) do
       # Broadcast message to all conversation members
       broadcast_message(socket, message)
@@ -92,6 +92,11 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, changeset} ->
         {:reply, {:error, %{errors: format_changeset_errors(changeset)}}, socket}
     end
+  end
+
+  # Handle invalid new_message payload
+  def handle_in("new_message", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", details: "content, message_type, and client_random are required"}}, socket}
   end
 
   # Handle message editing
@@ -119,6 +124,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
       {:error, :not_editable} ->
         {:reply, {:error, %{reason: "message_not_editable"}}, socket}
+
+      {:error, :forbidden} ->
+        {:reply, {:error, %{reason: "forbidden"}}, socket}
 
       {:error, :unauthorized} ->
         {:reply, {:error, %{reason: "unauthorized"}}, socket}
@@ -150,6 +158,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
       {:error, :not_deletable} ->
         {:reply, {:error, %{reason: "message_not_deletable"}}, socket}
+
+      {:error, :forbidden} ->
+        {:reply, {:error, %{reason: "forbidden"}}, socket}
 
       {:error, :unauthorized} ->
         {:reply, {:error, %{reason: "unauthorized"}}, socket}
@@ -274,19 +285,21 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   # Private functions
 
   defp verify_conversation_access(conversation_id, user_id) do
-    case Conversations.get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member ->
-        conversation = Conversations.get_conversation!(conversation_id)
-        {:ok, conversation}
+    # First check if conversation exists
+    case Conversations.get_conversation(conversation_id) do
+      {:ok, conversation} ->
+        # Then check membership
+        case Conversations.get_conversation_member(conversation_id, user_id) do
+          %ConversationMember{is_active: true} ->
+            {:ok, conversation}
 
-      %ConversationMember{is_active: false} ->
-        {:error, :not_member}
+          _ ->
+            {:error, :not_member}
+        end
 
-      nil ->
-        {:error, :not_member}
+      {:error, :not_found} ->
+        {:error, :not_found}
     end
-  rescue
-    Ecto.NoResultsError -> {:error, :not_found}
   end
 
   defp broadcast_message(socket, %Message{} = message) do

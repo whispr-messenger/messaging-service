@@ -222,7 +222,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       }
 
       ref = push(socket, "edit_message", edit_attrs)
-      assert_reply ref, :error, %{reason: "unauthorized"}
+      assert_reply ref, :error, %{reason: "forbidden"}
     end
   end
 

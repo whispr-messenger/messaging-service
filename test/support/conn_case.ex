@@ -25,6 +25,9 @@ defmodule WhisprMessagingWeb.ConnCase do
 
       alias WhisprMessagingWeb.Router.Helpers, as: Routes
 
+      # Verified routes
+      unquote(WhisprMessagingWeb.verified_routes())
+
       # The default endpoint for testing
       @endpoint WhisprMessagingWeb.Endpoint
     end
