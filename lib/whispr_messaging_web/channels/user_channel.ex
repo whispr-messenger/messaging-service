@@ -8,7 +8,7 @@ defmodule WhisprMessagingWeb.UserChannel do
 
   use WhisprMessagingWeb, :channel
 
-  alias WhisprMessaging.{Messages, Conversations}
+  alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessagingWeb.Presence
 
   require Logger
@@ -164,21 +164,27 @@ defmodule WhisprMessagingWeb.UserChannel do
     # This would typically be handled by a background process
     # that tracks pending delivery confirmations and sends them
     # when users come online
-    spawn(fn ->
-      case Messages.get_pending_delivery_confirmations(user_id) do
-        {:ok, confirmations} ->
-          Enum.each(confirmations, fn confirmation ->
-            send(
-              self(),
-              {:delivery_status, confirmation.message_id, confirmation.user_id,
-               confirmation.status, confirmation.timestamp}
-            )
-          end)
+    spawn(fn -> process_pending_confirmations(user_id) end)
 
-        _ ->
-          :ok
-      end
-    end)
+    socket
+  end
+
+  defp process_pending_confirmations(user_id) do
+    case Messages.get_pending_delivery_confirmations(user_id) do
+      {:ok, confirmations} ->
+        Enum.each(confirmations, &send_delivery_status/1)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp send_delivery_status(confirmation) do
+    send(
+      self(),
+      {:delivery_status, confirmation.message_id, confirmation.user_id, confirmation.status,
+       confirmation.timestamp}
+    )
   end
 
   defp send_conversation_summaries(socket) do

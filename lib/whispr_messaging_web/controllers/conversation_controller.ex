@@ -5,10 +5,32 @@ defmodule WhisprMessagingWeb.ConversationController do
   """
 
   use WhisprMessagingWeb, :controller
+  use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
 
   action_fallback WhisprMessagingWeb.FallbackController
+
+  swagger_path :index do
+    get("/conversations")
+    summary("List user conversations")
+    description("Lists all conversations for a specific user with optional filtering")
+    produces("application/json")
+    parameter(:user_id, :query, :string, "User UUID", required: true)
+
+    parameter(:limit, :query, :integer, "Maximum number of conversations to return (max: 100)",
+      required: false
+    )
+
+    parameter(:type, :query, :string, "Filter by conversation type",
+      enum: [:direct, :group],
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationsResponse))
+    response(400, "Bad Request")
+  end
 
   @doc """
   Lists conversations for a user.
@@ -43,6 +65,26 @@ defmodule WhisprMessagingWeb.ConversationController do
         }
       })
     end
+  end
+
+  swagger_path :create do
+    post("/conversations")
+    summary("Create a new conversation")
+    description("Creates a new direct or group conversation")
+    produces("application/json")
+    consumes("application/json")
+
+    parameter(
+      :conversation,
+      :body,
+      Schema.ref(:ConversationCreateRequest),
+      "Conversation parameters",
+      required: true
+    )
+
+    security([%{Bearer: []}])
+    response(201, "Created", Schema.ref(:ConversationResponse))
+    response(400, "Bad Request")
   end
 
   @doc """
@@ -134,6 +176,19 @@ defmodule WhisprMessagingWeb.ConversationController do
     })
   end
 
+  swagger_path :show do
+    get("/conversations/{id}")
+    summary("Get a conversation")
+    description("Retrieves a specific conversation by ID with member details")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    parameter(:user_id, :query, :string, "User UUID (for permission check)", required: false)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationDetailResponse))
+    response(403, "Forbidden - User is not a member")
+    response(404, "Not Found")
+  end
+
   @doc """
   Gets a single conversation.
   GET /api/v1/conversations/:id?user_id=uuid
@@ -169,6 +224,27 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  swagger_path :update do
+    put("/conversations/{id}")
+    summary("Update a conversation")
+    description("Updates conversation details such as name or metadata")
+    produces("application/json")
+    consumes("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+
+    parameter(
+      :conversation,
+      :body,
+      Schema.ref(:ConversationUpdateRequest),
+      "Conversation update parameters",
+      required: true
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationResponse))
+    response(404, "Not Found")
+  end
+
   @doc """
   Updates a conversation.
   PUT /api/v1/conversations/:id
@@ -184,7 +260,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = get_current_user_id(conn, params)
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- is_member?(conversation.id, user_id) do
+         true <- member?(conversation.id, user_id) do
       # Handle metadata merging and name update
       existing_metadata = conversation.metadata || %{}
       new_metadata = conversation_params["metadata"] || %{}
@@ -221,6 +297,17 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  swagger_path :delete do
+    PhoenixSwagger.Path.delete("/conversations/{id}")
+    summary("Delete a conversation")
+    description("Deactivates a conversation (soft delete)")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationDeleteResponse))
+    response(404, "Not Found")
+  end
+
   @doc """
   Deletes (deactivates) a conversation.
   DELETE /api/v1/conversations/:id
@@ -229,7 +316,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = get_current_user_id(conn, params)
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- is_member?(conversation.id, user_id),
+         true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
         data: %{
@@ -349,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     Enum.any?(conversation.members, fn member -> member.user_id == user_id end)
   end
 
-  defp is_member?(conversation_id, user_id) do
+  defp member?(conversation_id, user_id) do
     case Conversations.get_conversation_member(conversation_id, user_id) do
       nil -> false
       _ -> true
@@ -383,5 +470,111 @@ defmodule WhisprMessagingWeb.ConversationController do
       ["Bearer test_token_" <> user_id] -> user_id
       _ -> nil
     end
+  end
+
+  # Swagger Schema Definitions
+  def swagger_definitions do
+    %{
+      ConversationCreateRequest:
+        swagger_schema do
+          title("Conversation Create Request")
+          description("Request body for creating a conversation")
+
+          properties do
+            conversation(:object, "Conversation parameters")
+          end
+        end,
+      ConversationUpdateRequest:
+        swagger_schema do
+          title("Conversation Update Request")
+          description("Request body for updating a conversation")
+
+          properties do
+            conversation(:object, "Conversation update parameters")
+          end
+        end,
+      Conversation:
+        swagger_schema do
+          title("Conversation")
+          description("A conversation object")
+
+          properties do
+            id(:string, "Conversation UUID")
+            type(:string, "Conversation type")
+            name(:string, "Conversation name")
+            external_group_id(:string, "External group ID")
+            metadata(:object, "Additional metadata")
+            is_active(:boolean, "Whether the conversation is active")
+            inserted_at(:string, "Creation timestamp")
+            updated_at(:string, "Last update timestamp")
+          end
+        end,
+      ConversationWithMembers:
+        swagger_schema do
+          title("Conversation with Members")
+          description("A conversation object with member details")
+
+          properties do
+            id(:string, "Conversation UUID")
+            type(:string, "Conversation type")
+            name(:string, "Conversation name")
+            external_group_id(:string, "External group ID")
+            metadata(:object, "Additional metadata")
+            is_active(:boolean, "Whether the conversation is active")
+            members(:array, "List of conversation members")
+            member_count(:integer, "Number of members")
+            inserted_at(:string, "Creation timestamp")
+            updated_at(:string, "Last update timestamp")
+          end
+        end,
+      ConversationMember:
+        swagger_schema do
+          title("Conversation Member")
+          description("A member of a conversation")
+
+          properties do
+            user_id(:string, "User UUID")
+            role(:string, "Member role")
+            joined_at(:string, "Join timestamp")
+          end
+        end,
+      ConversationsResponse:
+        swagger_schema do
+          title("Conversations Response")
+          description("Response containing a list of conversations")
+
+          properties do
+            data(:array, "List of conversations")
+            meta(:object, "Metadata")
+          end
+        end,
+      ConversationResponse:
+        swagger_schema do
+          title("Conversation Response")
+          description("Response containing a single conversation")
+
+          properties do
+            data(:object, "Conversation object")
+          end
+        end,
+      ConversationDetailResponse:
+        swagger_schema do
+          title("Conversation Detail Response")
+          description("Response containing a conversation with member details")
+
+          properties do
+            data(:object, "Conversation object with members")
+          end
+        end,
+      ConversationDeleteResponse:
+        swagger_schema do
+          title("Conversation Delete Response")
+          description("Response after deleting a conversation")
+
+          properties do
+            data(:object, "Delete result")
+          end
+        end
+    }
   end
 end

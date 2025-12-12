@@ -95,7 +95,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       message_attrs = %{
         "content" => "encrypted_test_content",
         "message_type" => "text",
-        "client_random" => 12345,
+        "client_random" => 12_345,
         "metadata" => %{"test" => true}
       }
 
@@ -129,7 +129,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       message_attrs = %{
         "content" => "test_content",
         "message_type" => "text",
-        "client_random" => 99999,
+        "client_random" => 99_999,
         "metadata" => %{}
       }
 
@@ -159,7 +159,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
           sender_id: user_id,
           message_type: "text",
           content: "original_content",
-          client_random: 54321
+          client_random: 54_321
         })
 
       %{socket: socket, message: message}
@@ -212,7 +212,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
           sender_id: other_user_id,
           message_type: "text",
           content: "other_content",
-          client_random: 11111
+          client_random: 11_111
         })
 
       edit_attrs = %{
@@ -242,7 +242,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
           sender_id: user_id,
           message_type: "text",
           content: "content_to_delete",
-          client_random: 77777
+          client_random: 77_777
         })
 
       %{socket: socket, message: message}
@@ -301,7 +301,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
           sender_id: Ecto.UUID.generate(),
           message_type: "text",
           content: "test_content",
-          client_random: 33333
+          client_random: 33_333
         })
 
       %{socket: socket, message: message}
@@ -383,7 +383,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
           sender_id: user_id,
           message_type: "text",
           content: "message_to_react",
-          client_random: 55555
+          client_random: 55_555
         })
 
       %{socket: socket, message: message}
