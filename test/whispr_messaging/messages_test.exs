@@ -305,11 +305,12 @@ defmodule WhisprMessaging.MessagesTest do
       user2_id = Ecto.UUID.generate()
 
       # Create real conversation for DB constraints
-      {:ok, conversation} = WhisprMessaging.Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        WhisprMessaging.Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
       # Add members
       {:ok, _} = WhisprMessaging.Conversations.add_conversation_member(conversation.id, user1_id)
@@ -319,13 +320,14 @@ defmodule WhisprMessaging.MessagesTest do
 
       # Create messages
       for i <- 1..3 do
-        {:ok, message} = Messages.create_message(%{
-          conversation_id: conversation_id,
-          sender_id: user1_id,
-          message_type: "text",
-          content: "msg #{i}",
-          client_random: i
-        })
+        {:ok, message} =
+          Messages.create_message(%{
+            conversation_id: conversation_id,
+            sender_id: user1_id,
+            message_type: "text",
+            content: "msg #{i}",
+            client_random: i
+          })
 
         # Create delivery status for user2
         Messages.create_delivery_statuses_for_conversation(message.id, conversation_id, user1_id)
@@ -429,19 +431,26 @@ defmodule WhisprMessaging.MessagesTest do
       sender_id = Ecto.UUID.generate()
 
       # We need a real conversation for foreign key constraints
-      {:ok, conversation} = WhisprMessaging.Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        WhisprMessaging.Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
       # Update conversation_id to real one
       conversation_id = conversation.id
 
       assert {:ok, message} =
-               Messages.create_text_message(conversation_id, sender_id, "encrypted_content", 12345, %{
-                 "test" => true
-               })
+               Messages.create_text_message(
+                 conversation_id,
+                 sender_id,
+                 "encrypted_content",
+                 12345,
+                 %{
+                   "test" => true
+                 }
+               )
 
       assert message.message_type == "text"
       assert message.content == "encrypted_content"
@@ -454,18 +463,25 @@ defmodule WhisprMessaging.MessagesTest do
       sender_id = Ecto.UUID.generate()
 
       # We need a real conversation
-      {:ok, conversation} = WhisprMessaging.Conversations.create_conversation(%{
-        type: "direct",
-        metadata: %{},
-        is_active: true
-      })
+      {:ok, conversation} =
+        WhisprMessaging.Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
 
       conversation_id = conversation.id
 
       assert {:ok, message} =
-               Messages.create_media_message(conversation_id, sender_id, "encrypted_url", 67890, %{
-                 "width" => 800
-               })
+               Messages.create_media_message(
+                 conversation_id,
+                 sender_id,
+                 "encrypted_url",
+                 67890,
+                 %{
+                   "width" => 800
+                 }
+               )
 
       assert message.message_type == "media"
       assert message.content == "encrypted_url"
@@ -476,11 +492,12 @@ defmodule WhisprMessaging.MessagesTest do
       conversation_id = Ecto.UUID.generate()
 
       # We need a real conversation
-      {:ok, conversation} = WhisprMessaging.Conversations.create_conversation(%{
-        type: "group",
-        metadata: %{"name" => "System Group"},
-        is_active: true
-      })
+      {:ok, conversation} =
+        WhisprMessaging.Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "System Group"},
+          is_active: true
+        })
 
       conversation_id = conversation.id
 

@@ -154,7 +154,9 @@ defmodule WhisprMessagingWeb.MessageController do
   def delete(conn, %{"id" => id} = params) do
     # Get user_id from params or conn.assigns
     user_id = get_current_user_id(conn, params)
-    delete_for_everyone = params["delete_for_everyone"] == "true" || params["delete_for_everyone"] == true
+
+    delete_for_everyone =
+      params["delete_for_everyone"] == "true" || params["delete_for_everyone"] == true
 
     if is_nil(user_id) do
       conn

@@ -131,7 +131,11 @@ defmodule WhisprMessaging.ConversationServerTest do
       assert member.is_active == true
     end
 
-    test "removes member from conversation", %{pid: pid, conversation: conversation, user1_id: user1_id} do
+    test "removes member from conversation", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
       assert {:ok, _} = ConversationServer.remove_member(pid, user1_id)
 
       # Verify in DB
