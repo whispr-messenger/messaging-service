@@ -175,7 +175,7 @@ defmodule WhisprMessaging.ConversationServer do
         # Create system message
         create_member_left_message(user_id, new_state)
 
-        {:reply, :ok, new_state}
+        {:reply, {:ok, user_id}, new_state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
@@ -263,6 +263,13 @@ defmodule WhisprMessaging.ConversationServer do
   def handle_info(msg, state) do
     Logger.debug("Unhandled message in ConversationServer: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  @impl true
+  def terminate(reason, state) do
+    Logger.debug("ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}")
+    # The Registry will be automatically cleaned up when the process exits
+    :ok
   end
 
   # Private Functions

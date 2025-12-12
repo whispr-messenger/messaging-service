@@ -1,0 +1,73 @@
+# Docker Compose for WhisprMessaging Test Environment
+name: whispr-messaging-test
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: whispr-messaging-test-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: whispr_messaging_test
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    expose:
+      - "5432"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d whispr_messaging_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: whispr-messaging-test-redis
+    expose:
+      - "6379"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /data
+
+  test-runner:
+    build:
+      context: ../..
+      dockerfile: docker/test/Dockerfile
+      cache_from:
+        - whispr-messaging-test:latest
+    container_name: whispr-messaging-test-runner
+    environment:
+      MIX_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/whispr_messaging_test
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ../..:/app
+      - test-deps:/app/deps
+      - test-build:/app/_build
+    networks:
+      - test-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: /bin/bash -c "mix deps.get && mix ecto.create && mix ecto.migrate && mix test"
+
+volumes:
+  test-deps:
+    driver: local
+  test-build:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
