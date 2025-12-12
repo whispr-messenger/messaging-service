@@ -149,12 +149,17 @@ defmodule WhisprMessaging.Messages do
     # Use raw SQL for efficiency
     sql = """
     INSERT INTO delivery_statuses (id, message_id, user_id, inserted_at, updated_at)
-    SELECT gen_random_uuid(), $1, cm.user_id, NOW(), NOW()
+    SELECT gen_random_uuid(), $1::uuid, cm.user_id, NOW(), NOW()
     FROM conversation_members cm
-    WHERE cm.conversation_id = $2
-      AND cm.user_id != $3
+    WHERE cm.conversation_id = $2::uuid
+      AND cm.user_id != $3::uuid
       AND cm.is_active = true
     """
+
+    # Ensure IDs are binary UUIDs if they are strings
+    message_id = ensure_uuid_binary(message_id)
+    conversation_id = ensure_uuid_binary(conversation_id)
+    sender_id = ensure_uuid_binary(sender_id)
 
     case Repo.query(sql, [message_id, conversation_id, sender_id]) do
       {:ok, %{num_rows: count}} ->
@@ -167,11 +172,19 @@ defmodule WhisprMessaging.Messages do
     end
   end
 
+  defp ensure_uuid_binary(uuid) when is_binary(uuid) do
+    case Ecto.UUID.dump(uuid) do
+      {:ok, binary} -> binary
+      _ -> uuid
+    end
+  end
+  defp ensure_uuid_binary(uuid), do: uuid
+
   @doc """
   Marks a message as delivered for a specific user.
   """
   def mark_message_delivered(message_id, user_id, timestamp \\ nil) do
-    delivered_time = timestamp || DateTime.utc_now()
+    delivered_time = timestamp || DateTime.utc_now() |> DateTime.truncate(:second)
 
     case get_or_create_delivery_status(message_id, user_id) do
       {:ok, delivery_status} ->
@@ -188,7 +201,7 @@ defmodule WhisprMessaging.Messages do
   Marks a message as read for a specific user.
   """
   def mark_message_read(message_id, user_id, timestamp \\ nil) do
-    read_time = timestamp || DateTime.utc_now()
+    read_time = timestamp || DateTime.utc_now() |> DateTime.truncate(:second)
 
     case get_or_create_delivery_status(message_id, user_id) do
       {:ok, delivery_status} ->
@@ -205,7 +218,7 @@ defmodule WhisprMessaging.Messages do
   Marks all messages in a conversation as read for a user.
   """
   def mark_conversation_read(conversation_id, user_id, timestamp \\ nil) do
-    read_time = timestamp || DateTime.utc_now()
+    read_time = timestamp || DateTime.utc_now() |> DateTime.truncate(:second)
 
     # Update delivery statuses for unread messages
     query =
@@ -340,13 +353,13 @@ defmodule WhisprMessaging.Messages do
        when sender_id == user_id,
        do: :ok
 
-  defp validate_edit_permissions(_message, _user_id), do: {:error, :unauthorized}
+  defp validate_edit_permissions(_message, _user_id), do: {:error, :forbidden}
 
   defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id)
        when sender_id == user_id,
        do: :ok
 
-  defp validate_delete_permissions(_message, _user_id), do: {:error, :unauthorized}
+  defp validate_delete_permissions(_message, _user_id), do: {:error, :forbidden}
 
   # Text message helpers
 
@@ -388,8 +401,14 @@ defmodule WhisprMessaging.Messages do
   Creates a system message.
   """
   def create_system_message(conversation_id, content, metadata \\ %{}) do
-    Message.create_system_message(conversation_id, content, metadata)
-    |> Repo.insert()
+    create_message(%{
+      conversation_id: conversation_id,
+      sender_id: "00000000-0000-0000-0000-000000000000",
+      message_type: "system",
+      content: content,
+      metadata: metadata,
+      client_random: System.unique_integer([:positive])
+    })
   end
 
   # Attachment operations

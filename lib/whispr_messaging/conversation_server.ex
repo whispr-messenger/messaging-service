@@ -221,7 +221,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   def handle_cast({:mark_read, user_id, message_id}, state) do
     # Update read status in database
-    spawn(fn ->
+    Task.start_link(fn ->
       if message_id do
         Messages.mark_message_read(message_id, user_id)
       else
@@ -397,7 +397,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp create_member_joined_message(user_id, state) do
-    spawn(fn ->
+    Task.start_link(fn ->
       Messages.create_system_message(
         state.conversation_id,
         "User joined conversation",
@@ -407,7 +407,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp create_member_left_message(user_id, state) do
-    spawn(fn ->
+    Task.start_link(fn ->
       Messages.create_system_message(
         state.conversation_id,
         "User left conversation",

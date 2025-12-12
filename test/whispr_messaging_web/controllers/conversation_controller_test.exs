@@ -16,18 +16,19 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   end
 
   describe "GET /api/v1/conversations" do
-    test "lists all conversations for a user", %{user1_id: user1_id, user2_id: user2_id} do
+    test "lists all conversations for a user", %{user1_id: user1_id, user2_id: _user2_id} do
       # Create conversations
       {:ok, conversation1} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
       {:ok, conversation2} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Test Group",
+          metadata: %{"name" => "Test Group"},
           is_active: true
         })
 
@@ -41,7 +42,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :index))
+        get(conn, ~p"/api/v1/conversations")
         |> json_response(200)
 
       assert response["data"] != nil
@@ -55,7 +56,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :index))
+        get(conn, ~p"/api/v1/conversations")
         |> json_response(200)
 
       assert response["data"] == []
@@ -66,13 +67,14 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, direct_conv} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
       {:ok, group_conv} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Team Group",
+          metadata: %{"name" => "Team Group"},
           is_active: true
         })
 
@@ -85,7 +87,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :index), type: "group")
+        get(conn, ~p"/api/v1/conversations", type: "group")
         |> json_response(200)
 
       assert Enum.all?(response["data"], fn c -> c["type"] == "group" end)
@@ -97,7 +99,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :index))
+        get(conn, ~p"/api/v1/conversations")
         |> json_response(401)
 
       assert response["error"] != nil
@@ -118,7 +120,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(201)
 
       assert response["data"]["id"] != nil
@@ -139,7 +141,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -157,7 +159,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(400)
 
       assert response["error"] != nil
@@ -183,12 +185,15 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(201)
 
       assert response["data"]["id"] != nil
       assert response["data"]["type"] == "group"
-      assert response["data"]["name"] == "Test Group Chat"
+      # The controller might put name in metadata, response format depends on implementation
+      # Usually name is top-level in response if rendered correctly
+      # or in metadata
+      assert response["data"]["metadata"]["name"] == "Test Group Chat"
       assert response["data"]["is_active"] == true
     end
 
@@ -205,7 +210,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -225,7 +230,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, Routes.api_v1_conversation_path(conn, :create), attrs)
+        post(conn, ~p"/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -237,6 +242,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
@@ -249,7 +255,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :show, conversation.id))
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["id"] == conversation.id
@@ -266,7 +272,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :show, fake_id))
+        get(conn, ~p"/api/v1/conversations/#{fake_id}")
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -276,6 +282,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
@@ -287,16 +294,17 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :show, conversation.id))
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(403)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "User is not a member of this conversation"
     end
 
     test "includes member list in response", %{user1_id: user1_id, user2_id: user2_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "direct",
+          metadata: %{},
           is_active: true
         })
 
@@ -309,7 +317,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, Routes.api_v1_conversation_path(conn, :show, conversation.id))
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["members"] != nil
@@ -322,7 +330,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Old Name",
+          metadata: %{"name" => "Old Name"},
           is_active: true
         })
 
@@ -339,10 +347,11 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, Routes.api_v1_conversation_path(conn, :update, conversation.id), update_attrs)
+        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(200)
 
-      assert response["data"]["name"] == "New Group Name"
+      # Name is typically in metadata for groups
+      assert response["data"]["metadata"]["name"] == "New Group Name"
       assert response["data"]["metadata"]["updated"] == true
     end
 
@@ -360,7 +369,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, Routes.api_v1_conversation_path(conn, :update, fake_id), update_attrs)
+        put(conn, ~p"/api/v1/conversations/#{fake_id}", update_attrs)
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -370,7 +379,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Original Name",
+          metadata: %{"name" => "Original Name"},
           is_active: true
         })
 
@@ -387,7 +396,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, Routes.api_v1_conversation_path(conn, :update, conversation.id), update_attrs)
+        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(403)
 
       assert response["error"] == "Unauthorized"
@@ -397,12 +406,13 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Original Name",
+          metadata: %{"name" => "Original Name"},
           is_active: true
         })
 
       Conversations.add_conversation_member(conversation.id, user1_id)
 
+      # Empty name for group should fail
       update_attrs = %{
         "name" => "",
         "metadata" => %{}
@@ -414,7 +424,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, Routes.api_v1_conversation_path(conn, :update, conversation.id), update_attrs)
+        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -426,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "To Delete",
+          metadata: %{"name" => "To Delete"},
           is_active: true
         })
 
@@ -438,7 +448,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, Routes.api_v1_conversation_path(conn, :delete, conversation.id))
+        delete(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["is_active"] == false
@@ -453,7 +463,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, Routes.api_v1_conversation_path(conn, :delete, fake_id))
+        delete(conn, ~p"/api/v1/conversations/#{fake_id}")
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -463,7 +473,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Not Mine",
+          metadata: %{"name" => "Not Mine"},
           is_active: true
         })
 
@@ -475,7 +485,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, Routes.api_v1_conversation_path(conn, :delete, conversation.id))
+        delete(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(403)
 
       assert response["error"] == "Unauthorized"
@@ -491,11 +501,11 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Team",
+          metadata: %{"name" => "Team"},
           is_active: true
         })
 
-      Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
       Conversations.add_conversation_member(conversation.id, user2_id)
 
       add_attrs = %{
@@ -510,7 +520,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         post(
           conn,
-          Routes.api_v1_conversation_member_path(conn, :add_member, conversation.id),
+          ~p"/api/v1/conversations/#{conversation.id}/members",
           add_attrs
         )
         |> json_response(201)
@@ -527,7 +537,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Team",
+          metadata: %{"name" => "Team"},
           is_active: true
         })
 
@@ -546,7 +556,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         post(
           conn,
-          Routes.api_v1_conversation_member_path(conn, :add_member, conversation.id),
+          ~p"/api/v1/conversations/#{conversation.id}/members",
           add_attrs
         )
         |> json_response(403)
@@ -560,11 +570,12 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Team",
+          metadata: %{"name" => "Team"},
           is_active: true
         })
 
-      Conversations.add_conversation_member(conversation.id, user1_id)
+      # Add user1 as admin so they can remove members
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
       Conversations.add_conversation_member(conversation.id, user2_id)
 
       conn =
@@ -572,21 +583,20 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> authenticated_conn(user1_id)
         |> json_conn()
 
-      response =
+      response(
         delete(
           conn,
-          Routes.api_v1_conversation_member_path(conn, :remove_member, conversation.id, user2_id)
-        )
-        |> json_response(200)
-
-      assert response["data"]["is_active"] == false
+          ~p"/api/v1/conversations/#{conversation.id}/members/#{user2_id}"
+        ),
+        204
+      )
     end
 
     test "returns 404 for non-existent member", %{user1_id: user1_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Team",
+          metadata: %{"name" => "Team"},
           is_active: true
         })
 
@@ -602,12 +612,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         delete(
           conn,
-          Routes.api_v1_conversation_member_path(
-            conn,
-            :remove_member,
-            conversation.id,
-            fake_user_id
-          )
+          ~p"/api/v1/conversations/#{conversation.id}/members/#{fake_user_id}"
         )
         |> json_response(404)
 

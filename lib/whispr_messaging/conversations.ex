@@ -102,19 +102,23 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Creates a group conversation.
   """
-  def create_group_conversation(creator_id, member_ids, external_group_id \\ nil, metadata \\ %{}) do
+  def create_group_conversation(creator_id, member_ids, name, external_group_id \\ nil, metadata \\ %{}) do
     Repo.transaction(fn ->
       # Create conversation
+      # Add name to metadata if not present or override it to ensure consistency
+      group_metadata = Map.put(metadata, "name", name)
+
       {:ok, conversation} =
         create_conversation(%{
           type: "group",
           external_group_id: external_group_id,
-          metadata: metadata,
+          metadata: group_metadata,
           is_active: true
         })
 
-      # Add creator as member
-      {:ok, _creator_member} = add_conversation_member(conversation.id, creator_id)
+      # Add creator as member with admin role
+      creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
+      {:ok, _creator_member} = add_conversation_member(conversation.id, creator_id, creator_settings)
 
       # Add other members
       Enum.each(member_ids, fn member_id ->
@@ -196,9 +200,18 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Lists conversations for a specific user.
   """
-  def list_user_conversations(user_id) do
+  def list_user_conversations(user_id, opts \\ [])
+
+  def list_user_conversations(user_id, limit) when is_integer(limit) do
+    list_user_conversations(user_id, [limit: limit])
+  end
+
+  def list_user_conversations(user_id, opts) do
+    limit = Keyword.get(opts, :limit, 50)
+
     conversations =
       ConversationMember.user_conversations_query(user_id)
+      |> limit(^limit)
       |> Repo.all()
 
     # Enrich with additional data
@@ -213,7 +226,7 @@ defmodule WhisprMessaging.Conversations do
         |> Map.put(:member_info, member)
       end)
 
-    {:ok, enriched_conversations}
+    enriched_conversations
   end
 
   @doc """
@@ -272,12 +285,7 @@ defmodule WhisprMessaging.Conversations do
     member_of_conversation?(conversation_id, user_id)
   end
 
-  @doc """
-  Lists conversations for a specific user with options.
-  """
-  def list_user_conversations(user_id, _opts) when is_list(_opts) do
-    list_user_conversations(user_id)
-  end
+
 
   @doc """
   Gets members who haven't read messages since timestamp.
@@ -318,6 +326,16 @@ defmodule WhisprMessaging.Conversations do
     conv_settings
     |> ConversationSettings.update_settings_changeset(settings)
     |> Repo.update()
+  end
+
+  def update_conversation_settings(conversation_id, settings) when is_binary(conversation_id) do
+    case get_conversation_settings(conversation_id) do
+      {:ok, conv_settings} ->
+        update_conversation_settings(conv_settings, settings)
+
+      error ->
+        error
+    end
   end
 
   # Analytics and metrics
@@ -373,13 +391,21 @@ defmodule WhisprMessaging.Conversations do
   # Helper functions
 
   defp get_unread_count_for_user(conversation_id, user_id, last_read_at) do
-    from(m in Message,
-      where: m.conversation_id == ^conversation_id,
-      where: m.sender_id != ^user_id,
-      where: m.is_deleted == false,
-      where: is_nil(^last_read_at) or m.sent_at > ^last_read_at,
-      select: count(m.id)
-    )
+    query =
+      from(m in Message,
+        where: m.conversation_id == ^conversation_id,
+        where: m.sender_id != ^user_id,
+        where: m.is_deleted == false
+      )
+
+    query =
+      if last_read_at do
+        from m in query, where: m.sent_at > ^last_read_at
+      else
+        query
+      end
+
+    from(m in query, select: count(m.id))
     |> Repo.one()
   end
 
