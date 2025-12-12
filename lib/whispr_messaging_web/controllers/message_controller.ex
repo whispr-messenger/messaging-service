@@ -7,8 +7,8 @@ defmodule WhisprMessagingWeb.MessageController do
   use WhisprMessagingWeb, :controller
   use PhoenixSwagger
 
-  alias WhisprMessaging.Messages
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Messages
 
   action_fallback WhisprMessagingWeb.FallbackController
 
