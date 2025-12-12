@@ -182,51 +182,47 @@ defmodule WhisprMessagingWeb.HealthController do
 
   @doc false
   defp check_database do
-    try do
-      Logger.debug("Checking database connection")
-      Repo.query!("SELECT 1")
-      Logger.debug("Database check passed")
-      :ok
-    rescue
-      error ->
-        Logger.error("Database check failed: #{inspect(error)}")
-        {:error, :database}
-    end
+    Logger.debug("Checking database connection")
+    Repo.query!("SELECT 1")
+    Logger.debug("Database check passed")
+    :ok
+  rescue
+    error ->
+      Logger.error("Database check failed: #{inspect(error)}")
+      {:error, :database}
   end
 
   @doc false
   defp check_redis do
-    try do
-      Logger.debug("Checking cache connection")
+    Logger.debug("Checking cache connection")
 
-      # Try to set and get a health check value
-      set_result = Redix.command(:redix, ["SET", "health-check", "ok", "EX", "1"])
-      Logger.debug("Redis SET result: #{inspect(set_result)}")
+    # Try to set and get a health check value
+    set_result = Redix.command(:redix, ["SET", "health-check", "ok", "EX", "1"])
+    Logger.debug("Redis SET result: #{inspect(set_result)}")
 
-      case set_result do
-        {:ok, _} ->
-          get_result = Redix.command(:redix, ["GET", "health-check"])
-          Logger.debug("Redis GET result: #{inspect(get_result)}")
+    case set_result do
+      {:ok, _} ->
+        get_result = Redix.command(:redix, ["GET", "health-check"])
+        Logger.debug("Redis GET result: #{inspect(get_result)}")
 
-          case get_result do
-            {:ok, _} ->
-              Logger.debug("Cache check passed")
-              :ok
+        case get_result do
+          {:ok, _} ->
+            Logger.debug("Cache check passed")
+            :ok
 
-            error ->
-              Logger.error("Cache check failed: unable to read test value - #{inspect(error)}")
-              {:error, :redis}
-          end
+          error ->
+            Logger.error("Cache check failed: unable to read test value - #{inspect(error)}")
+            {:error, :redis}
+        end
 
-        error ->
-          Logger.error("Cache check failed: unable to set test value - #{inspect(error)}")
-          {:error, :redis}
-      end
-    rescue
       error ->
-        Logger.error("Cache check failed with exception: #{inspect(error)}")
+        Logger.error("Cache check failed: unable to set test value - #{inspect(error)}")
         {:error, :redis}
     end
+  rescue
+    error ->
+      Logger.error("Cache check failed with exception: #{inspect(error)}")
+      {:error, :redis}
   end
 
   @doc false

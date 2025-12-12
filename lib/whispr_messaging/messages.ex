@@ -7,10 +7,18 @@ defmodule WhisprMessaging.Messages do
   """
 
   import Ecto.Query, warn: false
-  alias WhisprMessaging.Repo
 
-  alias WhisprMessaging.Messages.{Message, DeliveryStatus, MessageReaction, MessageAttachment}
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
+
+  alias WhisprMessaging.Messages.{
+    Attachment,
+    DeliveryStatus,
+    Message,
+    MessageAttachment,
+    MessageReaction
+  }
+
+  alias WhisprMessaging.Repo
 
   require Logger
 
