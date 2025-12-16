@@ -104,6 +104,56 @@ defmodule WhisprMessagingWeb.HealthController do
     end
   end
 
+  def check(conn, _params) do
+    # Default health check - comprehensive check of all dependencies
+    with :ok <- check_database(),
+         :ok <- check_redis() do
+      uptime_seconds = get_uptime_seconds()
+      
+      json(conn, %{
+        status: "healthy",
+        service: "whispr-messaging",
+        timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+        version: get_version(),
+        uptime: %{
+          seconds: uptime_seconds,
+          human: format_uptime(uptime_seconds)
+        },
+        checks: %{
+          database: "ok",
+          redis: "ok"
+        },
+        memory: get_memory_info()
+      })
+    else
+      {:error, :database} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{
+          status: "unhealthy",
+          service: "whispr-messaging",
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+          checks: %{
+            database: "failed",
+            redis: "unknown"
+          }
+        })
+
+      {:error, :redis} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{
+          status: "unhealthy",
+          service: "whispr-messaging",
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+          checks: %{
+            database: "ok",
+            redis: "failed"
+          }
+        })
+    end
+  end
+
   swagger_path :live do
     get "/health/live"
     summary "Liveness probe"
