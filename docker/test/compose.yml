@@ -53,6 +53,7 @@ services:
       - ../..:/app
       - test-deps:/app/deps
       - test-build:/app/_build
+      - ../../cover:/app/cover
     networks:
       - test-network
     depends_on:
@@ -60,7 +61,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: /bin/bash -c "mix deps.get && mix ecto.create && mix ecto.migrate && mix test"
+    command: /bin/bash -c "mix deps.get && mix ecto.create && mix ecto.migrate && mix coveralls.html && mix coveralls.xml"
 
 volumes:
   test-deps:

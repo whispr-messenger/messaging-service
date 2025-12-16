@@ -38,6 +38,16 @@ jobs:
         run: |
           docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cover/excoveralls.xml
+          flags: unittests
+          name: messaging-service-coverage
+          fail_ci_if_error: true
+          verbose: true
+
       - name: Show test logs
         if: failure()
         run: |
@@ -57,6 +67,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
@@ -101,13 +112,14 @@ jobs:
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'sarif'
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
