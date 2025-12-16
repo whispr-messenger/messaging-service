@@ -24,6 +24,24 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   @doc """
+  Service information endpoint for root path.
+
+  Returns basic service information.
+  """
+  def info(conn, _params) do
+    json(conn, %{
+      service: "Whispr Messaging Service",
+      version: "1.0.0",
+      status: "running",
+      endpoints: %{
+        health: "/api/v1/health",
+        swagger: "/api/swagger",
+        websocket: "ws://#{conn.host}:#{conn.port}/socket"
+      }
+    })
+  end
+
+  @doc """
   Comprehensive health check endpoint.
 
   Returns the health status of the service and all its dependencies

@@ -11,15 +11,6 @@ defmodule WhisprMessagingWeb.Router do
     plug :accepts, ["json"]
   end
 
-  pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {WhisprMessagingWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-  end
-
   scope "/api/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
@@ -27,9 +18,9 @@ defmodule WhisprMessagingWeb.Router do
   end
 
   scope "/", WhisprMessagingWeb do
-    pipe_through :browser
+    pipe_through :api
 
-    get "/", PageController, :home
+    get "/", HealthController, :info
   end
 
   # Kubernetes-compatible health check routes (no /api/v1 prefix)
@@ -73,14 +64,6 @@ defmodule WhisprMessagingWeb.Router do
     delete "/attachments/:id", AttachmentController, :delete
   end
 
-  # Enable LiveDashboard in development
-  if Application.compile_env(:whispr_messaging, :dev_routes) do
-    import Phoenix.LiveDashboard.Router
-
-    scope "/dev" do
-      pipe_through :browser
-
-      live_dashboard "/dashboard", metrics: WhisprMessagingWeb.Telemetry
-    end
-  end
+  # Note: LiveDashboard removed - not needed for API-only microservice
+  # For monitoring, use /api/v1/health/detailed endpoint
 end
