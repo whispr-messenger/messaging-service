@@ -38,7 +38,6 @@ defmodule WhisprMessagingWeb.Router do
     get "/health", HealthController, :check
     get "/health/live", HealthController, :live
     get "/health/ready", HealthController, :ready
-    get "/health/detailed", HealthController, :detailed
 
     # Conversation routes
     get "/conversations", ConversationController, :index
