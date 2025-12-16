@@ -64,5 +64,5 @@ defmodule WhisprMessagingWeb.Router do
   end
 
   # Note: LiveDashboard removed - not needed for API-only microservice
-  # For monitoring, use /api/v1/health/detailed endpoint
+  # For monitoring, use /api/v1/health endpoints (/health, /health/live, /health/ready)
 end
