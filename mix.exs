@@ -11,20 +11,18 @@ defmodule WhisprMessaging.MixProject do
       aliases: aliases(),
       deps: deps(),
       elixirc_options: [warnings_as_errors: false],
-      test_coverage: [tool: ExCoveralls]
-    ]
-  end
-
-  def cli do
-    [
-      preferred_envs: [
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
-        "coveralls.html": :test
+        "coveralls.html": :test,
+        "coveralls.xml": :test
       ]
     ]
   end
+
+
 
   def application do
     [
