@@ -36,6 +36,7 @@ defmodule WhisprMessagingWeb.Router do
 
     # Health check endpoints
     get "/health", HealthController, :check
+    get "/health/detailed", HealthController, :detailed
     get "/health/live", HealthController, :live
     get "/health/ready", HealthController, :ready
 
