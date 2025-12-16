@@ -371,16 +371,26 @@ defmodule WhisprMessagingWeb.HealthController do
     %{
       HealthResponse: swagger_schema do
         title "Health Response"
-        description "Comprehensive health check response"
+        description "Health check response from GET /health endpoint. When healthy, includes version, uptime, checks, and memory. When unhealthy, only includes status, service, timestamp, and checks."
         properties do
-          status :string, "Overall status", example: "ok"
+          status :string, "Overall status (healthy or unhealthy)", example: "healthy"
           timestamp :string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z"
           service :string, "Service name", example: "whispr-messaging"
-          version :string, "Service version", example: "1.0.0"
-          uptime :object, "Uptime information"
-          memory :object, "Memory usage information"
-          services :object, "Status of dependent services"
-          check_duration_ms :integer, "Health check duration in milliseconds"
+          version :string, "Service version (only when healthy)", example: "1.0.0"
+          uptime(:object, "Uptime information (only when healthy)", required: false) do
+            property :seconds, :integer, "Uptime in seconds"
+            property :human, :string, "Human-readable uptime", example: "1d 2h 30m 15s"
+          end
+          checks(:object, "Status of dependencies") do
+            property :database, :string, "Database status (ok, failed, or unknown)"
+            property :redis, :string, "Redis status (ok, failed, or unknown)"
+          end
+          memory(:object, "Memory usage information (only when healthy)", required: false) do
+            property :total_bytes, :integer, "Total memory in bytes"
+            property :total_mb, :number, "Total memory in MB"
+            property :processes_bytes, :integer, "Process memory in bytes"
+            property :used_mb, :number, "Used memory in MB"
+          end
         end
       end,
       LivenessResponse: swagger_schema do
