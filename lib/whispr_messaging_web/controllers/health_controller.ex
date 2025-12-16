@@ -290,19 +290,6 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   @doc false
-  defp get_conversation_metrics do
-    try do
-      # Try to ping Redis
-      case Redix.command(:redix, ["PING"]) do
-        {:ok, "PONG"} -> :ok
-        _ -> {:error, :redis}
-      end
-    rescue
-      _ -> {:error, :redis}
-    end
-  end
-
-  @doc false
   defp get_uptime_seconds do
     {uptime_ms, _} = :erlang.statistics(:wall_clock)
     div(uptime_ms, 1000)
