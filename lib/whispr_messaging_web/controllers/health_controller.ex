@@ -111,7 +111,7 @@ defmodule WhisprMessagingWeb.HealthController do
       uptime_seconds = get_uptime_seconds()
       
       json(conn, %{
-        status: "healthy",
+        status: "ok",
         service: "whispr-messaging",
         timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
         version: get_version(),
@@ -124,6 +124,97 @@ defmodule WhisprMessagingWeb.HealthController do
           redis: "ok"
         },
         memory: get_memory_info()
+      })
+    else
+      {:error, :database} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{
+          status: "unhealthy",
+          service: "whispr-messaging",
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+          checks: %{
+            database: "failed",
+            redis: "unknown"
+          }
+        })
+
+      {:error, :redis} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{
+          status: "unhealthy",
+          service: "whispr-messaging",
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+          checks: %{
+            database: "ok",
+            redis: "failed"
+          }
+        })
+    end
+  end
+
+  swagger_path :detailed do
+    get "/health/detailed"
+    summary "Detailed health check"
+    description "Returns detailed health status with comprehensive metrics and diagnostics"
+    produces "application/json"
+    response 200, "Success", Schema.ref(:HealthResponse)
+    response 503, "Service Unavailable - when dependencies are unhealthy"
+  end
+
+  @doc """
+  Detailed health check endpoint with extended metrics.
+
+  Returns comprehensive health information including conversation metrics,
+  process information, and detailed dependency status.
+  """
+  def detailed(conn, _params) do
+    # Extended health check with detailed metrics
+    with :ok <- check_database(),
+         :ok <- check_redis() do
+      uptime_seconds = get_uptime_seconds()
+      memory = :erlang.memory()
+      
+      json(conn, %{
+        status: "ok",
+        service: "whispr-messaging",
+        timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+        version: get_version(),
+        uptime: %{
+          seconds: uptime_seconds,
+          human: format_uptime(uptime_seconds)
+        },
+        checks: %{
+          database: "ok",
+          redis: "ok"
+        },
+        memory: %{
+          used_mb: Float.round(memory[:total] / 1_048_576, 2),
+          available_mb: Float.round((memory[:system] + memory[:processes]) / 1_048_576, 2),
+          total_bytes: memory[:total],
+          total_mb: Float.round(memory[:total] / 1_048_576, 2),
+          processes_bytes: memory[:processes],
+          processes_mb: Float.round(memory[:processes] / 1_048_576, 2),
+          system_bytes: memory[:system],
+          system_mb: Float.round(memory[:system] / 1_048_576, 2),
+          atom_bytes: memory[:atom],
+          atom_mb: Float.round(memory[:atom] / 1_048_576, 2),
+          binary_bytes: memory[:binary],
+          binary_mb: Float.round(memory[:binary] / 1_048_576, 2),
+          ets_bytes: memory[:ets],
+          ets_mb: Float.round(memory[:ets] / 1_048_576, 2)
+        },
+        process_info: %{
+          run_queue: :erlang.statistics(:run_queue),
+          memory_usage: memory[:processes],
+          process_count: :erlang.system_info(:process_count),
+          process_limit: :erlang.system_info(:process_limit)
+        },
+        metrics: %{
+          active_conversations: get_active_conversation_count(),
+          active_connections: get_active_connection_count()
+        }
       })
     else
       {:error, :database} ->
@@ -220,7 +311,7 @@ defmodule WhisprMessagingWeb.HealthController do
     status_code = if all_healthy, do: :ok, else: :service_unavailable
 
     response = %{
-      status: if(all_healthy, do: "ok", else: "degraded"),
+      status: if(all_healthy, do: "ready", else: "degraded"),
       service: "whispr-messaging",
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
       checks: %{
@@ -340,6 +431,30 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   @doc false
+  defp get_active_conversation_count do
+    # Count active conversation processes
+    try do
+      WhisprMessaging.ConversationSupervisor
+      |> Supervisor.count_children()
+      |> Map.get(:active, 0)
+    rescue
+      _ -> 0
+    end
+  end
+
+  @doc false
+  defp get_active_connection_count do
+    # Count active Phoenix channels
+    try do
+      Phoenix.PubSub.node_name(WhisprMessaging.PubSub)
+      |> Phoenix.Tracker.list()
+      |> length()
+    rescue
+      _ -> 0
+    end
+  end
+
+  @doc false
   defp get_uptime_seconds do
     {uptime_ms, _} = :erlang.statistics(:wall_clock)
     div(uptime_ms, 1000)
@@ -377,20 +492,9 @@ defmodule WhisprMessagingWeb.HealthController do
           timestamp :string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z"
           service :string, "Service name", example: "whispr-messaging"
           version :string, "Service version (only when healthy)", example: "1.0.0"
-          uptime(:object, "Uptime information (only when healthy)", required: false) do
-            property :seconds, :integer, "Uptime in seconds"
-            property :human, :string, "Human-readable uptime", example: "1d 2h 30m 15s"
-          end
-          checks(:object, "Status of dependencies") do
-            property :database, :string, "Database status (ok, failed, or unknown)"
-            property :redis, :string, "Redis status (ok, failed, or unknown)"
-          end
-          memory(:object, "Memory usage information (only when healthy)", required: false) do
-            property :total_bytes, :integer, "Total memory in bytes"
-            property :total_mb, :number, "Total memory in MB"
-            property :processes_bytes, :integer, "Process memory in bytes"
-            property :used_mb, :number, "Used memory in MB"
-          end
+          uptime :object, "Uptime information (only when healthy)"
+          checks :object, "Status of dependencies"
+          memory :object, "Memory usage information (only when healthy)"
         end
       end,
       LivenessResponse: swagger_schema do
