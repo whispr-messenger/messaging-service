@@ -80,17 +80,6 @@ config :logger, :console,
   metadata: [:request_id, :conversation_id, :user_id, :query, :params]
 
 # Phoenix LiveView configuration
-config :phoenix, :json_library, Jason
-
-# Configure Phoenix Swagger
-config :whispr_messaging, :phoenix_swagger,
-  swagger_files: %{
-    "priv/static/swagger.json" => [
-      router: WhisprMessagingWeb.Router,
-      endpoint: WhisprMessagingWeb.Endpoint
-    ]
-  }
-
 config :phoenix_swagger, json_library: Jason
 
 # Configure telemetry - simplified for tests
