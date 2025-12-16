@@ -17,10 +17,10 @@ defmodule WhisprMessagingWeb.HealthController do
   swagger_path :check do
     get "/health"
     summary "Comprehensive health check"
-    description "Returns the health status of the service and all its dependencies"
+    description "Returns the health status of the service and all its dependencies. Supports optional 'type' query parameter: 'live' for liveness probe (lightweight), 'ready' for readiness probe (checks dependencies), or omit for full health check with metrics."
     produces "application/json"
     response 200, "Success", Schema.ref(:HealthResponse)
-    response 500, "Internal Server Error"
+    response 503, "Service Unavailable - when dependencies are unhealthy"
   end
 
   @doc """
@@ -407,12 +407,16 @@ defmodule WhisprMessagingWeb.HealthController do
       end,
       ReadinessResponse: swagger_schema do
         title "Readiness Response"
-        description "Readiness probe response"
+        description "Readiness probe response. Status will be 'ready' when all dependencies are healthy, or 'not_ready' when any dependency fails."
         properties do
-          status :string, "Readiness status", example: "ready"
+          status :string, "Readiness status (ready or not_ready)", example: "ready"
           timestamp :string, "ISO8601 timestamp"
           service :string, "Service name", example: "whispr-messaging"
-          checks :object, "Status of critical dependencies"
+          type :string, "Type of health check", example: "readiness"
+          checks(:object, "Status of critical dependencies") do
+            property :database, :string, "Database status (ok, failed, or unknown)"
+            property :redis, :string, "Redis status (ok, failed, or unknown)"
+          end
         end
       end
     }
