@@ -21,7 +21,7 @@ jobs:
   build-and-push:
     name: Build & Push Multi-Platform Image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     permissions:
       contents: read
@@ -40,9 +40,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
 
       - name: Set up QEMU
+        if: inputs.should_deploy
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -64,8 +64,9 @@ jobs:
           tags: |
             type=sha,prefix=
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
+            # Intentionally mutable "latest stable minor" tag (e.g. 1.2 -> 1.2.3, then 1.2.4, ...)
+            # For reproducible builds, pin to an immutable tag such as the full {{version}} or image digest
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
@@ -88,6 +89,8 @@ jobs:
         id: short_sha
         run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
+      # Note: Anchore SBOM generation scans the runner's native platform (linux/amd64)
+      # For complete multi-platform SBOM coverage, separate scans per platform would be needed
       - name: Generate SBOM with Anchore
         if: inputs.should_deploy
         uses: anchore/sbom-action@v0
@@ -118,7 +121,7 @@ jobs:
         if: inputs.should_deploy
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-spdx
+          name: sbom-spdx-${{ steps.short_sha.outputs.sha_short }}
           path: ./sbom-${{ github.sha }}.spdx.json
           retention-days: 90
 
