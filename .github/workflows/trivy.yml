@@ -7,11 +7,6 @@ on:
         description: 'Git reference to checkout'
         required: true
         type: string
-      should_deploy:
-        description: 'Whether this is a deployment build'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   trivy-fs:
@@ -24,12 +19,15 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+        # To display results from a third-party static analysis tool in your repository on GitHub,
+        # you'll need your results stored in a SARIF file that supports a specific subset of the
+        # SARIF 2.1.0 JSON schema for code scanning.
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          format: 'sarif'
+          format: 'sarif' 
           output: 'trivy-fs-results.sarif'
           severity: 'CRITICAL,HIGH'
 
@@ -51,7 +49,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Run Trivy configuration scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: 'config'
           scan-ref: '.'

@@ -18,6 +18,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+
   build-and-push:
     name: Build & Push Multi-Platform Image
     runs-on: ubuntu-latest
@@ -147,7 +148,6 @@ jobs:
     name: Scan Docker Image
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
 
     steps:
       - name: Checkout code
@@ -163,7 +163,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.short_sha }}
           format: 'sarif'
