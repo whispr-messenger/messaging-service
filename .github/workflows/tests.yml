@@ -7,21 +7,17 @@ on:
         description: 'Git reference to checkout'
         required: true
         type: string
-      should_deploy:
-        description: 'Whether this is a deployment build'
-        required: false
-        type: boolean
-        default: false
+
     secrets:
       CODECOV_TOKEN:
         description: 'Codecov token for coverage upload'
         required: false
 
 jobs:
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,7 +45,6 @@ jobs:
           docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner
 
       - name: Upload coverage to Codecov
-        if: secrets.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
