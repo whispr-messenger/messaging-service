@@ -66,7 +66,7 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             # Intentionally mutable "latest stable minor" tag (e.g. 1.2 -> 1.2.3, then 1.2.4, ...)
-            # For reproducible builds, pin to an immutable tag such as the full {{version}} or image digest
+            # For reproducible builds, pin to an immutable tag such as the full semver tag (e.g., 1.2.3) or image digest
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
@@ -83,7 +83,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: ${{ inputs.should_deploy }}
-          sbom: ${{ inputs.should_deploy }}
+          sbom: false
 
       - name: Extract short SHA
         id: short_sha
