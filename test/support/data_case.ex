@@ -56,7 +56,8 @@ defmodule WhisprMessaging.DataCase do
     # Combine current time in microseconds with a random number
     timestamp = System.system_time(:microsecond)
     random = :rand.uniform(10_000)
-    rem(timestamp + random, 2_147_483_647)  # Keep within integer range
+    # Keep within integer range
+    rem(timestamp + random, 2_147_483_647)
   end
 
   @doc """
