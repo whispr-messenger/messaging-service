@@ -1,17 +1,26 @@
 defmodule WhisprMessaging.MixProject do
   use Mix.Project
 
+  # In order to configure Mix, the module that calls use Mix.Project should export
+  # a project/0 function that returns a keyword list representing configuration
+  # for the project.
   def project do
     [
       app: :whispr_messaging,
       version: "1.0.0",
       elixir: "~> 1.19",
-      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
+      # A list of dependencies of this project.
       deps: deps(),
+      elixirc_paths: elixirc_paths(Mix.env()),
       elixirc_options: [warnings_as_errors: false],
-      test_coverage: [tool: ExCoveralls],
+      test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  def cli do
+    [
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
@@ -22,8 +31,6 @@ defmodule WhisprMessaging.MixProject do
     ]
   end
 
-
-
   def application do
     [
       mod: {WhisprMessaging.Application, []},
@@ -32,6 +39,7 @@ defmodule WhisprMessaging.MixProject do
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
