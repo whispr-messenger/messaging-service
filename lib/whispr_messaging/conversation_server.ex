@@ -267,7 +267,10 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def terminate(reason, state) do
-    Logger.debug("ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}")
+    Logger.debug(
+      "ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}"
+    )
+
     # The Registry will be automatically cleaned up when the process exits
     :ok
   end
