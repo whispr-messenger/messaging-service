@@ -15,12 +15,16 @@ defmodule WhisprMessagingWeb.HealthController do
   alias WhisprMessaging.Repo
 
   swagger_path :check do
-    get "/health"
-    summary "Comprehensive health check"
-    description "Returns the health status of the service and all its dependencies. Supports optional 'type' query parameter: 'live' for liveness probe (lightweight), 'ready' for readiness probe (checks dependencies), or omit for full health check with metrics."
-    produces "application/json"
-    response 200, "Success", Schema.ref(:HealthResponse)
-    response 503, "Service Unavailable - when dependencies are unhealthy"
+    get("/health")
+    summary("Comprehensive health check")
+
+    description(
+      "Returns the health status of the service and all its dependencies. Supports optional 'type' query parameter: 'live' for liveness probe (lightweight), 'ready' for readiness probe (checks dependencies), or omit for full health check with metrics."
+    )
+
+    produces("application/json")
+    response(200, "Success", Schema.ref(:HealthResponse))
+    response(503, "Service Unavailable - when dependencies are unhealthy")
   end
 
   @doc """
@@ -109,7 +113,7 @@ defmodule WhisprMessagingWeb.HealthController do
     with :ok <- check_database(),
          :ok <- check_redis() do
       uptime_seconds = get_uptime_seconds()
-      
+
       json(conn, %{
         status: "ok",
         service: "whispr-messaging",
@@ -155,12 +159,12 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   swagger_path :detailed do
-    get "/health/detailed"
-    summary "Detailed health check"
-    description "Returns detailed health status with comprehensive metrics and diagnostics"
-    produces "application/json"
-    response 200, "Success", Schema.ref(:HealthResponse)
-    response 503, "Service Unavailable - when dependencies are unhealthy"
+    get("/health/detailed")
+    summary("Detailed health check")
+    description("Returns detailed health status with comprehensive metrics and diagnostics")
+    produces("application/json")
+    response(200, "Success", Schema.ref(:HealthResponse))
+    response(503, "Service Unavailable - when dependencies are unhealthy")
   end
 
   @doc """
@@ -175,7 +179,7 @@ defmodule WhisprMessagingWeb.HealthController do
          :ok <- check_redis() do
       uptime_seconds = get_uptime_seconds()
       memory = :erlang.memory()
-      
+
       json(conn, %{
         status: "ok",
         service: "whispr-messaging",
@@ -246,11 +250,11 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   swagger_path :live do
-    get "/health/live"
-    summary "Liveness probe"
-    description "Returns whether the service is alive and responding"
-    produces "application/json"
-    response 200, "Success", Schema.ref(:LivenessResponse)
+    get("/health/live")
+    summary("Liveness probe")
+    description("Returns whether the service is alive and responding")
+    produces("application/json")
+    response(200, "Success", Schema.ref(:LivenessResponse))
   end
 
   @doc """
@@ -283,12 +287,12 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   swagger_path :ready do
-    get "/health/ready"
-    summary "Readiness probe"
-    description "Returns whether the service is ready to accept traffic"
-    produces "application/json"
-    response 200, "Service is ready", Schema.ref(:ReadinessResponse)
-    response 503, "Service is not ready"
+    get("/health/ready")
+    summary("Readiness probe")
+    description("Returns whether the service is ready to accept traffic")
+    produces("application/json")
+    response(200, "Service is ready", Schema.ref(:ReadinessResponse))
+    response(503, "Service is not ready")
   end
 
   @doc """
@@ -418,7 +422,11 @@ defmodule WhisprMessagingWeb.HealthController do
     %{
       count: :erlang.system_info(:process_count),
       limit: :erlang.system_info(:process_limit),
-      usage_percent: Float.round(:erlang.system_info(:process_count) / :erlang.system_info(:process_limit) * 100, 2),
+      usage_percent:
+        Float.round(
+          :erlang.system_info(:process_count) / :erlang.system_info(:process_limit) * 100,
+          2
+        ),
       run_queue: :erlang.statistics(:run_queue),
       memory_usage: %{
         total_mb: Float.round(memory[:total] / 1_048_576, 2),
@@ -484,45 +492,58 @@ defmodule WhisprMessagingWeb.HealthController do
   # Swagger Schema Definitions
   def swagger_definitions do
     %{
-      HealthResponse: swagger_schema do
-        title "Health Response"
-        description "Health check response from GET /health endpoint. When healthy, includes version, uptime, checks, and memory. When unhealthy, only includes status, service, timestamp, and checks."
-        properties do
-          status :string, "Overall status (healthy or unhealthy)", example: "healthy"
-          timestamp :string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z"
-          service :string, "Service name", example: "whispr-messaging"
-          version :string, "Service version (only when healthy)", example: "1.0.0"
-          uptime :object, "Uptime information (only when healthy)"
-          checks :object, "Status of dependencies"
-          memory :object, "Memory usage information (only when healthy)"
-        end
-      end,
-      LivenessResponse: swagger_schema do
-        title "Liveness Response"
-        description "Liveness probe response"
-        properties do
-          status :string, "Liveness status", example: "alive"
-          timestamp :string, "ISO8601 timestamp"
-          service :string, "Service name", example: "whispr-messaging"
-          version :string, "Service version"
-          uptime :object, "Uptime information"
-          memory :object, "Memory usage information"
-        end
-      end,
-      ReadinessResponse: swagger_schema do
-        title "Readiness Response"
-        description "Readiness probe response. Status will be 'ready' when all dependencies are healthy, or 'not_ready' when any dependency fails."
-        properties do
-          status :string, "Readiness status (ready or not_ready)", example: "ready"
-          timestamp :string, "ISO8601 timestamp"
-          service :string, "Service name", example: "whispr-messaging"
-          type :string, "Type of health check", example: "readiness"
-          checks(:object, "Status of critical dependencies") do
-            property :database, :string, "Database status (ok, failed, or unknown)"
-            property :redis, :string, "Redis status (ok, failed, or unknown)"
+      HealthResponse:
+        swagger_schema do
+          title("Health Response")
+
+          description(
+            "Health check response from GET /health endpoint. When healthy, includes version, uptime, checks, and memory. When unhealthy, only includes status, service, timestamp, and checks."
+          )
+
+          properties do
+            status(:string, "Overall status (healthy or unhealthy)", example: "healthy")
+            timestamp(:string, "ISO8601 timestamp", example: "2025-12-11T21:53:00Z")
+            service(:string, "Service name", example: "whispr-messaging")
+            version(:string, "Service version (only when healthy)", example: "1.0.0")
+            uptime(:object, "Uptime information (only when healthy)")
+            checks(:object, "Status of dependencies")
+            memory(:object, "Memory usage information (only when healthy)")
+          end
+        end,
+      LivenessResponse:
+        swagger_schema do
+          title("Liveness Response")
+          description("Liveness probe response")
+
+          properties do
+            status(:string, "Liveness status", example: "alive")
+            timestamp(:string, "ISO8601 timestamp")
+            service(:string, "Service name", example: "whispr-messaging")
+            version(:string, "Service version")
+            uptime(:object, "Uptime information")
+            memory(:object, "Memory usage information")
+          end
+        end,
+      ReadinessResponse:
+        swagger_schema do
+          title("Readiness Response")
+
+          description(
+            "Readiness probe response. Status will be 'ready' when all dependencies are healthy, or 'not_ready' when any dependency fails."
+          )
+
+          properties do
+            status(:string, "Readiness status (ready or not_ready)", example: "ready")
+            timestamp(:string, "ISO8601 timestamp")
+            service(:string, "Service name", example: "whispr-messaging")
+            type(:string, "Type of health check", example: "readiness")
+
+            checks(:object, "Status of critical dependencies") do
+              property(:database, :string, "Database status (ok, failed, or unknown)")
+              property(:redis, :string, "Redis status (ok, failed, or unknown)")
+            end
           end
         end
-      end
     }
   end
 end

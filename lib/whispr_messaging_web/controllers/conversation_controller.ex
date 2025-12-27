@@ -434,10 +434,12 @@ defmodule WhisprMessagingWeb.ConversationController do
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          {:member_exists, {:ok, _member}} <-
-           {:member_exists, Conversations.get_conversation_member(id, member_id) |> case do
-             nil -> {:error, :not_found}
-             member -> {:ok, member}
-           end},
+           {:member_exists,
+            Conversations.get_conversation_member(id, member_id)
+            |> case do
+              nil -> {:error, :not_found}
+              member -> {:ok, member}
+            end},
          true <- can_manage_members?(conversation, current_user_id),
          {:ok, _} <- Conversations.remove_conversation_member(id, member_id) do
       send_resp(conn, :no_content, "")
