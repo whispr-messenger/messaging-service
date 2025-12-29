@@ -55,7 +55,6 @@ services:
     volumes:
       - ../..:/app
       - deps:/app/deps
-      - build:/app/_build
     ports:
       - "8080:${HTTP_PORT}"  # HTTP/WebSocket
       - "8443:${HTTPS_PORT}" # HTTPS
