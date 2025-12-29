@@ -172,47 +172,54 @@ defmodule WhisprMessagingWeb.ConversationController do
     name = params["name"]
     metadata = params["metadata"] || %{}
     external_group_id = params["external_group_id"]
-    # creator_id can come from params or auth token
     creator_id = params["creator_id"] || get_current_user_id(conn, params)
 
     if is_nil(creator_id) do
-      conn
-      |> put_status(:bad_request)
-      |> json(%{error: "creator_id is required for group conversations"})
+      respond_missing_creator(conn)
     else
-      # Filter creator out of member list to avoid duplication if frontend sends both
       member_ids = Enum.filter(user_ids, fn id -> id != creator_id end)
+      validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata)
+    end
+  end
 
-      if length(member_ids) < 1 do
+  defp respond_missing_creator(conn) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "creator_id is required for group conversations"})
+  end
+
+  defp validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata) do
+    if length(member_ids) < 1 do
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
+    else
+      handle_group_creation(conn, creator_id, member_ids, name, external_group_id, metadata)
+    end
+  end
+
+  defp handle_group_creation(conn, creator_id, member_ids, name, external_group_id, metadata) do
+    case Conversations.create_group_conversation(
+           creator_id,
+           member_ids,
+           name,
+           external_group_id,
+           metadata
+         ) do
+      {:ok, conversation} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: render_conversation(conversation)})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
-      else
-        case Conversations.create_group_conversation(
-               creator_id,
-               member_ids,
-               name,
-               external_group_id,
-               metadata
-             ) do
-          {:ok, conversation} ->
-            conn
-            |> put_status(:created)
-            |> json(%{
-              data: render_conversation(conversation)
-            })
+        |> json(%{errors: translate_errors(changeset)})
 
-          {:error, %Ecto.Changeset{} = changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: translate_errors(changeset)})
-
-          {:error, reason} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: inspect(reason)})
-        end
-      end
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: inspect(reason)})
     end
   end
 
