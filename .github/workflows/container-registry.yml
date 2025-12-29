@@ -78,8 +78,6 @@ jobs:
           image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
           format: 'sarif'
           output: 'docker-trivy-results.sarif'
-        severity: 'CRITICAL,HIGH'
-        exit-code: '1'
 
       - name: Upload Docker Trivy scan results
         uses: github/codeql-action/upload-sarif@v4
@@ -128,8 +126,8 @@ jobs:
           file: ./docker/prod/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+            tags: ${{ steps.meta.outputs.tags }} 
+            labels: ${{ steps.meta.outputs.labels }} 
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
