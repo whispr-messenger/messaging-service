@@ -127,7 +127,7 @@ defmodule WhisprMessagingWeb.HealthController do
           database: "ok",
           redis: "ok"
         },
-        memory: get_memory_info()
+        memory: get_process_info()
       })
     else
       {:error, :database} ->
@@ -280,7 +280,7 @@ defmodule WhisprMessagingWeb.HealthController do
         seconds: uptime_seconds,
         human: format_uptime(uptime_seconds)
       },
-      memory: get_memory_info()
+      memory: get_process_info()
     }
 
     json(conn, response)
@@ -308,8 +308,12 @@ defmodule WhisprMessagingWeb.HealthController do
   def ready(conn, _params) do
     Logger.debug("Readiness check started")
 
-    {database_status, database_time} = measure_check(&check_database/0)
-    {cache_status, cache_time} = measure_check(&check_redis/0)
+    db_check = measure_check(&check_database/0)
+    cache_check = measure_check(&check_redis/0)
+    database_status = db_check.result
+    database_time = db_check.duration_ms
+    cache_status = cache_check.result
+    cache_time = cache_check.duration_ms
 
     all_healthy = database_status == "healthy" && cache_status == "healthy"
     status_code = if all_healthy, do: :ok, else: :service_unavailable
@@ -383,36 +387,9 @@ defmodule WhisprMessagingWeb.HealthController do
   @doc false
   defp measure_check(check_fn) do
     start_time = System.monotonic_time(:millisecond)
-
-    status =
-      case check_fn.() do
-        :ok -> "healthy"
-        {:error, _} -> "unhealthy"
-      end
-
-    elapsed_time = System.monotonic_time(:millisecond) - start_time
-
-    {status, elapsed_time}
-  end
-
-  @doc false
-  defp get_memory_info do
-    memory = :erlang.memory()
-
-    %{
-      total_bytes: memory[:total],
-      total_mb: Float.round(memory[:total] / 1_048_576, 2),
-      processes_bytes: memory[:processes],
-      processes_mb: Float.round(memory[:processes] / 1_048_576, 2),
-      system_bytes: memory[:system],
-      system_mb: Float.round(memory[:system] / 1_048_576, 2),
-      atom_bytes: memory[:atom],
-      atom_mb: Float.round(memory[:atom] / 1_048_576, 2),
-      binary_bytes: memory[:binary],
-      binary_mb: Float.round(memory[:binary] / 1_048_576, 2),
-      ets_bytes: memory[:ets],
-      ets_mb: Float.round(memory[:ets] / 1_048_576, 2)
-    }
+    result = check_fn.()
+    duration = System.monotonic_time(:millisecond) - start_time
+    %{result: result, duration_ms: duration}
   end
 
   @doc false
@@ -455,7 +432,7 @@ defmodule WhisprMessagingWeb.HealthController do
     # Count active Phoenix channels
     try do
       Phoenix.PubSub.node_name(WhisprMessaging.PubSub)
-      |> Phoenix.Tracker.list()
+      |> Phoenix.Tracker.list(:all)
       |> length()
     rescue
       _ -> 0

@@ -15,8 +15,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
-  alias WhisprMessaging.Messages.Message
-  alias WhisprMessagingWeb.{Endpoint, Presence}
+  alias WhisprMessagingWeb.Endpoint
 
   @typep conversation_state :: %{
            conversation_id: binary(),
