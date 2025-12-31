@@ -11,7 +11,6 @@ defmodule WhisprMessagingWeb.Presence do
     otp_app: :whispr_messaging,
     pubsub_server: WhisprMessaging.PubSub
 
-  alias WhisprMessaging.Conversations
   require Logger
 
   @doc """
@@ -129,7 +128,7 @@ defmodule WhisprMessagingWeb.Presence do
   """
   def fetch(_topic, presences) do
     # Add custom user information to presence data
-    user_ids =
+    _user_ids =
       presences
       |> Map.keys()
       |> Enum.filter(&(!String.starts_with?(&1, "typing:")))

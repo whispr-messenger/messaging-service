@@ -120,15 +120,16 @@ defmodule WhisprMessaging.Conversations do
       ) do
     Repo.transaction(fn ->
       group_metadata = Map.put(metadata, "name", name)
-      with {:ok, conversation} <- create_conversation(%{
-             type: "group",
-             external_group_id: external_group_id,
-             metadata: group_metadata,
-             is_active: true
-           }),
+
+      with {:ok, conversation} <-
+             create_conversation(%{
+               type: "group",
+               external_group_id: external_group_id,
+               metadata: group_metadata,
+               is_active: true
+             }),
            {:ok, _creator_member} <- add_creator_as_admin(conversation.id, creator_id),
-           :ok <- add_members(conversation.id, member_ids)
-      do
+           :ok <- add_members(conversation.id, member_ids) do
         conversation
       else
         {:error, changeset} -> Repo.rollback(changeset)
@@ -142,6 +143,7 @@ defmodule WhisprMessaging.Conversations do
   end
 
   defp add_members(_conversation_id, []), do: :ok
+
   defp add_members(conversation_id, member_ids) do
     Enum.reduce_while(member_ids, :ok, fn member_id, :ok ->
       case add_conversation_member(conversation_id, member_id) do

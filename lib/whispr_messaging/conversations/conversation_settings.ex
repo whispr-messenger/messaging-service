@@ -125,9 +125,6 @@ defmodule WhisprMessaging.Conversations.ConversationSettings do
     }
   end
 
-  @doc """
-  Validates settings structure and values.
-  """
   defp validate_settings(%Ecto.Changeset{} = changeset) do
     settings = get_field(changeset, :settings) || %{}
 
