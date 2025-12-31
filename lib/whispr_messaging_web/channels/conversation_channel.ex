@@ -127,15 +127,19 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         broadcast(socket, "message_edited", %{
           message: serialize_message(message)
         })
-
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
-        {:reply, {:error, %{reason: "message_not_editable"}}, socket}
+
+      {:error, :not_found} ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
 
       {:error, :forbidden} ->
         {:reply, {:error, %{reason: "forbidden"}}, socket}
 
       {:error, :unauthorized} ->
         {:reply, {:error, %{reason: "unauthorized"}}, socket}
+
+      {:error, _} ->
+        {:reply, {:error, %{reason: "message_not_editable"}}, socket}
     end
   end
 
