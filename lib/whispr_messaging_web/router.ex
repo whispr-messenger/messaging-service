@@ -48,8 +48,8 @@ defmodule WhisprMessagingWeb.Router do
     delete "/conversations/:id", ConversationController, :delete
 
     # Conversation members
-    post "/conversations/:id/members", ConversationController, :add_member
-    delete "/conversations/:id/members/:user_id", ConversationController, :remove_member
+    post "/conversations/:id/members", ConversationMemberController, :create
+    delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create

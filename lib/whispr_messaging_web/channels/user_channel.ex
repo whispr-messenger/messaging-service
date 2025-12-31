@@ -19,7 +19,6 @@ defmodule WhisprMessagingWeb.UserChannel do
     if socket.assigns.user_id == user_id do
       # Track global user presence
       send(self(), :after_join)
-
       {:ok, %{user_id: user_id}, socket}
     else
       {:error, %{reason: "unauthorized"}}
@@ -46,7 +45,12 @@ defmodule WhisprMessagingWeb.UserChannel do
     {:noreply, socket}
   end
 
-  # Handle user status updates
+  @impl true
+  def handle_info(%{event: "presence_diff", payload: diff}, socket) do
+    push(socket, "presence_diff", diff)
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_in("update_status", %{"status" => status}, socket)
       when status in ["online", "away", "busy", "offline"] do
@@ -90,9 +94,6 @@ defmodule WhisprMessagingWeb.UserChannel do
       {:ok, unread_messages} ->
         serialized_messages = Enum.map(unread_messages, &serialize_message_summary/1)
         {:reply, {:ok, %{unread_messages: serialized_messages}}, socket}
-
-      {:error, reason} ->
-        {:reply, {:error, %{reason: reason}}, socket}
     end
   end
 
@@ -121,7 +122,6 @@ defmodule WhisprMessagingWeb.UserChannel do
   end
 
   # Handle presence diff events
-  @impl true
   def handle_info(%{event: "presence_diff", payload: diff}, socket) do
     push(socket, "presence_diff", diff)
     {:noreply, socket}
