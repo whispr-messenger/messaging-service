@@ -62,7 +62,7 @@ graph TD
 - **Langage** : Elixir
 - **Framework** : Phoenix (framework web pour Elixir)
 - **Communication temps réel** : Phoenix Channels pour les WebSockets
-- **Base de données** : PostgreSQL avec Ecto
+- **Base de données** : PostgreSQL
 - **Cache** : Redis pour les données temporaires et les sessions
 - **Communication inter-services** : gRPC pour les appels synchrones, PubSub pour les événements
 - **ORM** : Ecto avec repositories
