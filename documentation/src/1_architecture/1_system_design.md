@@ -1,14 +1,23 @@
-# Messaging Service (`messaging-service`) - System Design Document
+# System Design
 
 ## 1. Introduction
 
-### 1.1 Objectif du Document
-Ce document décrit l'architecture et la conception technique du service de messagerie (Messaging Service) de l'application Whispr. Il sert de référence pour l'équipe de développement et les parties prenantes du projet.
+### 1.1 Objectif
+Cette page décrit l'architecture et la conception technique du service de messagerie (Messaging Service) de l'application Whispr. 
+
+Il sert de référence pour l'équipe de développement et les parties prenantes du projet.
 
 ### 1.2 Périmètre du Service
-Le Messaging Service est responsable de la gestion des conversations, des messages, de la communication en temps réel, et de la synchronisation multi-appareils. Il assure la livraison fiable et sécurisée des messages textuels et multimédias tout en préservant leur chiffrement de bout en bout.
+Le Messaging Service est responsable :
+- Des messages
+- Da La gestion des conversations
+- De la communication en temps réel
+- De la synchronisation multi-appareils
+
+Il assure la livraison fiable et sécurisée des messages textuels et multimédias tout en préservant leur chiffrement de bout en bout.
 
 ### 1.3 Relations avec les Autres Services
+
 Le Messaging Service interagit avec plusieurs autres microservices de l'écosystème Whispr :
 - **auth-service** : pour la validation des identités et l'autorisation
 - **user-service** : pour les informations sur les utilisateurs et groupes
@@ -20,31 +29,20 @@ Le Messaging Service interagit avec plusieurs autres microservices de l'écosyst
 
 ### 2.1 Vue d'Ensemble de l'Architecture
 
+![System Overview](./assets/system-overview.svg)
+
 Le service de messagerie repose sur une architecture Elixir/OTP avec isolation des composants via le modèle d'Acteurs :
 
 ```mermaid
 graph TD
-    A[API Gateway] --> B[Messaging Service]
-    B --> C[(Base de données Messages)]
-    B --> D[(Cache Redis)]
-    
-    subgraph "Messaging Service"
-        E[Phoenix Endpoint] --> F[Controllers]
-        F --> G[Phoenix Channels]
-        F --> H[Core Messaging Logic]
-        G --> H
-        H --> I[Conversation Supervisors]
-        I --> J[Conversation Processes]
-        H --> K[Message Store]
-        H --> L[Delivery Tracker]
-    end
-    
-    B <--> M[auth-service]
-    B <--> N[user-service]
-    B <--> O[media-service]
-    B <--> P[notification-service]
-    
-    style B fill:#9cf,stroke:#333,stroke-width:2px
+  E[Phoenix Endpoint] --> F[Controllers]
+  F --> G[Phoenix Channels]
+  F --> H[Core Messaging Logic]
+  G --> H
+  H --> I[Conversation Supervisors]
+  I --> J[Conversation Processes]
+  H --> K[Message Store]
+  H --> L[Delivery Tracker]
 ```
 
 ### 2.2 Principes Architecturaux
