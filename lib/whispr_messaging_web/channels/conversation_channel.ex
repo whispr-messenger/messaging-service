@@ -127,6 +127,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         broadcast(socket, "message_edited", %{
           message: serialize_message(message)
         })
+
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, :not_found} ->
