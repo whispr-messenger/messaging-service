@@ -2,7 +2,7 @@ name: CD Pipeline
 
 on:
   workflow_run:
-    workflows: [🚀 CI Pipeline]
+    workflows: ["🚀 CI Pipeline"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/user-service
+  IMAGE_NAME: whispr-messenger/messaging-service
 
 jobs:
   update-deployment:
@@ -33,7 +33,7 @@ jobs:
           app_id: ${{ secrets.ACTIONS_CD }}
           private_key: ${{ secrets.ACTIONS_CD_PRIVATE_KEY }}
 
-      - name: Checkout user-service
+      - name: Checkout messaging-service
         uses: actions/checkout@v4
         with:
           ref: main
@@ -117,12 +117,12 @@ jobs:
           echo "Updating deployment image to: ${FULL_IMAGE}"
 
           # Update the deployment manifest in the infrastructure repository
-          yq -i ".spec.template.spec.containers[0].image = \"${FULL_IMAGE}\"" argocd/k8s/whispr/user-service/deployment.yaml
+          yq -i ".spec.template.spec.containers[0].image = \"${FULL_IMAGE}\"" argocd/k8s/whispr/messaging-service/deployment.yaml
 
       - name: Verify update
         run: |
           echo "Updated deployment manifest:"
-          yq '.spec.template.spec.containers[0].image' argocd/k8s/whispr/user-service/deployment.yaml
+          yq '.spec.template.spec.containers[0].image' argocd/k8s/whispr/messaging-service/deployment.yaml
 
       - name: Commit and push changes
         run: |
@@ -130,28 +130,22 @@ jobs:
           git config --local user.name "github-actions[bot]"
           
           # Check if there are changes to commit
-          if git diff --quiet argocd/k8s/whispr/user-service/deployment.yaml; then
+          if git diff --quiet argocd/k8s/whispr/messaging-service/deployment.yaml; then
             echo "No changes to commit"
             exit 0
           fi
 
           # Use the validated commit SHA determined in the previous step
           COMMIT_SHA="${{ steps.validate_commit.outputs.commit_sha }}"
-          SHORT_SHA=$(printf "%.7s" "$COMMIT_SHA")
-          
-          # Create a new branch with the requested prefix
-          BRANCH_NAME="WHISPR-259-deploy-user-service-${SHORT_SHA}"
-          echo "Creating and pushing to branch: ${BRANCH_NAME}"
-          git checkout -b "${BRANCH_NAME}"
           
           # Build commit message based on trigger type
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            COMMIT_MSG="🔧 chore(deploy/user-service): update image to ${SHORT_SHA} (manual trigger)"
+            COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${COMMIT_SHA:0:7} (manual trigger)"
           else
-            COMMIT_MSG="🔧 chore(deploy/user-service): update image to ${SHORT_SHA}"
+            COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${COMMIT_SHA:0:7}"
           fi
 
-          git add argocd/k8s/whispr/user-service/deployment.yaml
+          git add argocd/k8s/whispr/messaging-service/deployment.yaml
           git commit -m "${COMMIT_MSG}"
 
-          git push https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/whispr-messenger/infrastructure.git "${BRANCH_NAME}"
+          git push https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/whispr-messenger/infrastructure.git main
