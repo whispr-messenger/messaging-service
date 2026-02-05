@@ -53,6 +53,12 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_info(%{event: "presence_diff", payload: diff}, socket) do
+    push(socket, "presence_diff", diff)
+    {:noreply, socket}
+  end
+
   # Handle new message sending
   @impl true
   def handle_in(
@@ -125,16 +131,16 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, :not_found} ->
-        {:reply, {:error, %{reason: "message_not_found"}}, socket}
-
-      {:error, :not_editable} ->
-        {:reply, {:error, %{reason: "message_not_editable"}}, socket}
+        {:reply, {:error, %{reason: "not_found"}}, socket}
 
       {:error, :forbidden} ->
         {:reply, {:error, %{reason: "forbidden"}}, socket}
 
       {:error, :unauthorized} ->
         {:reply, {:error, %{reason: "unauthorized"}}, socket}
+
+      {:error, _} ->
+        {:reply, {:error, %{reason: "message_not_editable"}}, socket}
     end
   end
 
@@ -177,7 +183,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     user_id = socket.assigns.user_id
 
     case Messages.mark_message_delivered(message_id, user_id) do
-      {:ok, delivery_status} ->
+      {:ok, _delivery_status} ->
         # Notify sender about delivery
         notify_sender_delivery_status(message_id, user_id, "delivered")
         {:reply, {:ok, %{status: "delivered"}}, socket}
@@ -192,7 +198,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     user_id = socket.assigns.user_id
 
     case Messages.mark_message_read(message_id, user_id) do
-      {:ok, delivery_status} ->
+      {:ok, _delivery_status} ->
         # Notify sender about read receipt
         notify_sender_delivery_status(message_id, user_id, "read")
         {:reply, {:ok, %{status: "read"}}, socket}
@@ -278,13 +284,6 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, :not_found} ->
         {:reply, {:error, %{reason: "reaction_not_found"}}, socket}
     end
-  end
-
-  # Handle presence diff events
-  @impl true
-  def handle_info(%{event: "presence_diff", payload: diff}, socket) do
-    push(socket, "presence_diff", diff)
-    {:noreply, socket}
   end
 
   # Private functions

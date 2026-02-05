@@ -299,8 +299,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     test "updates a message", %{message: message, user1_id: user1_id} do
       update_attrs = %{
         "content" => "updated_content",
-        "metadata" => %{"edited" => true},
-        "user_id" => user1_id
+        "metadata" => %{"edited" => true}
       }
 
       conn =
@@ -326,8 +325,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       update_attrs = %{
         "content" => "new_content",
-        "metadata" => %{},
-        "user_id" => user1_id
+        "metadata" => %{}
       }
 
       conn =
@@ -354,8 +352,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     } do
       update_attrs = %{
         "content" => "hacked_content",
-        "metadata" => %{},
-        "user_id" => user2_id
+        "metadata" => %{}
       }
 
       conn =
@@ -379,8 +376,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       # Update with invalid attributes
       update_attrs = %{
         "content" => nil,
-        "metadata" => %{},
-        "user_id" => user1_id
+        "metadata" => %{}
       }
 
       conn =
@@ -423,7 +419,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}?user_id=#{user1_id}",
+          ~p"/api/v1/messages/#{message.id}",
           delete_for_everyone: true
         )
         |> json_response(200)
@@ -443,7 +439,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{fake_id}?user_id=#{user1_id}",
+          ~p"/api/v1/messages/#{fake_id}",
           delete_for_everyone: false
         )
         |> json_response(404)
@@ -463,7 +459,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}?user_id=#{user2_id}",
+          ~p"/api/v1/messages/#{message.id}",
           delete_for_everyone: false
         )
         |> json_response(403)
@@ -483,7 +479,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}?user_id=#{user1_id}",
+          ~p"/api/v1/messages/#{message.id}",
           delete_for_everyone: false
         )
         |> json_response(200)

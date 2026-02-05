@@ -246,7 +246,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
       nil ->
         false
 
-      pid ->
+      _pid ->
         try do
           state = ConversationServer.get_state(conversation_id)
           minutes_since_activity = DateTime.diff(DateTime.utc_now(), state.last_activity, :minute)

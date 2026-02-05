@@ -247,9 +247,6 @@ defmodule WhisprMessaging.Messages.Message do
     })
   end
 
-  @doc """
-  Validates content size (encrypted content should not exceed limits).
-  """
   defp validate_content_size(%Ecto.Changeset{} = changeset) do
     max_size = Application.get_env(:whispr_messaging, :messages)[:max_content_size] || 65_536
 
@@ -269,9 +266,6 @@ defmodule WhisprMessaging.Messages.Message do
     end
   end
 
-  @doc """
-  Validates message metadata structure.
-  """
   defp validate_metadata(%Ecto.Changeset{} = changeset) do
     metadata = get_field(changeset, :metadata) || %{}
 
@@ -282,9 +276,6 @@ defmodule WhisprMessaging.Messages.Message do
     end
   end
 
-  @doc """
-  Sets sent_at to current time if not provided.
-  """
   defp put_sent_at_if_empty(%Ecto.Changeset{} = changeset) do
     case get_field(changeset, :sent_at) do
       nil ->

@@ -1,0 +1,122 @@
+name: 🧪 Quality Assurance
+
+on:
+  repository_dispatch:
+    types: [run-tests]
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      should_deploy:
+        required: false
+        type: string
+        default: 'false'
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      SONAR_HOST_URL:
+        required: false
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  ELIXIR_VERSION: '1.19'
+  OTP_VERSION: '27'
+
+jobs:
+  test-and-quality:
+    name: 🔍 Code Analysis & Testing
+    runs-on: ubuntu-latest
+
+    ####################################################################################################
+    # Services
+    ####################################################################################################
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: whispr_messaging_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      ####################################################################################################
+      # Setup
+      ####################################################################################################
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.client_payload.ref }}
+          fetch-depth: 0
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Restore dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile dependencies
+        run: mix deps.compile
+
+      - name: Compile project
+        run: mix compile --warnings-as-errors
+
+      ####################################################################################################
+      # Linting and Formatting
+      ####################################################################################################
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Run Credo
+        run: mix credo --strict
+
+      ####################################################################################################
+      # Unit and Integration Tests
+      ####################################################################################################
+      - name: Run tests
+        run: mix coveralls.xml
+        env:
+          MIX_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whispr_messaging_test
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cover/excoveralls.xml
+          flags: unittests
+          name: messaging-service-coverage
+          fail_ci_if_error: false
+          verbose: true

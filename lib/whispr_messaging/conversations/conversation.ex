@@ -137,9 +137,6 @@ defmodule WhisprMessaging.Conversations.Conversation do
       preload: [messages: ^recent_messages_query]
   end
 
-  @doc """
-  Validates conversation metadata based on type.
-  """
   defp validate_metadata(%Ecto.Changeset{} = changeset) do
     conversation_type = get_field(changeset, :type)
     metadata = get_field(changeset, :metadata) || %{}
@@ -184,7 +181,7 @@ defmodule WhisprMessaging.Conversations.Conversation do
   @doc """
   Creates a new direct conversation between two users.
   """
-  def create_direct_conversation(user_id1, user_id2, metadata \\ %{}) do
+  def create_direct_conversation(_user_id1, _user_id2, metadata \\ %{}) do
     %__MODULE__{}
     |> changeset(%{
       type: "direct",

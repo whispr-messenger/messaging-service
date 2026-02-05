@@ -1,9 +1,9 @@
-# Conception de la Base de Données - Service Messagerie
+# Database Design
 
 ## 1. Introduction et Principes de Conception
 
 ### 1.1 Objectif
-Ce document décrit la structure de la base de données du service de messagerie (messaging-service) de l'application Whispr, en détaillant les modèles de données, les relations, et les considérations de performance pour la gestion des conversations et des messages.
+Ce document décrit la structure de la base de données du service de messagerie (`messaging-service`) de l'application Whispr, en détaillant les modèles de données, les relations, et les considérations de performance pour la gestion des conversations et des messages.
 
 ### 1.2 Principes Architecturaux
 - **Optimisation pour le temps réel**: Structures conçues pour des opérations à haute fréquence et faible latence
@@ -13,7 +13,7 @@ Ce document décrit la structure de la base de données du service de messagerie
 - **Haute disponibilité**: Conception permettant la résilience et la continuité de service
 - **Performances d'écriture/lecture équilibrées**: Optimisation pour l'envoi et la récupération rapide des messages
 
-### 1.3 Technologie
+### 1.3 Technologies
 - **PostgreSQL**: Pour le stockage persistant des conversations et messages
 - **Ecto**: ORM pour Elixir utilisé pour l'accès aux données
 - **Redis**: Pour les données temporaires et la coordination des nœuds Elixir
@@ -132,7 +132,7 @@ Stocke les métadonnées des conversations entre utilisateurs.
 |---------|------|-------------|-------------|
 | id | UUID | Identifiant unique de la conversation | PK, NOT NULL |
 | type | VARCHAR(20) | Type de conversation ('direct', 'group') | NOT NULL |
-| external_group_id | UUID | Référence à un groupe dans user-service (pour les groupes) | NULL |
+| external_group_id | UUID | Référence à un groupe dans user-service (pour les groupes)  | NULL |
 | metadata | JSONB | Métadonnées de la conversation (nom pour groupe, etc.) | NOT NULL, DEFAULT '{}' |
 | created_at | TIMESTAMP | Date/heure de création de la conversation | NOT NULL |
 | updated_at | TIMESTAMP | Date/heure de la dernière activité | NOT NULL |

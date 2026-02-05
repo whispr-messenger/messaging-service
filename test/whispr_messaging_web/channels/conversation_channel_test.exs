@@ -197,7 +197,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       }
 
       ref = push(socket, "edit_message", edit_attrs)
-      assert_reply ref, :error, %{reason: "message_not_found"}
+      assert_reply ref, :error, %{reason: "not_found"}
     end
 
     test "fails to edit other user's message", %{

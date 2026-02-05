@@ -14,21 +14,20 @@ defmodule WhisprMessaging.ConversationServer do
   require Logger
 
   alias WhisprMessaging.{Conversations, Messages}
-  alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
-  alias WhisprMessaging.Messages.Message
-  alias WhisprMessagingWeb.{Endpoint, Presence}
+  # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
+  alias WhisprMessagingWeb.Endpoint
 
-  @typep conversation_state :: %{
-           conversation_id: binary(),
-           conversation: Conversation.t(),
-           members: [ConversationMember.t()],
-           active_members: MapSet.t(),
-           typing_users: MapSet.t(),
-           message_queue: :queue.queue(),
-           settings: map(),
-           last_activity: DateTime.t(),
-           metrics: map()
-         }
+  # @typep conversation_state :: %{
+  #          conversation_id: binary(),
+  #          conversation: Conversation.t(),
+  #          members: [ConversationMember.t()],
+  #          active_members: MapSet.t(),
+  #          typing_users: MapSet.t(),
+  #          message_queue: :queue.queue(),
+  #          settings: map(),
+  #          last_activity: DateTime.t(),
+  #          metrics: map()
+  #        }
 
   # Client API
 
@@ -267,7 +266,10 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def terminate(reason, state) do
-    Logger.debug("ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}")
+    Logger.debug(
+      "ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}"
+    )
+
     # The Registry will be automatically cleaned up when the process exits
     :ok
   end
@@ -468,7 +470,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   defp perform_cleanup(state) do
     # Clean up old typing indicators (older than 30 seconds)
-    now = System.system_time(:second)
+    _now = System.system_time(:second)
     # This would normally involve checking timestamps, but for simplicity
     # we'll just clear typing users if they've been typing too long
     new_state = %{state | typing_users: MapSet.new()}

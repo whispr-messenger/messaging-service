@@ -2,7 +2,7 @@ defmodule WhisprMessaging.MessagesTest do
   use WhisprMessaging.DataCase, async: true
 
   alias WhisprMessaging.{Conversations, Messages}
-  alias WhisprMessaging.Messages.{DeliveryStatus, Message, MessageReaction}
+  alias WhisprMessaging.Messages.Message
 
   describe "messages" do
     setup do
@@ -170,7 +170,7 @@ defmodule WhisprMessaging.MessagesTest do
       # Create multiple messages with explicit timestamps to ensure order
       base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      messages =
+      _messages =
         for i <- 1..5 do
           {:ok, message} =
             Messages.create_message(%{
@@ -300,7 +300,7 @@ defmodule WhisprMessaging.MessagesTest do
     end
 
     test "mark_conversation_read/3 marks all messages as read" do
-      conversation_id = Ecto.UUID.generate()
+      _conversation_id = Ecto.UUID.generate()
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
 
@@ -427,7 +427,7 @@ defmodule WhisprMessaging.MessagesTest do
 
   describe "message helpers" do
     test "create_text_message/5 creates a text message" do
-      conversation_id = Ecto.UUID.generate()
+      _conversation_id = Ecto.UUID.generate()
       sender_id = Ecto.UUID.generate()
 
       # We need a real conversation for foreign key constraints
@@ -459,7 +459,7 @@ defmodule WhisprMessaging.MessagesTest do
     end
 
     test "create_media_message/5 creates a media message" do
-      conversation_id = Ecto.UUID.generate()
+      _conversation_id = Ecto.UUID.generate()
       sender_id = Ecto.UUID.generate()
 
       # We need a real conversation
@@ -489,7 +489,7 @@ defmodule WhisprMessaging.MessagesTest do
     end
 
     test "create_system_message/3 creates a system message" do
-      conversation_id = Ecto.UUID.generate()
+      _conversation_id = Ecto.UUID.generate()
 
       # We need a real conversation
       {:ok, conversation} =

@@ -2,7 +2,7 @@ defmodule WhisprMessaging.ConversationsTest do
   use WhisprMessaging.DataCase
 
   alias WhisprMessaging.Conversations
-  alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
+  alias WhisprMessaging.Conversations.Conversation
 
   describe "create_conversation/1" do
     test "creates a direct conversation successfully" do

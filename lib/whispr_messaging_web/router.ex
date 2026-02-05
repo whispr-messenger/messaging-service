@@ -6,15 +6,22 @@ defmodule WhisprMessagingWeb.Router do
   """
 
   use WhisprMessagingWeb, :router
+  use PhoenixSwagger
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
   scope "/api/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
       swagger_file: "swagger.json"
+  end
+
+  # Swagger API info
+  def swagger_info do
+    WhisprMessagingWeb.SwaggerInfo.swagger_info()
   end
 
   scope "/", WhisprMessagingWeb do
@@ -48,8 +55,8 @@ defmodule WhisprMessagingWeb.Router do
     delete "/conversations/:id", ConversationController, :delete
 
     # Conversation members
-    post "/conversations/:id/members", ConversationController, :add_member
-    delete "/conversations/:id/members/:user_id", ConversationController, :remove_member
+    post "/conversations/:id/members", ConversationMemberController, :create
+    delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
@@ -63,7 +70,4 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
   end
-
-  # Note: LiveDashboard removed - not needed for API-only microservice
-  # For monitoring, use /api/v1/health endpoints (/health, /health/live, /health/ready)
 end

@@ -119,35 +119,36 @@ defmodule WhisprMessaging.Conversations do
         metadata \\ %{}
       ) do
     Repo.transaction(fn ->
-      # Create conversation
-      # Add name to metadata if not present or override it to ensure consistency
       group_metadata = Map.put(metadata, "name", name)
 
-      case create_conversation(%{
-             type: "group",
-             external_group_id: external_group_id,
-             metadata: group_metadata,
-             is_active: true
-           }) do
-        {:ok, conversation} ->
-          # Add creator as member with admin role
-          creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
+      with {:ok, conversation} <-
+             create_conversation(%{
+               type: "group",
+               external_group_id: external_group_id,
+               metadata: group_metadata,
+               is_active: true
+             }),
+           {:ok, _creator_member} <- add_creator_as_admin(conversation.id, creator_id),
+           :ok <- add_members(conversation.id, member_ids) do
+        conversation
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
 
-          case add_conversation_member(conversation.id, creator_id, creator_settings) do
-            {:ok, _creator_member} ->
-              # Add other members
-              Enum.each(member_ids, fn member_id ->
-                {:ok, _member} = add_conversation_member(conversation.id, member_id)
-              end)
+  defp add_creator_as_admin(conversation_id, creator_id) do
+    creator_settings = ConversationMember.default_settings() |> Map.put("role", "admin")
+    add_conversation_member(conversation_id, creator_id, creator_settings)
+  end
 
-              conversation
+  defp add_members(_conversation_id, []), do: :ok
 
-            {:error, changeset} ->
-              Repo.rollback(changeset)
-          end
-
-        {:error, changeset} ->
-          Repo.rollback(changeset)
+  defp add_members(conversation_id, member_ids) do
+    Enum.reduce_while(member_ids, :ok, fn member_id, :ok ->
+      case add_conversation_member(conversation_id, member_id) do
+        {:ok, _member} -> {:cont, :ok}
+        {:error, changeset} -> {:halt, {:error, changeset}}
       end
     end)
   end
