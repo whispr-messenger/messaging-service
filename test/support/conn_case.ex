@@ -46,6 +46,7 @@ defmodule WhisprMessagingWeb.ConnCase do
   """
   def authenticated_conn(conn, user_id) do
     conn
+    |> put_req_header("x-user-id", user_id)
     |> put_req_header("authorization", "Bearer test_token_#{user_id}")
     |> put_req_header("content-type", "application/json")
   end

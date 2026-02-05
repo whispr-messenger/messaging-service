@@ -104,7 +104,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   - message_id: UUID of the message
   - user_id: UUID of the user uploading
   """
-  def upload(conn, %{"file" => upload, "message_id" => message_id, "user_id" => user_id}) do
+  def upload(conn, %{"file" => upload, "message_id" => message_id}) do
+    user_id = conn.assigns[:user_id]
     with :ok <- validate_file_size(upload),
          :ok <- validate_mime_type(upload.content_type),
          {:ok, message} <- Messages.get_message(message_id),
@@ -149,7 +150,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     |> put_status(:bad_request)
     |> json(%{
       error: "Missing required parameters",
-      required: ["file", "message_id", "user_id"]
+      required: ["file", "message_id"]
     })
   end
 
@@ -170,7 +171,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   Download a file attachment.
   GET /api/v1/attachments/:id/download?user_id=uuid
   """
-  def download(conn, %{"id" => attachment_id, "user_id" => user_id}) do
+  def download(conn, %{"id" => attachment_id}) do
+    user_id = conn.assigns[:user_id]
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
@@ -210,10 +212,10 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
-  def download(conn, %{"id" => _attachment_id}) do
+  def download(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{error: "Missing user_id parameter"})
+    |> json(%{error: "Authentication required"})
   end
 
   swagger_path :show do
@@ -256,7 +258,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   Delete an attachment.
   DELETE /api/v1/attachments/:id?user_id=uuid
   """
-  def delete(conn, %{"id" => attachment_id, "user_id" => user_id}) do
+  def delete(conn, %{"id" => attachment_id}) do
+    user_id = conn.assigns[:user_id]
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_permission(message, user_id),

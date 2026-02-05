@@ -35,7 +35,7 @@ jobs:
           echo "# 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Service**: user-service" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: messaging-service" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ steps.commit.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Message**: ${{ steps.commit.outputs.commit_message }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.event.client_payload.ref }}" >> $GITHUB_STEP_SUMMARY
@@ -65,7 +65,7 @@ jobs:
       #     status: success
       #     text: |
       #       🚀 *Deployment Successful!*
-      #       Service: `user-service`
+      #       Service: `messaging-service`
       #       Commit: `${{ steps.commit.outputs.short_sha }}`
       #       Branch: `${{ github.event.client_payload.ref }}`
       #   env:
