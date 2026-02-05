@@ -52,6 +52,35 @@ defmodule WhisprMessagingWeb.UserChannel do
   end
 
   @impl true
+  def handle_info({:delivery_status, message_id, user_id, status, timestamp}, socket) do
+    push(socket, "delivery_status", %{
+      message_id: message_id,
+      user_id: user_id,
+      status: status,
+      timestamp: timestamp
+    })
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:conversation_invitation, conversation_id, inviter_id}, socket) do
+    case Conversations.get_conversation(conversation_id) do
+      {:ok, conversation} ->
+        push(socket, "conversation_invitation", %{
+          conversation: serialize_conversation_summary(conversation),
+          inviter_id: inviter_id,
+          timestamp: DateTime.utc_now()
+        })
+
+      _ ->
+        Logger.warning("Failed to fetch conversation #{conversation_id} for invitation")
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_in("update_status", %{"status" => status}, socket)
       when status in ["online", "away", "busy", "offline"] do
     user_id = socket.assigns.user_id
@@ -68,6 +97,7 @@ defmodule WhisprMessagingWeb.UserChannel do
     {:reply, {:ok, %{status: status}}, socket}
   end
 
+  @impl true
   def handle_in("update_status", _payload, socket) do
     {:reply, {:error, %{reason: "invalid_status"}}, socket}
   end
@@ -119,41 +149,6 @@ defmodule WhisprMessagingWeb.UserChannel do
       {:error, reason} ->
         {:reply, {:error, %{reason: reason}}, socket}
     end
-  end
-
-  # Handle presence diff events
-  def handle_info(%{event: "presence_diff", payload: diff}, socket) do
-    push(socket, "presence_diff", diff)
-    {:noreply, socket}
-  end
-
-  # Handle incoming delivery status notifications
-  def handle_info({:delivery_status, message_id, user_id, status, timestamp}, socket) do
-    push(socket, "delivery_status", %{
-      message_id: message_id,
-      user_id: user_id,
-      status: status,
-      timestamp: timestamp
-    })
-
-    {:noreply, socket}
-  end
-
-  # Handle incoming conversation invitations
-  def handle_info({:conversation_invitation, conversation_id, inviter_id}, socket) do
-    case Conversations.get_conversation(conversation_id) do
-      {:ok, conversation} ->
-        push(socket, "conversation_invitation", %{
-          conversation: serialize_conversation_summary(conversation),
-          inviter_id: inviter_id,
-          timestamp: DateTime.utc_now()
-        })
-
-      _ ->
-        Logger.warning("Failed to fetch conversation #{conversation_id} for invitation")
-    end
-
-    {:noreply, socket}
   end
 
   # Private functions

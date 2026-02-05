@@ -59,5 +59,4 @@ defmodule WhisprMessagingWeb.Endpoint do
   plug Plug.Session, @session_options
 
   plug WhisprMessagingWeb.Router
-
 end

@@ -24,7 +24,7 @@ permissions:
   pull-requests: write
 
 env:
-  ELIXIR_VERSION: '1.17'
+  ELIXIR_VERSION: '1.19'
   OTP_VERSION: '27'
 
 jobs:

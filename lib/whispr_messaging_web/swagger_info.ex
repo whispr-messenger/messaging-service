@@ -8,26 +8,26 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
   def swagger_info do
     # Get the base URL from environment or use default
     base_url = System.get_env("SWAGGER_BASE_URL") || "localhost"
-    
+
     # Determine scheme based on environment
-    scheme = 
+    scheme =
       case System.get_env("MIX_ENV") do
         "prod" -> "https"
         _ -> "http"
       end
-    
+
     # Get port from HTTP_PORT environment variable
     port_str = System.get_env("HTTP_PORT") || "4000"
     port = ":#{port_str}"
-    
+
     # Remove port for standard ports (80 for http, 443 for https)
-    port = 
+    port =
       case {scheme, port} do
         {"http", ":80"} -> ""
         {"https", ":443"} -> ""
         _ -> port
       end
-    
+
     host_with_port = "#{base_url}#{port}"
 
     %{
@@ -37,14 +37,14 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
         title: "Whispr Messaging Service API",
         description: """
         RESTful API for the Whispr Messaging Service.
-        
+
         This service handles:
         - Real-time messaging between users
         - Conversation management (1-on-1 and group chats)
         - Message delivery and read receipts
         - Message attachments
         - Conversation members management
-        
+
         ## Authentication
         All endpoints (except health checks) require a valid JWT token in the Authorization header:
         ```

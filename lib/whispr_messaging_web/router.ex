@@ -17,7 +17,7 @@ defmodule WhisprMessagingWeb.Router do
       otp_app: :whispr_messaging,
       swagger_file: "swagger.json"
   end
-  
+
   # Swagger API info
   def swagger_info do
     WhisprMessagingWeb.SwaggerInfo.swagger_info()
@@ -69,5 +69,4 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
   end
-
 end
