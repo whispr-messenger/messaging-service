@@ -43,7 +43,7 @@ defmodule WhisprMessagingWeb.MessageController do
   def index(conn, %{"id" => conversation_id} = params) do
     limit = min(String.to_integer(params["limit"] || "50"), 100)
     before_timestamp = params["before"]
-    user_id = get_current_user_id(conn, params)
+    user_id = conn.assigns[:user_id]
 
     if is_nil(user_id) do
       conn
@@ -100,7 +100,7 @@ defmodule WhisprMessagingWeb.MessageController do
   def create(conn, %{"id" => conversation_id} = params) do
     # Handle different parameter structures (nested under "message" or flat)
     message_params = params["message"] || Map.drop(params, ["id"])
-    user_id = get_current_user_id(conn, message_params)
+    user_id = conn.assigns[:user_id]
 
     # Ensure conversation_id and sender_id are set
     params_with_conv =
@@ -191,8 +191,8 @@ defmodule WhisprMessagingWeb.MessageController do
     message_params = params["message"] || Map.drop(params, ["id"])
 
     content = message_params["content"]
-    # Get user_id from params or conn.assigns (if auth middleware set it)
-    user_id = get_current_user_id(conn, message_params)
+    # Get user_id from conn.assigns (set by auth middleware)
+    user_id = conn.assigns[:user_id]
 
     # Metadata is optional
     metadata = message_params["metadata"] || %{}
@@ -253,8 +253,8 @@ defmodule WhisprMessagingWeb.MessageController do
   DELETE /api/v1/messages/:id
   """
   def delete(conn, %{"id" => id} = params) do
-    # Get user_id from params or conn.assigns
-    user_id = get_current_user_id(conn, params)
+    # Get user_id from conn.assigns
+    user_id = conn.assigns[:user_id]
 
     delete_for_everyone =
       params["delete_for_everyone"] == "true" || params["delete_for_everyone"] == true
@@ -299,22 +299,6 @@ defmodule WhisprMessagingWeb.MessageController do
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
-  end
-
-  defp get_current_user_id(conn, params) do
-    cond do
-      conn.assigns[:user_id] -> conn.assigns[:user_id]
-      user_id = extract_user_from_header(conn) -> user_id
-      params["user_id"] -> params["user_id"]
-      true -> nil
-    end
-  end
-
-  defp extract_user_from_header(conn) do
-    case get_req_header(conn, "authorization") do
-      ["Bearer test_token_" <> user_id] -> user_id
-      _ -> nil
-    end
   end
 
   # Swagger Schema Definitions

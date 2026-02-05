@@ -9,7 +9,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   """
   def create(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
-    current_user_id = get_current_user_id(conn, params)
+    current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          true <- can_manage_members?(conversation, current_user_id),
@@ -33,7 +33,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   DELETE /api/v1/conversations/:id/members/:user_id
   """
   def delete(conn, %{"id" => id, "user_id" => member_id} = params) do
-    current_user_id = get_current_user_id(conn, params)
+    current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          {:member_exists, {:ok, _member}} <-
@@ -67,23 +67,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
     end
   end
 
-  # Fonctions utilitaires copiées depuis ConversationController
-  defp get_current_user_id(conn, params) do
-    cond do
-      conn.assigns[:user_id] -> conn.assigns[:user_id]
-      user_id = extract_user_from_header(conn) -> user_id
-      params["user_id"] -> params["user_id"]
-      true -> nil
-    end
-  end
-
-  defp extract_user_from_header(conn) do
-    case get_req_header(conn, "authorization") do
-      ["Bearer test_token_" <> user_id] -> user_id
-      _ -> nil
-    end
-  end
-
+  # Fonctions utilitaires
   defp can_manage_members?(_conversation, nil), do: false
 
   defp can_manage_members?(conversation, user_id) do

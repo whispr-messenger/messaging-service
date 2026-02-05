@@ -95,7 +95,7 @@ jobs:
           embed-url: ${{ github.event.pull_request.html_url }}
           embed-color: ${{ steps.pr_action.outputs.color }}
           embed-thumbnail-url: ${{ github.event.pull_request.user.avatar_url }}
-          embed-footer-text: "user-service • whispr-messenger"
+          embed-footer-text: "messaging-service • whispr-messenger"
           embed-footer-icon-url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
           embed-timestamp: ${{ github.event.pull_request.created_at }}
 
@@ -163,6 +163,6 @@ jobs:
           embed-url: ${{ github.event.review.html_url }}
           embed-color: ${{ steps.review_action.outputs.color }}
           embed-thumbnail-url: ${{ github.event.review.user.avatar_url }}
-          embed-footer-text: "user-service • whispr-messenger"
+          embed-footer-text: "messaging-service • whispr-messenger"
           embed-footer-icon-url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
           embed-timestamp: ${{ github.event.review.submitted_at }}

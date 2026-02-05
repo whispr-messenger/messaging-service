@@ -10,6 +10,7 @@ defmodule WhisprMessagingWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
   scope "/api/swagger" do
