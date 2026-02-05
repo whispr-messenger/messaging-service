@@ -46,10 +46,10 @@ jobs:
           echo "Analyzing changed files..."
           
           # Critical files that require high priority
-          CRITICAL_FILES="src/main.ts src/app.module.ts src/users/users.module.ts src/users/users.service.ts src/database/migrations/ docker/Dockerfile docker-compose.yml .github/workflows/"
+          CRITICAL_FILES="mix.exs lib/whispr_messaging/application.ex docker/ .github/workflows/"
           
           # Security-related files
-          SECURITY_FILES="src/common/guards/ src/entities/ src/privacy/"
+          SECURITY_FILES="lib/whispr_messaging_web/plugs/"
           
           # Get PR files
           gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path' > changed_files.txt
@@ -84,13 +84,13 @@ jobs:
             done
             
             # Check database changes
-            if [[ "$file" == *"migration"* ]] || [[ "$file" == *"entity"* ]] || [[ "$file" == *"init.sql"* ]]; then
+            if [[ "$file" == *"priv/repo/migrations"* ]] || [[ "$file" == *"repo.ex"* ]]; then
               echo "database=true" >> $GITHUB_OUTPUT
               DATABASE_CHANGED=true
             fi
             
             # Check test files
-            if [[ "$file" == *".spec.ts"* ]] || [[ "$file" == *".test.ts"* ]] || [[ "$file" == *"test/"* ]]; then
+            if [[ "$file" == *".exs"* ]] || [[ "$file" == *"test/"* ]]; then
               echo "tests=true" >> $GITHUB_OUTPUT
               TESTS_CHANGED=true
             fi
