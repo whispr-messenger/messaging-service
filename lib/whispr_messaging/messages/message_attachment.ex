@@ -122,9 +122,7 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
     |> changeset(Map.put(attrs, :message_id, message_id))
   end
 
-  @doc """
-  Validates file size against application limits.
-  """
+  # Validates file size against application limits.
   defp validate_file_size(%Ecto.Changeset{} = changeset) do
     file_size = get_field(changeset, :file_size)
     file_type = get_field(changeset, :file_type)
@@ -142,9 +140,7 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
     end
   end
 
-  @doc """
-  Validates attachment metadata structure.
-  """
+  # Validates attachment metadata structure.
   defp validate_metadata(%Ecto.Changeset{} = changeset) do
     metadata = get_field(changeset, :metadata) || %{}
 

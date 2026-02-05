@@ -152,9 +152,7 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
     end
   end
 
-  @doc """
-  Sets joined_at to current time if not provided.
-  """
+  # Sets joined_at to current time if not provided.
   defp put_joined_at_if_empty(%Ecto.Changeset{} = changeset) do
     case get_field(changeset, :joined_at) do
       nil ->

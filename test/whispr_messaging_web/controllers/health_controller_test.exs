@@ -67,15 +67,18 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       resp = get(conn, ~p"/api/v1/health/ready")
+
       case resp.status do
         200 ->
           response = Jason.decode!(resp.resp_body)
           assert response["status"] == "ready"
           assert response["timestamp"] != nil
+
         503 ->
           response = Jason.decode!(resp.resp_body)
           assert response["status"] == "degraded"
           assert response["timestamp"] != nil
+
         _ ->
           flunk("Unexpected status: ")
       end
@@ -210,13 +213,16 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       resp = get(conn, "/ready")
+
       case resp.status do
         200 ->
           response = Jason.decode!(resp.resp_body)
           assert response["status"] != nil
+
         503 ->
           response = Jason.decode!(resp.resp_body)
           assert response["status"] == "degraded"
+
         _ ->
           flunk("Unexpected status: #{resp.status}")
       end

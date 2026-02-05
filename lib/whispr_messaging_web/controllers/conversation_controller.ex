@@ -182,6 +182,18 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  defp do_create(conn, _params) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{
+      error: "Invalid conversation type or missing required fields",
+      required: %{
+        direct: ["type", "user_ids"],
+        group: ["type", "name", "user_ids"]
+      }
+    })
+  end
+
   defp respond_missing_creator(conn) do
     conn
     |> put_status(:bad_request)
@@ -221,18 +233,6 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> put_status(:unprocessable_entity)
         |> json(%{error: inspect(reason)})
     end
-  end
-
-  defp do_create(conn, _params) do
-    conn
-    |> put_status(:bad_request)
-    |> json(%{
-      error: "Invalid conversation type or missing required fields",
-      required: %{
-        direct: ["type", "user_ids"],
-        group: ["type", "name", "user_ids"]
-      }
-    })
   end
 
   swagger_path :show do

@@ -343,12 +343,10 @@ defmodule WhisprMessagingWeb.HealthController do
 
   @doc false
   defp check_database do
-    try do
-      Repo.query!("SELECT 1")
-      :ok
-    rescue
-      _ -> {:error, :database}
-    end
+    Repo.query!("SELECT 1")
+    :ok
+  rescue
+    _ -> {:error, :database}
   end
 
   @doc false
@@ -418,25 +416,21 @@ defmodule WhisprMessagingWeb.HealthController do
   @doc false
   defp get_active_conversation_count do
     # Count active conversation processes
-    try do
-      WhisprMessaging.ConversationSupervisor
-      |> Supervisor.count_children()
-      |> Map.get(:active, 0)
-    rescue
-      _ -> 0
-    end
+    WhisprMessaging.ConversationSupervisor
+    |> Supervisor.count_children()
+    |> Map.get(:active, 0)
+  rescue
+    _ -> 0
   end
 
   @doc false
   defp get_active_connection_count do
     # Count active Phoenix channels
-    try do
-      Phoenix.PubSub.node_name(WhisprMessaging.PubSub)
-      |> Phoenix.Tracker.list(:all)
-      |> length()
-    rescue
-      _ -> 0
-    end
+    Phoenix.PubSub.node_name(WhisprMessaging.PubSub)
+    |> Phoenix.Tracker.list(:all)
+    |> length()
+  rescue
+    _ -> 0
   end
 
   @doc false
