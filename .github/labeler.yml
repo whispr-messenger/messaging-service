@@ -1,0 +1,145 @@
+# GitHub Labeler Configuration
+# Automatically applies labels based on changed files
+
+# ================================
+# 📁 Core Components
+# ================================
+
+# Conversation Management
+📁 core:conversations:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging/conversations/**/*'
+      - 'lib/whispr_messaging/conversations.ex'
+
+# Message Handling
+📁 core:messages:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging/messages/**/*'
+      - 'lib/whispr_messaging/messages.ex'
+
+# File Attachments
+📁 core:attachments:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging/attachments/**/*'
+
+# ================================
+# 🏗️ Infrastructure & Configuration
+# ================================
+
+# Database & Migrations
+🗄️ database:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'priv/repo/migrations/**/*'
+      - 'lib/whispr_messaging/repo.ex'
+
+# Configuration
+⚙️ config:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/*.exs'
+      - 'mix.exs'
+      - 'mix.lock'
+      - '.formatter.exs'
+      - '.credo.exs'
+
+# Health & Monitoring
+💊 health:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging_web/controllers/health_controller.ex'
+
+# ================================
+# 🌐 Communication & APIs
+# ================================
+
+# Controllers & APIs
+🎮 api:controllers:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging_web/controllers/**/*'
+
+# gRPC Services
+🔗 api:grpc:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging_grpc/**/*'
+
+# ================================
+# 🛡️ Security & Middleware
+# ================================
+
+# Plugs & Middleware
+🔄 middleware:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'lib/whispr_messaging_web/plugs/**/*'
+
+# ================================
+# 🧪 Testing & Quality
+# ================================
+
+# Tests
+🧪 tests:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'test/**/*'
+
+# ================================
+# 🚀 DevOps & Infrastructure
+# ================================
+
+# Docker & Containers
+🐳 devops:docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker/**/*'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '.dockerignore'
+
+# CI/CD Workflows
+⚡ devops:ci-cd:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+
+# Scripts & Automation
+📜 devops:scripts:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'scripts/**/*'
+      - 'Justfile'
+
+# ================================
+# 📚 Documentation
+# ================================
+
+# General Documentation
+📖 documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'README*.md'
+      - 'documentation/**/*'
+      - '**/*.md'
+
+# ================================
+# 🔧 Development Tools
+# ================================
+
+# Dependencies & Package Management
+📦 dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'mix.exs'
+      - 'mix.lock'
+
+# Linting & Formatting
+🎨 tools:linting:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.formatter.exs'
+      - '.credo.exs'

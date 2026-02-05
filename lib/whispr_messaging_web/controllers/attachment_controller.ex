@@ -8,7 +8,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Messages
-  alias WhisprMessaging.Messages.MessageAttachment
 
   require Logger
 
@@ -56,6 +55,46 @@ defmodule WhisprMessagingWeb.AttachmentController do
     response(415, "Unsupported media type")
   end
 
+  # Swagger Schema Definitions
+  def swagger_definitions do
+    %{
+      Attachment:
+        swagger_schema do
+          title("Attachment")
+          description("A file attachment object")
+
+          properties do
+            id(:string, "Attachment UUID")
+            message_id(:string, "Message UUID")
+            file_name(:string, "Original filename")
+            file_url(:string, "URL to access the file")
+            file_size(:integer, "File size in bytes")
+            mime_type(:string, "MIME type of the file")
+            uploaded_at(:string, "Upload timestamp")
+          end
+        end,
+      AttachmentResponse:
+        swagger_schema do
+          title("Attachment Response")
+          description("Response containing an attachment object")
+
+          properties do
+            data(:object, "Attachment object")
+            message(:string, "Success message")
+          end
+        end,
+      AttachmentDeleteResponse:
+        swagger_schema do
+          title("Attachment Delete Response")
+          description("Response after deleting an attachment")
+
+          properties do
+            data(:object, "Delete result")
+          end
+        end
+    }
+  end
+
   @doc """
   Upload a file attachment.
   POST /api/v1/attachments/upload
@@ -65,7 +104,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   - message_id: UUID of the message
   - user_id: UUID of the user uploading
   """
-  def upload(conn, %{"file" => upload, "message_id" => message_id, "user_id" => user_id}) do
+  def upload(conn, %{"file" => upload, "message_id" => message_id}) do
+    user_id = conn.assigns[:user_id]
     with :ok <- validate_file_size(upload),
          :ok <- validate_mime_type(upload.content_type),
          {:ok, message} <- Messages.get_message(message_id),
@@ -110,7 +150,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     |> put_status(:bad_request)
     |> json(%{
       error: "Missing required parameters",
-      required: ["file", "message_id", "user_id"]
+      required: ["file", "message_id"]
     })
   end
 
@@ -131,7 +171,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   Download a file attachment.
   GET /api/v1/attachments/:id/download?user_id=uuid
   """
-  def download(conn, %{"id" => attachment_id, "user_id" => user_id}) do
+  def download(conn, %{"id" => attachment_id}) do
+    user_id = conn.assigns[:user_id]
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
@@ -171,10 +212,10 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
-  def download(conn, %{"id" => _attachment_id}) do
+  def download(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{error: "Missing user_id parameter"})
+    |> json(%{error: "Authentication required"})
   end
 
   swagger_path :show do
@@ -217,7 +258,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   Delete an attachment.
   DELETE /api/v1/attachments/:id?user_id=uuid
   """
-  def delete(conn, %{"id" => attachment_id, "user_id" => user_id}) do
+  def delete(conn, %{"id" => attachment_id}) do
+    user_id = conn.assigns[:user_id]
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_permission(message, user_id),
@@ -246,7 +288,9 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
-  # Private functions
+  ####################################################################################################
+  ## Private functions
+  ####################################################################################################
 
   defp validate_file_size(%{path: path}) do
     case File.stat(path) do
@@ -327,46 +371,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
       uploaded_at: attachment.inserted_at
-    }
-  end
-
-  # Swagger Schema Definitions
-  def swagger_definitions do
-    %{
-      Attachment:
-        swagger_schema do
-          title("Attachment")
-          description("A file attachment object")
-
-          properties do
-            id(:string, "Attachment UUID")
-            message_id(:string, "Message UUID")
-            file_name(:string, "Original filename")
-            file_url(:string, "URL to access the file")
-            file_size(:integer, "File size in bytes")
-            mime_type(:string, "MIME type of the file")
-            uploaded_at(:string, "Upload timestamp")
-          end
-        end,
-      AttachmentResponse:
-        swagger_schema do
-          title("Attachment Response")
-          description("Response containing an attachment object")
-
-          properties do
-            data(:object, "Attachment object")
-            message(:string, "Success message")
-          end
-        end,
-      AttachmentDeleteResponse:
-        swagger_schema do
-          title("Attachment Delete Response")
-          description("Response after deleting an attachment")
-
-          properties do
-            data(:object, "Delete result")
-          end
-        end
     }
   end
 end

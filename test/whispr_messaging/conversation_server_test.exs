@@ -148,7 +148,9 @@ defmodule WhisprMessaging.ConversationServerTest do
 
     test "fails to remove non-existent member", %{conversation: conversation} do
       fake_user_id = Ecto.UUID.generate()
-      assert {:error, :not_found} = ConversationServer.remove_member(conversation.id, fake_user_id)
+
+      assert {:error, :not_found} =
+               ConversationServer.remove_member(conversation.id, fake_user_id)
     end
   end
 
