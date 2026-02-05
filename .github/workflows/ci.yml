@@ -2,12 +2,14 @@ name: 🚀 CI Pipeline
 
 on:
   push:
+    branches: [main, develop]
     paths-ignore:
       - 'k8s/**'
       - '**.md'
       - 'documentation/**'
       - '.github/workflows/cd.yml'
   pull_request:
+    branches: [main, develop]
     paths-ignore:
       - 'k8s/**'
       - '**.md'
@@ -37,8 +39,11 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ github.ref }}
+      should_deploy: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   # ================================
   # Security Scanning
@@ -48,6 +53,7 @@ jobs:
     uses: ./.github/workflows/trivy.yml
     with:
       ref: ${{ github.ref }}
+      should_deploy: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
 
   # ================================
   # Docker Build
