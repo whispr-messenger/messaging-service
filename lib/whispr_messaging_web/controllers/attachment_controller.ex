@@ -8,7 +8,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Messages
-  alias WhisprMessaging.Messages.MessageAttachment
 
   require Logger
 
@@ -54,6 +53,46 @@ defmodule WhisprMessagingWeb.AttachmentController do
     response(403, "Forbidden - User cannot upload to this message")
     response(413, "File too large (max 50MB)")
     response(415, "Unsupported media type")
+  end
+
+  # Swagger Schema Definitions
+  def swagger_definitions do
+    %{
+      Attachment:
+        swagger_schema do
+          title("Attachment")
+          description("A file attachment object")
+
+          properties do
+            id(:string, "Attachment UUID")
+            message_id(:string, "Message UUID")
+            file_name(:string, "Original filename")
+            file_url(:string, "URL to access the file")
+            file_size(:integer, "File size in bytes")
+            mime_type(:string, "MIME type of the file")
+            uploaded_at(:string, "Upload timestamp")
+          end
+        end,
+      AttachmentResponse:
+        swagger_schema do
+          title("Attachment Response")
+          description("Response containing an attachment object")
+
+          properties do
+            data(:object, "Attachment object")
+            message(:string, "Success message")
+          end
+        end,
+      AttachmentDeleteResponse:
+        swagger_schema do
+          title("Attachment Delete Response")
+          description("Response after deleting an attachment")
+
+          properties do
+            data(:object, "Delete result")
+          end
+        end
+    }
   end
 
   @doc """
@@ -246,7 +285,9 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
-  # Private functions
+  ####################################################################################################
+  ## Private functions
+  ####################################################################################################
 
   defp validate_file_size(%{path: path}) do
     case File.stat(path) do
@@ -327,46 +368,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
       uploaded_at: attachment.inserted_at
-    }
-  end
-
-  # Swagger Schema Definitions
-  def swagger_definitions do
-    %{
-      Attachment:
-        swagger_schema do
-          title("Attachment")
-          description("A file attachment object")
-
-          properties do
-            id(:string, "Attachment UUID")
-            message_id(:string, "Message UUID")
-            file_name(:string, "Original filename")
-            file_url(:string, "URL to access the file")
-            file_size(:integer, "File size in bytes")
-            mime_type(:string, "MIME type of the file")
-            uploaded_at(:string, "Upload timestamp")
-          end
-        end,
-      AttachmentResponse:
-        swagger_schema do
-          title("Attachment Response")
-          description("Response containing an attachment object")
-
-          properties do
-            data(:object, "Attachment object")
-            message(:string, "Success message")
-          end
-        end,
-      AttachmentDeleteResponse:
-        swagger_schema do
-          title("Attachment Delete Response")
-          description("Response after deleting an attachment")
-
-          properties do
-            data(:object, "Delete result")
-          end
-        end
     }
   end
 end

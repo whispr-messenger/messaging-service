@@ -52,7 +52,6 @@ services:
     volumes:
       - ../..:/app
       - test-deps:/app/deps
-      - test-build:/app/_build
       - ../../cover:/app/cover
     networks:
       - test-network

@@ -155,9 +155,6 @@ defmodule WhisprMessaging.Messages.MessageAttachment do
     end
   end
 
-  @doc """
-  Gets maximum file size for a file type.
-  """
   defp get_max_file_size(file_type) do
     # 100MB default
     Application.get_env(:whispr_messaging, :attachments)[:max_file_sizes][file_type] ||

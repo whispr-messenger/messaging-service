@@ -99,7 +99,7 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   end
 
   @doc """
-  Query to find members who haven't read recent messages.
+  Query to find members who have not read recent messages.
   """
   def unread_members_query(conversation_id, since_timestamp) do
     from m in __MODULE__,
@@ -142,9 +142,6 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
     }
   end
 
-  @doc """
-  Validates member settings structure.
-  """
   defp validate_settings(%Ecto.Changeset{} = changeset) do
     settings = get_field(changeset, :settings) || %{}
 
@@ -190,9 +187,6 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
     get_setting(member, "notifications", true)
   end
 
-  @doc """
-  Checks if a member has unread messages since a given timestamp.
-  """
   def has_unread_since?(%__MODULE__{last_read_at: nil}, _timestamp), do: true
 
   def has_unread_since?(%__MODULE__{last_read_at: last_read}, timestamp) do
@@ -204,9 +198,6 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   """
   def active?(%__MODULE__{is_active: is_active}), do: is_active
 
-  @doc """
-  Gets the duration since the member joined.
-  """
   def membership_duration(%__MODULE__{joined_at: joined_at}) do
     DateTime.diff(DateTime.utc_now(), joined_at, :second)
   end

@@ -15,8 +15,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
-  alias WhisprMessaging.Messages.Message
-  alias WhisprMessagingWeb.{Endpoint, Presence}
+  alias WhisprMessagingWeb.Endpoint
 
   @typep conversation_state :: %{
            conversation_id: binary(),
@@ -267,7 +266,10 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def terminate(reason, state) do
-    Logger.debug("ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}")
+    Logger.debug(
+      "ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}"
+    )
+
     # The Registry will be automatically cleaned up when the process exits
     :ok
   end
