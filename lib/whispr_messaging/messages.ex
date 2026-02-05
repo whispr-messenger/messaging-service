@@ -8,10 +8,7 @@ defmodule WhisprMessaging.Messages do
 
   import Ecto.Query, warn: false
 
-  alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
-
   alias WhisprMessaging.Messages.{
-    Attachment,
     DeliveryStatus,
     Message,
     MessageAttachment,
@@ -230,7 +227,7 @@ defmodule WhisprMessaging.Messages do
     read_time = timestamp || DateTime.utc_now() |> DateTime.truncate(:second)
 
     # Update delivery statuses for unread messages
-    query =
+    _query =
       from ds in DeliveryStatus,
         join: m in Message,
         on: m.id == ds.message_id,
@@ -280,7 +277,7 @@ defmodule WhisprMessaging.Messages do
   @doc """
   Gets pending delivery confirmations for a user.
   """
-  def get_pending_delivery_confirmations(user_id) do
+  def get_pending_delivery_confirmations(_user_id) do
     # This would typically be handled by a separate tracking system
     # For now, return empty list
     {:ok, []}
