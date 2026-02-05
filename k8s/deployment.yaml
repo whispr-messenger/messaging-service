@@ -1,15 +1,10 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: messaging-service
-  namespace: whispr-prod
-  labels:
-    app: messaging-service
-    app.kubernetes.io/name: messaging-service
-    app.kubernetes.io/part-of: whispr
+  namespace: default
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: messaging-service
@@ -17,24 +12,18 @@ spec:
     metadata:
       labels:
         app: messaging-service
-        app.kubernetes.io/name: messaging-service
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "4000"
-        prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: messaging-service
-      imagePullSecrets:
-        - name: ghcr-secret
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: messaging-service
-          image: ghcr.io/whispr-messenger/messaging-service:latest
-          imagePullPolicy: Always
+          image: ghcr.io/whispr-messenger/messaging-service:v1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 4000
@@ -73,15 +62,9 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
             capabilities:
               drop:
                 - ALL
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: messaging-service
-                topologyKey: kubernetes.io/hostname
