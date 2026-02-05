@@ -42,7 +42,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   - type: filter by type (direct|group)
   """
   def index(conn, params) do
-    user_id = get_current_user_id(conn, params)
+    user_id = conn.assigns[:user_id]
 
     if is_nil(user_id) do
       conn
@@ -114,7 +114,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   # Handle direct conversation with other_user_id (authenticated user is implied)
   defp do_create(conn, %{"type" => "direct", "other_user_id" => other_user_id} = params) do
-    current_user_id = get_current_user_id(conn, params)
+    current_user_id = conn.assigns[:user_id]
     metadata = params["metadata"] || %{}
 
     if is_nil(current_user_id) do
@@ -172,47 +172,13 @@ defmodule WhisprMessagingWeb.ConversationController do
     name = params["name"]
     metadata = params["metadata"] || %{}
     external_group_id = params["external_group_id"]
-    # creator_id can come from params or auth token
-    creator_id = params["creator_id"] || get_current_user_id(conn, params)
+    creator_id = conn.assigns[:user_id]
 
     if is_nil(creator_id) do
-      conn
-      |> put_status(:bad_request)
-      |> json(%{error: "creator_id is required for group conversations"})
+      respond_missing_creator(conn)
     else
-      # Filter creator out of member list to avoid duplication if frontend sends both
       member_ids = Enum.filter(user_ids, fn id -> id != creator_id end)
-
-      if length(member_ids) < 1 do
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
-      else
-        case Conversations.create_group_conversation(
-               creator_id,
-               member_ids,
-               name,
-               external_group_id,
-               metadata
-             ) do
-          {:ok, conversation} ->
-            conn
-            |> put_status(:created)
-            |> json(%{
-              data: render_conversation(conversation)
-            })
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: translate_errors(changeset)})
-
-          {:error, reason} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: inspect(reason)})
-        end
-      end
+      validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata)
     end
   end
 
@@ -226,6 +192,47 @@ defmodule WhisprMessagingWeb.ConversationController do
         group: ["type", "name", "user_ids"]
       }
     })
+  end
+
+  defp respond_missing_creator(conn) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "creator_id is required for group conversations"})
+  end
+
+  defp validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata) do
+    if length(member_ids) < 1 do
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{errors: %{members: ["Group must have at least 2 members (including creator)"]}})
+    else
+      handle_group_creation(conn, creator_id, member_ids, name, external_group_id, metadata)
+    end
+  end
+
+  defp handle_group_creation(conn, creator_id, member_ids, name, external_group_id, metadata) do
+    case Conversations.create_group_conversation(
+           creator_id,
+           member_ids,
+           name,
+           external_group_id,
+           metadata
+         ) do
+      {:ok, conversation} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: render_conversation(conversation)})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: translate_errors(changeset)})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: inspect(reason)})
+    end
   end
 
   swagger_path :show do
@@ -246,7 +253,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   GET /api/v1/conversations/:id?user_id=uuid
   """
   def show(conn, %{"id" => id} = params) do
-    user_id = get_current_user_id(conn, params)
+    user_id = conn.assigns[:user_id]
 
     if user_id do
       with {:ok, conversation} <- Conversations.get_conversation_with_members(id),
@@ -309,7 +316,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   """
   def update(conn, %{"id" => id} = params) do
     conversation_params = params["conversation"] || Map.drop(params, ["id"])
-    user_id = get_current_user_id(conn, params)
+    user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          true <- member?(conversation.id, user_id) do
@@ -372,7 +379,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   DELETE /api/v1/conversations/:id
   """
   def delete(conn, %{"id" => id} = params) do
-    user_id = get_current_user_id(conn, params)
+    user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          true <- member?(conversation.id, user_id),
@@ -406,7 +413,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   """
   def add_member(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
-    current_user_id = get_current_user_id(conn, params)
+    current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          true <- can_manage_members?(conversation, current_user_id),
@@ -430,14 +437,16 @@ defmodule WhisprMessagingWeb.ConversationController do
   DELETE /api/v1/conversations/:id/members/:user_id
   """
   def remove_member(conn, %{"id" => id, "user_id" => member_id} = params) do
-    current_user_id = get_current_user_id(conn, params)
+    current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
          {:member_exists, {:ok, _member}} <-
-           {:member_exists, Conversations.get_conversation_member(id, member_id) |> case do
-             nil -> {:error, :not_found}
-             member -> {:ok, member}
-           end},
+           {:member_exists,
+            Conversations.get_conversation_member(id, member_id)
+            |> case do
+              nil -> {:error, :not_found}
+              member -> {:ok, member}
+            end},
          true <- can_manage_members?(conversation, current_user_id),
          {:ok, _} <- Conversations.remove_conversation_member(id, member_id) do
       send_resp(conn, :no_content, "")
@@ -528,22 +537,6 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       _ ->
         false
-    end
-  end
-
-  defp get_current_user_id(conn, params) do
-    cond do
-      conn.assigns[:user_id] -> conn.assigns[:user_id]
-      user_id = extract_user_from_header(conn) -> user_id
-      params["user_id"] -> params["user_id"]
-      true -> nil
-    end
-  end
-
-  defp extract_user_from_header(conn) do
-    case get_req_header(conn, "authorization") do
-      ["Bearer test_token_" <> user_id] -> user_id
-      _ -> nil
     end
   end
 

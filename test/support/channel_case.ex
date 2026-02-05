@@ -67,7 +67,7 @@ defmodule WhisprMessagingWeb.ChannelCase do
   @doc """
   Subscribes to a conversation channel and returns the socket.
   """
-  def subscribe_to_conversation(socket, conversation_id) do
+  def subscribe_to_conversation(socket, _conversation_id) do
     # Simplified for testing - this would normally subscribe to a channel
     socket
   end

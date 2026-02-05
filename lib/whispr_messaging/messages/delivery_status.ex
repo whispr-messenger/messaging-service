@@ -118,7 +118,7 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   @doc """
   Creates delivery statuses for all conversation members.
   """
-  def create_for_conversation_members(message_id, conversation_id, sender_id) do
+  def create_for_conversation_members(_message_id, _conversation_id, _sender_id) do
     # This would typically be called as part of a raw SQL query for efficiency
     """
     INSERT INTO delivery_statuses (id, message_id, user_id, inserted_at, updated_at)
@@ -141,9 +141,6 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
     })
   end
 
-  @doc """
-  Sets delivered_at if not already set when marking as read.
-  """
   defp maybe_set_delivered_at(%Ecto.Changeset{} = changeset, read_time) do
     case get_field(changeset, :delivered_at) do
       nil ->
