@@ -50,7 +50,7 @@ RUN mix release
 # -----------------------------------------------------------------------------
 # STAGE 2: Runtime
 # -----------------------------------------------------------------------------
-FROM alpine:3.18 AS runtime
+FROM elixir:1.19-alpine AS runtime
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -59,23 +59,34 @@ RUN apk add --no-cache \
     ncurses-libs \
     libgcc \
     curl \
-    bash
+    bash \
+    tini
 
 # Create non-root user for security
 RUN addgroup -g 1000 whispr && \
     adduser -u 1000 -G whispr -s /bin/sh -D whispr
 
-# Set environment variables
+# Set environment variables (defaults, can be overridden)
 ENV MIX_ENV=prod \
     LANG=C.UTF-8 \
-    PORT=4000 \
-    GRPC_PORT=4001
+    HTTP_PORT=4000 \
+    GRPC_PORT=4001 \
+    PHX_HOST=0.0.0.0 \
+    PHX_PORT=3999 \
+    LOG_LEVEL=info
 
 # Create app directory
 WORKDIR /app
 
 # Copy release from builder
 COPY --from=builder --chown=whispr:whispr /app/_build/prod/rel/whispr_messaging ./
+
+# Copy entrypoint scripts
+COPY --chown=whispr:whispr ./docker/prod/scripts/entrypoint.sh /app/entrypoint.sh
+COPY --chown=whispr:whispr ./docker/prod/scripts/check-env.sh /app/check-env.sh
+
+# Make scripts executable
+RUN chmod +x /app/entrypoint.sh /app/check-env.sh
 
 # Switch to non-root user
 USER whispr
@@ -85,7 +96,7 @@ EXPOSE 4000 4001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:4000/api/v1/health?type=live || exit 1
+    CMD curl -f http://localhost:${HTTP_PORT:-4000}/api/v1/health?type=live || exit 1
 
 # OCI Labels
 LABEL org.opencontainers.image.title="Whispr Messaging Service" \
@@ -93,5 +104,5 @@ LABEL org.opencontainers.image.title="Whispr Messaging Service" \
       org.opencontainers.image.vendor="Whispr" \
       org.opencontainers.image.version="1.0.0"
 
-# Start the application
-CMD ["bin/whispr_messaging", "start"]
+# Use entrypoint with tini for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--", "/bin/bash", "/app/entrypoint.sh"]
