@@ -310,9 +310,9 @@ defmodule WhisprMessagingWeb.HealthController do
 
     db_check = measure_check(&check_database/0)
     cache_check = measure_check(&check_redis/0)
-    database_status = db_check.result
+    database_status = db_check.status
     database_time = db_check.duration_ms
-    cache_status = cache_check.result
+    cache_status = cache_check.status
     cache_time = cache_check.duration_ms
 
     all_healthy = database_status == "healthy" && cache_status == "healthy"
@@ -387,7 +387,10 @@ defmodule WhisprMessagingWeb.HealthController do
     start_time = System.monotonic_time(:millisecond)
     result = check_fn.()
     duration = System.monotonic_time(:millisecond) - start_time
-    %{result: result, duration_ms: duration}
+
+    status = if result == :ok, do: "healthy", else: "unhealthy"
+
+    %{status: status, result: result, duration_ms: duration}
   end
 
   @doc false
