@@ -27,6 +27,7 @@ config :whispr_messaging, :redis,
   host: System.get_env("REDIS_HOST", "localhost"),
   port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   database: String.to_integer(System.get_env("REDIS_DB", "0")),
+  username: System.get_env("REDIS_USERNAME"),
   password: System.get_env("REDIS_PASSWORD"),
   timeout: 15_000,
   ssl: System.get_env("REDIS_SSL", "false") == "true"
