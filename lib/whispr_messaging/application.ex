@@ -46,6 +46,7 @@ defmodule WhisprMessaging.Application do
       # Conversation registry and supervisor
       {Registry, keys: :unique, name: WhisprMessaging.ConversationRegistry},
       WhisprMessaging.ConversationSupervisor,
+      {Task.Supervisor, name: WhisprMessaging.TaskSupervisor},
 
       # Presence tracking
       WhisprMessagingWeb.Presence,
