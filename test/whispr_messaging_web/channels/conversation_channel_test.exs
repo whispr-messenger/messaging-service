@@ -1,10 +1,11 @@
 defmodule WhisprMessagingWeb.ConversationChannelTest do
-  use WhisprMessagingWeb.ChannelCase, async: true
+  use WhisprMessagingWeb.ChannelCase, async: false
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessagingWeb.{ConversationChannel, UserSocket}
 
   setup do
+    Ecto.Adapters.SQL.Sandbox.mode(WhisprMessaging.Repo, {:shared, self()})
     user_id = Ecto.UUID.generate()
     other_user_id = Ecto.UUID.generate()
 
@@ -123,7 +124,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       assert_reply ref, :error, %{errors: _errors}
     end
 
-    test "prevents duplicate client_random", %{
+    test "handles duplicate client_random idempotently", %{
       socket: socket
     } do
       message_attrs = %{
@@ -135,11 +136,13 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
       # First message should succeed
       ref1 = push(socket, "new_message", message_attrs)
-      assert_reply ref1, :ok, %{message: _}
+      assert_reply ref1, :ok, %{message: message1}
 
-      # Second message with same client_random should fail
+      # Second message with same client_random should succeed and return original message
       ref2 = push(socket, "new_message", message_attrs)
-      assert_reply ref2, :error, %{errors: _}
+      assert_reply ref2, :ok, %{message: message2}
+
+      assert message1.id == message2.id
     end
   end
 
