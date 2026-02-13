@@ -8,7 +8,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
   use WhisprMessagingWeb, :channel
 
-  alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.{Conversations, Messages, ConversationServer, ConversationSupervisor}
   alias WhisprMessaging.Conversations.ConversationMember
   alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.Presence
@@ -21,11 +21,19 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case verify_conversation_access(conversation_id, user_id) do
       {:ok, conversation} ->
-        # Track user presence in conversation
-        send(self(), :after_join)
+        # Ensure ConversationServer is running
+        case ConversationSupervisor.start_conversation(conversation_id) do
+          {:ok, _pid} ->
+            # Track user presence in conversation
+            send(self(), :after_join)
 
-        socket = assign(socket, :conversation_id, conversation_id)
-        {:ok, %{conversation: conversation}, socket}
+            socket = assign(socket, :conversation_id, conversation_id)
+            {:ok, %{conversation: conversation}, socket}
+
+          {:error, reason} ->
+            Logger.error("Failed to start conversation server: #{inspect(reason)}")
+            {:error, %{reason: "internal_server_error"}}
+        end
 
       {:error, :not_member} ->
         {:error, %{reason: "not_authorized"}}
@@ -74,25 +82,24 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     sender_id = socket.assigns.user_id
     metadata = Map.get(payload, "metadata", %{})
 
-    case Messages.create_message(%{
-           conversation_id: conversation_id,
-           sender_id: sender_id,
-           message_type: message_type,
-           content: encrypted_content,
-           client_random: client_random,
-           metadata: metadata
-         }) do
+    message_attrs = %{
+      conversation_id: conversation_id,
+      sender_id: sender_id,
+      message_type: message_type,
+      content: encrypted_content,
+      client_random: client_random,
+      metadata: metadata
+    }
+
+    case ConversationServer.send_message(conversation_id, message_attrs) do
       {:ok, message} ->
-        # Broadcast message to all conversation members
-        broadcast_message(socket, message)
+        # Note: Broadcasting, delivery statuses, and offline notifications
+        # are handled by ConversationServer
 
-        # Create delivery statuses for recipients
-        Messages.create_delivery_statuses_for_conversation(
-          message.id,
-          conversation_id,
-          sender_id
-        )
+        {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
+      {:error, {:duplicate, message}} ->
+        # Return existing message as success, but don't re-notify or re-broadcast
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, changeset} ->
@@ -193,45 +200,51 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
-  # Handle message read confirmation
-  def handle_in("message_read", %{"message_id" => message_id}, socket) do
+  # Handle typing indicator
+  def handle_in("user_typing", %{"typing" => typing}, socket) do
+    conversation_id = socket.assigns.conversation_id
     user_id = socket.assigns.user_id
 
-    case Messages.mark_message_read(message_id, user_id) do
-      {:ok, _delivery_status} ->
-        # Notify sender about read receipt
-        notify_sender_delivery_status(message_id, user_id, "read")
-        {:reply, {:ok, %{status: "read"}}, socket}
+    ConversationServer.update_typing(conversation_id, user_id, typing)
+    {:noreply, socket}
+  end
 
-      {:error, reason} ->
-        {:reply, {:error, %{reason: reason}}, socket}
-    end
+  # Handle read receipt
+  def handle_in("mark_read", payload, socket) do
+    conversation_id = socket.assigns.conversation_id
+    user_id = socket.assigns.user_id
+    message_id = Map.get(payload, "message_id")
+
+    ConversationServer.mark_read(conversation_id, user_id, message_id)
+    {:noreply, socket}
+  end
+
+  # Handle message read confirmation
+  def handle_in("message_read", %{"message_id" => message_id}, socket) do
+    conversation_id = socket.assigns.conversation_id
+    user_id = socket.assigns.user_id
+
+    # Delegate to ConversationServer (async)
+    ConversationServer.mark_read(conversation_id, user_id, message_id)
+
+    # Optimistic success response
+    {:reply, {:ok, %{status: "read"}}, socket}
   end
 
   # Handle typing indicators
   def handle_in("typing_start", _payload, socket) do
-    user_id = socket.assigns.user_id
     conversation_id = socket.assigns.conversation_id
+    user_id = socket.assigns.user_id
 
-    broadcast_from(socket, "user_typing", %{
-      user_id: user_id,
-      conversation_id: conversation_id,
-      typing: true
-    })
-
+    ConversationServer.update_typing(conversation_id, user_id, true)
     {:noreply, socket}
   end
 
   def handle_in("typing_stop", _payload, socket) do
-    user_id = socket.assigns.user_id
     conversation_id = socket.assigns.conversation_id
+    user_id = socket.assigns.user_id
 
-    broadcast_from(socket, "user_typing", %{
-      user_id: user_id,
-      conversation_id: conversation_id,
-      typing: false
-    })
-
+    ConversationServer.update_typing(conversation_id, user_id, false)
     {:noreply, socket}
   end
 
@@ -306,11 +319,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
-  defp broadcast_message(socket, %Message{} = message) do
-    broadcast(socket, "new_message", %{
-      message: serialize_message(message)
-    })
-  end
+
 
   defp notify_sender_delivery_status(message_id, user_id, status) do
     case Messages.get_message_sender(message_id) do
@@ -330,6 +339,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         :ok
     end
   end
+
+
 
   defp serialize_message(%Message{} = message) do
     %{

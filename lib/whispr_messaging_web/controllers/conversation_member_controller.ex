@@ -32,7 +32,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   Supprime un membre d'une conversation.
   DELETE /api/v1/conversations/:id/members/:user_id
   """
-  def delete(conn, %{"id" => id, "user_id" => member_id} = params) do
+  def delete(conn, %{"id" => id, "user_id" => member_id}) do
     current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),

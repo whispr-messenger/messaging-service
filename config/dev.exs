@@ -2,8 +2,8 @@ import Config
 
 # Configure your database
 config :whispr_messaging, WhisprMessaging.Repo,
-  username: System.get_env("DB_USERNAME", "root"),
-  password: System.get_env("DB_PASSWORD", "root"),
+  username: System.get_env("DB_USERNAME", "postgres"),
+  password: System.get_env("DB_PASSWORD", "postgres"),
   hostname: System.get_env("DB_HOST", "localhost"),
   database: System.get_env("DB_NAME", "whispr_messaging_dev"),
   port: String.to_integer(System.get_env("DB_PORT", "5432")),

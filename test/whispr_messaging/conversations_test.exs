@@ -59,6 +59,37 @@ defmodule WhisprMessaging.ConversationsTest do
 
       assert {:ok, conversation} = Conversations.create_direct_conversation(user1_id, user2_id)
       assert conversation.type == "direct"
+      
+      members = Conversations.list_conversation_members(conversation.id)
+      assert length(members) == 2
+    end
+
+    test "returns existing conversation if it already exists" do
+      user1_id = Ecto.UUID.generate()
+      user2_id = Ecto.UUID.generate()
+
+      assert {:ok, conversation1} = Conversations.create_direct_conversation(user1_id, user2_id)
+      assert {:ok, conversation2} = Conversations.create_direct_conversation(user1_id, user2_id)
+
+      assert conversation1.id == conversation2.id
+    end
+
+    test "reactivates existing conversation if it was inactive" do
+      user1_id = Ecto.UUID.generate()
+      user2_id = Ecto.UUID.generate()
+
+      {:ok, conversation} = Conversations.create_direct_conversation(user1_id, user2_id)
+      Conversations.update_conversation(conversation, %{is_active: false})
+
+      assert {:ok, reactivated} = Conversations.create_direct_conversation(user1_id, user2_id)
+      assert reactivated.id == conversation.id
+      assert reactivated.is_active == true
+    end
+
+    test "cannot create conversation with yourself" do
+      user_id = Ecto.UUID.generate()
+      assert {:error, changeset} = Conversations.create_direct_conversation(user_id, user_id)
+      assert "Cannot create conversation with yourself" in errors_on(changeset).base
     end
   end
 

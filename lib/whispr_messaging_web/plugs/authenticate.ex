@@ -4,7 +4,6 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   Supports both X-User-Id (trusted gateway header) and Authorization: Bearer <token>.
   """
   import Plug.Conn
-  import Phoenix.Controller, only: [json: 2]
   require Logger
 
   def init(opts), do: opts

@@ -252,7 +252,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   Gets a single conversation.
   GET /api/v1/conversations/:id?user_id=uuid
   """
-  def show(conn, %{"id" => id} = params) do
+  def show(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
 
     if user_id do
@@ -378,7 +378,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   Deletes (deactivates) a conversation.
   DELETE /api/v1/conversations/:id
   """
-  def delete(conn, %{"id" => id} = params) do
+  def delete(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
@@ -436,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   Removes a member from a conversation.
   DELETE /api/v1/conversations/:id/members/:user_id
   """
-  def remove_member(conn, %{"id" => id, "user_id" => member_id} = params) do
+  def remove_member(conn, %{"id" => id, "user_id" => member_id}) do
     current_user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
