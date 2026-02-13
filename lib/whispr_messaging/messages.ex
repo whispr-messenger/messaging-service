@@ -70,6 +70,19 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
+  Gets a message by sender and client_random.
+  """
+  def get_message_by_sender_and_random(sender_id, client_random) do
+    case Repo.one(
+           from m in Message,
+             where: m.sender_id == ^sender_id and m.client_random == ^client_random
+         ) do
+      nil -> {:error, :not_found}
+      message -> {:ok, message}
+    end
+  end
+
+  @doc """
   Lists recent messages from a conversation.
   """
   def list_recent_messages(conversation_id, limit \\ 50, before_timestamp \\ nil) do
