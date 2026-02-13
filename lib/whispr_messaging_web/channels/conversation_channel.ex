@@ -225,10 +225,10 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     user_id = socket.assigns.user_id
 
     # Delegate to ConversationServer (async)
+    # The client will receive the result via "message_read" or "message_read_error" broadcast
     ConversationServer.mark_read(conversation_id, user_id, message_id)
 
-    # Optimistic success response
-    {:reply, {:ok, %{status: "read"}}, socket}
+    {:noreply, socket}
   end
 
   # Handle typing indicators

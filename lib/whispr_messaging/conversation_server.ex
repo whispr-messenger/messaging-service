@@ -223,17 +223,34 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   def handle_cast({:mark_read, user_id, message_id}, state) do
-    # Update read status in database
+    # Update read status in database asynchronously
+    parent = self()
+
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
-      if message_id do
-        Messages.mark_message_read(message_id, user_id)
-      else
-        Messages.mark_conversation_read(state.conversation_id, user_id)
-      end
+      result =
+        if message_id do
+          Messages.mark_message_read(message_id, user_id)
+        else
+          Messages.mark_conversation_read(state.conversation_id, user_id)
+        end
+
+      # Send result back to ConversationServer
+      send(parent, {:mark_read_result, user_id, message_id, result})
     end)
 
-    # Broadcast read receipt
-    broadcast_read_receipt(user_id, message_id, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:mark_read_result, user_id, message_id, result}, state) do
+    case result do
+      {:ok, _} ->
+        # Broadcast read receipt on success
+        broadcast_read_receipt(user_id, message_id, state)
+
+      {:error, reason} ->
+        # Broadcast error event
+        broadcast_read_error(user_id, message_id, reason, state)
+    end
 
     {:noreply, state}
   end
@@ -439,6 +456,15 @@ defmodule WhisprMessaging.ConversationServer do
       message_id: message_id,
       conversation_id: state.conversation_id,
       timestamp: DateTime.utc_now()
+    })
+  end
+
+  defp broadcast_read_error(user_id, message_id, reason, state) do
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read_error", %{
+      user_id: user_id,
+      message_id: message_id,
+      conversation_id: state.conversation_id,
+      reason: reason
     })
   end
 
