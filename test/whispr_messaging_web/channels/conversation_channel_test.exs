@@ -333,6 +333,21 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       
       assert message_id == message.id
     end
+
+    test "broadcasts error when marking non-existent message as read", %{
+      socket: socket,
+      user_id: user_id
+    } do
+      fake_message_id = Ecto.UUID.generate()
+      push(socket, "message_read", %{"message_id" => fake_message_id})
+      
+      # Should receive error broadcast for non-existent message
+      assert_broadcast "message_read_error", %{
+        message_id: ^fake_message_id,
+        user_id: ^user_id,
+        reason: "message_not_found"
+      }
+    end
   end
 
   describe "typing indicators" do

@@ -235,6 +235,8 @@ defmodule WhisprMessaging.ConversationServer do
         end
 
       # Send result back to ConversationServer
+      # Note: Using send/2 is acceptable here - if the GenServer terminates before
+      # the message is received, we don't need to process the result anyway
       send(parent, {:mark_read_result, user_id, message_id, result})
     end)
 
@@ -460,11 +462,19 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_read_error(user_id, message_id, reason, state) do
+    # Sanitize error reason to avoid exposing internal details
+    sanitized_reason =
+      case reason do
+        :not_found -> "message_not_found"
+        :unauthorized -> "unauthorized"
+        _ -> "internal_error"
+      end
+
     Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read_error", %{
       user_id: user_id,
       message_id: message_id,
       conversation_id: state.conversation_id,
-      reason: reason
+      reason: sanitized_reason
     })
   end
 
