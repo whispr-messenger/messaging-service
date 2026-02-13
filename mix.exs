@@ -8,7 +8,7 @@ defmodule WhisprMessaging.MixProject do
     [
       app: :whispr_messaging,
       version: "1.0.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       # A list of dependencies of this project.
@@ -112,7 +112,7 @@ defmodule WhisprMessaging.MixProject do
 
       # API Documentation
       {:phoenix_swagger, "~> 0.8"},
-      {:ex_json_schema, "~> 0.10.2"},
+      {:ex_json_schema, github: "jonasschmidt/ex_json_schema", override: true},
 
       # Production monitoring
       {:recon, "~> 2.5"},

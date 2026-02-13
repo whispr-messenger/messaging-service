@@ -14,8 +14,9 @@ defmodule WhisprMessaging.ConversationServer do
   require Logger
 
   alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.Services.NotificationService
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
-  alias WhisprMessagingWeb.Endpoint
+  alias WhisprMessagingWeb.{Endpoint, Presence}
 
   # @typep conversation_state :: %{
   #          conversation_id: binary(),
@@ -135,6 +136,9 @@ defmodule WhisprMessaging.ConversationServer do
         # Broadcast message to all channels
         broadcast_message(message, new_state)
 
+        # Notify offline members
+        notify_offline_members(message, new_state)
+
         # Update activity timestamp
         updated_state = %{new_state | last_activity: DateTime.utc_now()}
 
@@ -220,7 +224,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   def handle_cast({:mark_read, user_id, message_id}, state) do
     # Update read status in database
-    Task.start_link(fn ->
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
       if message_id do
         Messages.mark_message_read(message_id, user_id)
       else
@@ -301,9 +305,28 @@ defmodule WhisprMessaging.ConversationServer do
 
         {:ok, message, new_state}
 
-      error ->
-        error
+      {:error, changeset} ->
+        if duplicate_message_error?(changeset) do
+          sender_id = message_attrs[:sender_id] || message_attrs["sender_id"]
+          client_random = message_attrs[:client_random] || message_attrs["client_random"]
+
+          case Messages.get_message_by_sender_and_random(sender_id, client_random) do
+            {:ok, existing_message} ->
+              {:error, {:duplicate, existing_message}}
+
+            _ ->
+              {:error, changeset}
+          end
+        else
+          {:error, changeset}
+        end
     end
+  end
+
+  defp duplicate_message_error?(changeset) do
+    Enum.any?(changeset.errors, fn {_field, {_msg, opts}} ->
+      opts[:constraint_name] == "messages_sender_id_client_random_index"
+    end)
   end
 
   defp add_member_to_conversation(user_id, settings, state) do
@@ -367,6 +390,27 @@ defmodule WhisprMessaging.ConversationServer do
     })
   end
 
+  defp notify_offline_members(message, state) do
+    # Get all conversation members from state
+    member_ids = Enum.map(state.members, & &1.user_id)
+
+    # Get online users from Presence
+    # Presence keys are strings (user_ids)
+    presence_list = Presence.list("conversation:#{state.conversation_id}")
+    online_user_ids = Map.keys(presence_list)
+
+    # Calculate offline users
+    offline_user_ids = member_ids -- online_user_ids
+    # Remove sender from offline list if present
+    offline_user_ids = List.delete(offline_user_ids, message.sender_id)
+
+    if length(offline_user_ids) > 0 do
+      Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+        NotificationService.queue_push_notifications(offline_user_ids, message)
+      end)
+    end
+  end
+
   defp broadcast_member_added(member, state) do
     Endpoint.broadcast("conversation:#{state.conversation_id}", "member_added", %{
       member: serialize_member(member),
@@ -406,7 +450,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp create_member_joined_message(user_id, state) do
-    Task.start_link(fn ->
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
       Messages.create_system_message(
         state.conversation_id,
         "User joined conversation",
@@ -416,7 +460,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp create_member_left_message(user_id, state) do
-    Task.start_link(fn ->
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
       Messages.create_system_message(
         state.conversation_id,
         "User left conversation",

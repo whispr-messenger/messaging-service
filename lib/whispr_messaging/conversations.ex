@@ -11,6 +11,7 @@ defmodule WhisprMessaging.Conversations do
 
   alias WhisprMessaging.Conversations.{Conversation, ConversationMember, ConversationSettings}
   alias WhisprMessaging.Messages.Message
+  alias WhisprMessaging.Services.UserService
 
   require Logger
 
@@ -90,22 +91,60 @@ defmodule WhisprMessaging.Conversations do
 
       {:error, changeset}
     else
-      Repo.transaction(fn ->
-        # Create conversation
-        {:ok, conversation} =
-          create_conversation(%{
-            type: "direct",
-            metadata: metadata,
-            is_active: true
-          })
+      # Check if user exists and if there are blocks
+      with {:ok, true} <- UserService.check_user_exists(user2_id),
+           {:ok, false} <- UserService.check_user_blocked(user2_id, user1_id),
+           {:ok, false} <- UserService.check_user_blocked(user1_id, user2_id) do
 
-        # Add both users as members
-        {:ok, _member1} = add_conversation_member(conversation.id, user1_id)
-        {:ok, _member2} = add_conversation_member(conversation.id, user2_id)
+        # Check if conversation already exists
+        case find_direct_conversation(user1_id, user2_id) do
+          nil ->
+            Repo.transaction(fn ->
+              # Create conversation
+              {:ok, conversation} =
+                create_conversation(%{
+                  type: "direct",
+                  metadata: metadata,
+                  is_active: true
+                })
 
-        conversation
-      end)
+              # Add both users as members
+              {:ok, _member1} = add_conversation_member(conversation.id, user1_id)
+              {:ok, _member2} = add_conversation_member(conversation.id, user2_id)
+
+              conversation
+            end)
+
+          conversation ->
+            if conversation.is_active do
+              {:ok, conversation}
+            else
+              # Reactivate conversation
+              update_conversation(conversation, %{is_active: true})
+            end
+        end
+      else
+        {:ok, false} -> {:error, :user_not_found} # User does not exist
+        {:ok, true} -> {:error, :blocked} # User is blocked
+        error -> error
+      end
     end
+  end
+
+  @doc """
+  Finds a direct conversation between two users (active or inactive).
+  """
+  def find_direct_conversation(user1_id, user2_id) do
+    query = from c in Conversation,
+      join: m1 in ConversationMember,
+      on: m1.conversation_id == c.id,
+      join: m2 in ConversationMember,
+      on: m2.conversation_id == c.id,
+      where: c.type == "direct",
+      where: m1.user_id == ^user1_id,
+      where: m2.user_id == ^user2_id
+
+    Repo.one(query)
   end
 
   @doc """
