@@ -320,10 +320,18 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
     test "marks message as read", %{
       socket: socket,
-      message: message
+      message: message,
+      user_id: user_id
     } do
-      ref = push(socket, "message_read", %{"message_id" => message.id})
-      assert_reply ref, :ok, %{status: "read"}
+      push(socket, "message_read", %{"message_id" => message.id})
+      
+      # Should receive broadcast instead of immediate reply
+      assert_broadcast "message_read", %{
+        message_id: message_id,
+        user_id: ^user_id
+      }
+      
+      assert message_id == message.id
     end
   end
 
