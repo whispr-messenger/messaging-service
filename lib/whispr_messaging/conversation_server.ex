@@ -223,17 +223,36 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   def handle_cast({:mark_read, user_id, message_id}, state) do
-    # Update read status in database
+    # Update read status in database asynchronously
+    parent = self()
+
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
-      if message_id do
-        Messages.mark_message_read(message_id, user_id)
-      else
-        Messages.mark_conversation_read(state.conversation_id, user_id)
-      end
+      result =
+        if message_id do
+          Messages.mark_message_read(message_id, user_id)
+        else
+          Messages.mark_conversation_read(state.conversation_id, user_id)
+        end
+
+      # Send result back to ConversationServer
+      # Note: Using send/2 is acceptable here - if the GenServer terminates before
+      # the message is received, we don't need to process the result anyway
+      send(parent, {:mark_read_result, user_id, message_id, result})
     end)
 
-    # Broadcast read receipt
-    broadcast_read_receipt(user_id, message_id, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:mark_read_result, user_id, message_id, result}, state) do
+    case result do
+      {:ok, _} ->
+        # Broadcast read receipt on success
+        broadcast_read_receipt(user_id, message_id, state)
+
+      {:error, reason} ->
+        # Broadcast error event
+        broadcast_read_error(user_id, message_id, reason, state)
+    end
 
     {:noreply, state}
   end
@@ -439,6 +458,23 @@ defmodule WhisprMessaging.ConversationServer do
       message_id: message_id,
       conversation_id: state.conversation_id,
       timestamp: DateTime.utc_now()
+    })
+  end
+
+  defp broadcast_read_error(user_id, message_id, reason, state) do
+    # Sanitize error reason to avoid exposing internal details
+    sanitized_reason =
+      case reason do
+        :not_found -> "message_not_found"
+        :unauthorized -> "unauthorized"
+        _ -> "internal_error"
+      end
+
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read_error", %{
+      user_id: user_id,
+      message_id: message_id,
+      conversation_id: state.conversation_id,
+      reason: sanitized_reason
     })
   end
 
