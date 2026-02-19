@@ -6,7 +6,9 @@
 # -----------------------------------------------------------------------------
 # STAGE 1: Build
 # -----------------------------------------------------------------------------
-FROM elixir:1.19-alpine AS builder
+# Pin to exact hexpm tag (OTP 28.2 + Alpine 3.23.3 = OpenSSL 3.3.x)
+# Avoids floating tag drift that caused EVP_PKEY_sign_message_init crash in prod
+FROM hexpm/elixir:1.19.5-erlang-28.2-alpine-3.23.3 AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -50,9 +52,11 @@ RUN mix release
 # -----------------------------------------------------------------------------
 # STAGE 2: Runtime
 # -----------------------------------------------------------------------------
-FROM elixir:1.19-alpine AS runtime
+# Must match Alpine version of builder to ensure same OpenSSL (3.3.x)
+FROM alpine:3.23 AS runtime
 
 # Install runtime dependencies
+# openssl on Alpine 3.23 = OpenSSL 3.3.x, which provides EVP_PKEY_sign_message_init
 RUN apk add --no-cache \
     libstdc++ \
     openssl \
