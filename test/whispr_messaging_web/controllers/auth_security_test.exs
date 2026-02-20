@@ -23,7 +23,8 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     }
   end
 
-  test "GET /api/v1/conversations fails if no auth header provided, even with user_id in params", %{user1_id: user1_id} do
+  test "GET /api/v1/conversations fails if no auth header provided, even with user_id in params",
+       %{user1_id: user1_id} do
     conn =
       build_conn()
       |> json_conn()
