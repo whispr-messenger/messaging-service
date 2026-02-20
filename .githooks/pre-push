@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# pre-push hook: run the full test suite against an isolated stack before push.
+#
+# Uses the Docker Compose test stack (tmpfs DB, env propre) — identique à la CI.
+# Skip with: git push --no-verify
+
+set -e
+
+echo "[pre-push] Running test suite before push..."
+echo "           This spins up the isolated test stack (Docker Compose)."
+echo "           It may take a moment on first run."
+echo ""
+
+# Use `just test` if available, otherwise fall back to the raw docker compose
+# command so the hook works even if `just` is not installed.
+if command -v just >/dev/null 2>&1; then
+    just test
+else
+    docker compose -f docker/test/compose.yml \
+        up --abort-on-container-exit --exit-code-from test-runner --build
+fi
+
+echo ""
+echo "[pre-push] All tests passed."

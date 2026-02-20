@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# pre-commit hook: auto-format staged Elixir files and run Credo (strict).
+#
+# Requires the dev stack to be running (`just up dev`).
+# Skip with: git commit --no-verify
+
+set -e
+
+COMPOSE_FILE="docker/dev/compose.yml"
+
+# ─── Check dev stack is running ──────────────────────────────────────────────
+
+if ! docker compose -f "$COMPOSE_FILE" ps --status running messaging-service 2>/dev/null | grep -q "messaging-service"; then
+    echo ""
+    echo "[pre-commit] WARNING: messaging-service container is not running."
+    echo "             Run 'just up dev' to start the dev stack."
+    echo "             Skipping format and lint checks."
+    echo ""
+    exit 0
+fi
+
+# ─── Format staged .ex / .exs files ──────────────────────────────────────────
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.exs?$' || true)
+
+if [ -n "$STAGED" ]; then
+    echo "[pre-commit] Formatting staged Elixir files..."
+
+    # shellcheck disable=SC2086
+    docker compose -f "$COMPOSE_FILE" exec -T messaging-service \
+        mix format $STAGED
+
+    # Re-stage the (possibly reformatted) files so the commit reflects the
+    # formatted version.
+    # shellcheck disable=SC2086
+    git add $STAGED
+
+    echo "[pre-commit] Formatting done."
+fi
+
+# ─── Credo (strict) ──────────────────────────────────────────────────────────
+
+echo "[pre-commit] Running Credo (strict)..."
+
+docker compose -f "$COMPOSE_FILE" exec -T messaging-service \
+    mix credo --strict
+
+echo "[pre-commit] Credo passed."
