@@ -106,6 +106,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
   """
   def upload(conn, %{"file" => upload, "message_id" => message_id}) do
     user_id = conn.assigns[:user_id]
+
     with :ok <- validate_file_size(upload),
          :ok <- validate_mime_type(upload.content_type),
          {:ok, message} <- Messages.get_message(message_id),
@@ -173,6 +174,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
   """
   def download(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]
+
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
@@ -260,6 +262,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
   """
   def delete(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]
+
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_permission(message, user_id),
