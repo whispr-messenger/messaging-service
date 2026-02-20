@@ -2,23 +2,41 @@
 #
 # pre-commit hook: auto-format staged Elixir files and run Credo (strict).
 #
-# Requires the dev stack to be running (`just up dev`).
+# Starts the dev stack automatically if it is not already running.
 # Skip with: git commit --no-verify
 
 set -e
 
 COMPOSE_FILE="docker/dev/compose.yml"
 
-# ─── Check dev stack is running ──────────────────────────────────────────────
+# ─── Ensure dev stack is running ─────────────────────────────────────────────
 
 if ! docker compose -f "$COMPOSE_FILE" ps --status running messaging-service 2>/dev/null | grep -q "messaging-service"; then
-    echo ""
-    echo "[pre-commit] WARNING: messaging-service container is not running."
-    echo "             Run 'just up dev' to start the dev stack."
-    echo "             Skipping format and lint checks."
-    echo ""
-    exit 0
+    echo "[pre-commit] Dev stack is not running — starting it now..."
+    if command -v just >/dev/null 2>&1; then
+        just up dev
+    else
+        docker compose -f "$COMPOSE_FILE" up -d --build
+    fi
 fi
+
+echo "[pre-commit] Waiting for messaging-service to be healthy..."
+# Poll until the healthcheck passes (entrypoint: hex + deps.get + migrate + server)
+i=0
+while [ $i -lt 60 ]; do
+    if docker compose -f "$COMPOSE_FILE" ps --status healthy messaging-service 2>/dev/null | grep -q "messaging-service"; then
+        break
+    fi
+    sleep 2
+    i=$((i + 1))
+done
+
+if ! docker compose -f "$COMPOSE_FILE" ps --status healthy messaging-service 2>/dev/null | grep -q "messaging-service"; then
+    echo "[pre-commit] ERROR: messaging-service failed to become healthy. Aborting commit." >&2
+    exit 1
+fi
+
+echo "[pre-commit] Dev stack is up and healthy."
 
 # ─── Format staged .ex / .exs files ──────────────────────────────────────────
 

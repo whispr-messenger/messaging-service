@@ -70,7 +70,16 @@ setup-hooks:
         echo "Error: .githooks/ directory not found." >&2
         exit 1
     fi
-    cp .githooks/pre-commit .git/hooks/pre-commit
-    cp .githooks/pre-push   .git/hooks/pre-push
+    # Use sudo if the existing hook files are owned by another user (e.g. root
+    # from a previous busybox container run).
+    _cp() {
+        if [ -f "$2" ] && [ ! -w "$2" ]; then
+            sudo cp "$1" "$2" && sudo chown "$(id -u):$(id -g)" "$2"
+        else
+            cp "$1" "$2"
+        fi
+    }
+    _cp .githooks/pre-commit .git/hooks/pre-commit
+    _cp .githooks/pre-push   .git/hooks/pre-push
     chmod +x .git/hooks/pre-commit .git/hooks/pre-push
     echo "Git hooks installed successfully."
