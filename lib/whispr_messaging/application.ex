@@ -74,11 +74,19 @@ defmodule WhisprMessaging.Application do
   end
 
   defp redis_config do
-    Application.get_env(:whispr_messaging, :redis,
-      host: "localhost",
-      port: 6379,
-      database: 0
-    )
+    config =
+      Application.get_env(:whispr_messaging, :redis,
+        host: "localhost",
+        port: 6379,
+        database: 0
+      )
+
+    # Strip password if nil or empty to avoid sending AUTH to a Redis
+    # instance that has no password configured (e.g. in development).
+    case Keyword.get(config, :password) do
+      password when password in [nil, ""] -> Keyword.delete(config, :password)
+      _ -> config
+    end
   end
 
   # defp grpc_server_config do
