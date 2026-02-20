@@ -24,14 +24,15 @@ echo "[pre-commit] Waiting for messaging-service to be healthy..."
 # Poll until the healthcheck passes (entrypoint: hex + deps.get + migrate + server)
 i=0
 while [ $i -lt 60 ]; do
-    if docker compose -f "$COMPOSE_FILE" ps --status healthy messaging-service 2>/dev/null | grep -q "messaging-service"; then
+    if docker compose -f "$COMPOSE_FILE" ps messaging-service 2>/dev/null | grep -q "(healthy)"; then
         break
     fi
+    echo -n "."
     sleep 2
     i=$((i + 1))
 done
 
-if ! docker compose -f "$COMPOSE_FILE" ps --status healthy messaging-service 2>/dev/null | grep -q "messaging-service"; then
+if ! docker compose -f "$COMPOSE_FILE" ps messaging-service 2>/dev/null | grep -q "(healthy)"; then
     echo "[pre-commit] ERROR: messaging-service failed to become healthy. Aborting commit." >&2
     exit 1
 fi
