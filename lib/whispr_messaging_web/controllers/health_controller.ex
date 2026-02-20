@@ -512,10 +512,10 @@ defmodule WhisprMessagingWeb.HealthController do
             service(:string, "Service name", example: "whispr-messaging")
             type(:string, "Type of health check", example: "readiness")
 
-            checks(:object, "Status of critical dependencies") do
-              property(:database, :string, "Database status (ok, failed, or unknown)")
-              property(:redis, :string, "Redis status (ok, failed, or unknown)")
-            end
+            checks(
+              :object,
+              "Status of critical dependencies (database: ok/failed/unknown, redis: ok/failed/unknown)"
+            )
           end
         end
     }
