@@ -72,8 +72,9 @@ config :whispr_messaging, :conversations,
   max_message_cache: 50
 
 # Development logging
+# Note: :backends is removed — :console is the default handler in Elixir 1.19+
+# and passing it explicitly triggers a deprecation warning.
 config :logger,
-  backends: [:console],
   compile_time_purge_matching: [
     [level_lower_than: :info]
   ]
