@@ -59,7 +59,7 @@ defmodule WhisprMessaging.Application do
   defp env_specific_children do
     [
       # Redis connections (enabled for all environments)
-      {Redix, [name: :redix] ++ redis_config()}
+      {Redix, [name: :redix] ++ WhisprMessaging.RedisConfig.build()}
       # gRPC server disabled for now - needs config update
       # {GRPC.Server.Supervisor, grpc_server_config()}
     ]
@@ -71,22 +71,6 @@ defmodule WhisprMessaging.Application do
   def config_change(changed, _new, removed) do
     WhisprMessagingWeb.Endpoint.config_change(changed, removed)
     :ok
-  end
-
-  defp redis_config do
-    config =
-      Application.get_env(:whispr_messaging, :redis,
-        host: "localhost",
-        port: 6379,
-        database: 0
-      )
-
-    # Strip password if nil or empty to avoid sending AUTH to a Redis
-    # instance that has no password configured (e.g. in development).
-    case Keyword.get(config, :password) do
-      password when password in [nil, ""] -> Keyword.delete(config, :password)
-      _ -> config
-    end
   end
 
   # defp grpc_server_config do

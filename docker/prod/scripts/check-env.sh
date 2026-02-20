@@ -68,8 +68,17 @@ check_required "HTTP_PORT"
 check_required "GRPC_PORT"
 
 # Redis
-check_required "REDIS_HOST"
-check_required "REDIS_PORT"
+check_optional "REDIS_MODE" "direct"
+
+if [ "${REDIS_MODE:-direct}" = "sentinel" ]; then
+    echo "  -> Sentinel mode detected, checking sentinel-specific variables..."
+    check_required "REDIS_SENTINELS"
+    check_required "REDIS_MASTER_NAME"
+    check_optional "REDIS_SENTINEL_PASSWORD" "(no sentinel password)"
+else
+    check_required "REDIS_HOST"
+    check_required "REDIS_PORT"
+fi
 
 # gRPC services
 check_required "SCHEDULING_SERVICE_GRPC_URL"
