@@ -22,14 +22,9 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
   check_origin: false,
   server: true
 
-# Production Redis configuration
-config :whispr_messaging, :redis,
-  host: System.get_env("REDIS_HOST", "localhost"),
-  port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
-  database: String.to_integer(System.get_env("REDIS_DB", "0")),
-  password: System.get_env("REDIS_PASSWORD"),
-  timeout: 15_000,
-  ssl: System.get_env("REDIS_SSL", "false") == "true"
+# Redis configuration is handled entirely in config/runtime.exs so that
+# environment variables (including REDIS_MODE / REDIS_SENTINELS) are always
+# resolved from the live process environment rather than at compile time.
 
 # Production logging - JSON format for structured logging
 config :logger, :console,
