@@ -110,8 +110,8 @@ defmodule WhisprMessaging.RedisConfig do
     |> String.split(",")
     |> Enum.map(fn entry ->
       case String.split(String.trim(entry), ":") do
-        [host, port] -> %{host: host, port: String.to_integer(port)}
-        [host] -> %{host: host, port: 26_379}
+        [host, port] -> [host: host, port: String.to_integer(port)]
+        [host] -> [host: host, port: 26_379]
       end
     end)
   end
@@ -125,7 +125,7 @@ defmodule WhisprMessaging.RedisConfig do
     master = Keyword.get(sentinel, :group, "?")
 
     sentinels_str =
-      Enum.map_join(sentinels, ", ", fn %{host: h, port: p} -> "#{h}:#{p}" end)
+      Enum.map_join(sentinels, ", ", fn s -> "#{s[:host]}:#{s[:port]}" end)
 
     Logger.info("Redis mode: sentinel (master: #{master}, sentinels: #{sentinels_str})")
   end
