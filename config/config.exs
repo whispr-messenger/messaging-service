@@ -11,6 +11,9 @@ config :whispr_messaging,
   ecto_repos: [WhisprMessaging.Repo],
   generators: [binary_id: true]
 
+# Disable tzdata autoupdates to avoid writing to read-only container file system
+config :tzdata, :autoupdate, :disabled
+
 # Configures the endpoint
 config :whispr_messaging, WhisprMessagingWeb.Endpoint,
   url: [host: "localhost"],
