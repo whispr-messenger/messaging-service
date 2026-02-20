@@ -16,22 +16,12 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo "Step 2: Generating Swagger documentation..."
-# Generate swagger.json with runtime environment variables
-/app/bin/whispr_messaging eval "
-  # Ensure swagger info is loaded with current env vars
-  spec = WhisprMessagingWeb.Router.swagger_info()
-  json = Jason.encode!(spec, pretty: true)
-  File.write!('/app/lib/whispr_messaging-1.0.0/priv/static/swagger.json', json)
-  IO.puts('Swagger documentation generated successfully')
-"
-
-echo ""
-echo "Step 3: Running database migrations..."
+echo "Step 2: Running database migrations..."
+# swagger.json is pre-generated at build time (host omitted per Swagger 2.0 spec)
 /app/bin/whispr_messaging eval "WhisprMessaging.Release.migrate()"
 
 echo ""
-echo "Step 4: Starting application..."
+echo "Step 3: Starting application..."
 echo "=================================================="
 echo ""
 

@@ -6,30 +6,9 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
   use PhoenixSwagger
 
   def swagger_info do
-    # Get the base URL from environment or use default
-    base_url = System.get_env("SWAGGER_BASE_URL") || "localhost"
-
-    # Determine scheme based on environment
-    scheme =
-      case System.get_env("MIX_ENV") do
-        "prod" -> "https"
-        _ -> "http"
-      end
-
-    # Get port from HTTP_PORT environment variable
-    port_str = System.get_env("HTTP_PORT") || "4000"
-    port = ":#{port_str}"
-
-    # Remove port for standard ports (80 for http, 443 for https)
-    port =
-      case {scheme, port} do
-        {"http", ":80"} -> ""
-        {"https", ":443"} -> ""
-        _ -> port
-      end
-
-    host_with_port = "#{base_url}#{port}"
-
+    # host and schemes are intentionally omitted: per Swagger 2.0 spec, when host
+    # is absent the SwaggerUI uses window.location.host for "Try it out" requests.
+    # This makes the spec environment-agnostic and allows build-time generation.
     %{
       swagger: "2.0",
       info: %{
@@ -56,9 +35,7 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
           email: "gabriel.lopez@epitech.eu"
         }
       },
-      host: host_with_port,
       basePath: "/api/v1",
-      schemes: [scheme],
       consumes: ["application/json"],
       produces: ["application/json"],
       securityDefinitions: %{

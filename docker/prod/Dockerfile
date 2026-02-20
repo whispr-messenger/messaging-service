@@ -46,6 +46,9 @@ COPY priv priv
 # Compile the application
 RUN mix compile
 
+# Generate swagger.json at build time (host omitted → SwaggerUI uses window.location)
+RUN mix phx.swagger.generate priv/static/swagger.json
+
 # Build release
 RUN mix release
 
