@@ -60,3 +60,17 @@ shell:
 
 test:
     docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner --build
+
+# Install git hooks manually (alternative to the automatic busybox container).
+# Useful for contributors who don't use the Docker dev stack.
+setup-hooks:
+    #!/bin/bash
+    set -euo pipefail
+    if [ ! -d ".githooks" ]; then
+        echo "Error: .githooks/ directory not found." >&2
+        exit 1
+    fi
+    cp .githooks/pre-commit .git/hooks/pre-commit
+    cp .githooks/pre-push   .git/hooks/pre-push
+    chmod +x .git/hooks/pre-commit .git/hooks/pre-push
+    echo "Git hooks installed successfully."

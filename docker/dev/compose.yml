@@ -44,6 +44,24 @@ services:
     networks:
       - whispr-messaging-network
 
+  git-hooks:
+    image: busybox:latest
+    container_name: whispr-messaging-git-hooks
+    volumes:
+      - ../..:/repo
+    command:
+      - sh
+      - -c
+      - |
+        if [ -d /repo/.githooks ] && ls /repo/.githooks/* >/dev/null 2>&1; then
+          cp /repo/.githooks/* /repo/.git/hooks/
+          chmod +x /repo/.git/hooks/pre-commit /repo/.git/hooks/pre-push
+          echo 'Git hooks installed successfully.'
+        else
+          echo 'No git hooks found in .githooks/, skipping.'
+        fi
+    restart: "no"
+
   messaging-service:
     build:
       context: ../..
@@ -67,6 +85,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      git-hooks:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${HTTP_PORT}/api/v1/health"]
       interval: 30s
