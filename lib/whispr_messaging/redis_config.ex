@@ -58,6 +58,7 @@ defmodule WhisprMessaging.RedisConfig do
     ]
 
     base
+    |> maybe_put(:username, Keyword.get(config, :username))
     |> maybe_put(:password, Keyword.get(config, :password))
     |> maybe_put(:timeout, Keyword.get(config, :timeout))
     |> then(fn opts ->
@@ -89,8 +90,12 @@ defmodule WhisprMessaging.RedisConfig do
       sentinel: sentinel_cfg,
       database: Keyword.get(config, :database, 0)
     ]
+    |> maybe_put(:username, Keyword.get(config, :username))
     |> maybe_put(:password, Keyword.get(config, :password))
     |> maybe_put(:timeout, Keyword.get(config, :timeout))
+    |> then(fn opts ->
+      if Keyword.get(config, :ssl, false), do: Keyword.put(opts, :ssl, true), else: opts
+    end)
   end
 
   # ---------------------------------------------------------------------------
