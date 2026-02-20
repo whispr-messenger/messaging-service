@@ -10,9 +10,12 @@ defmodule WhisprMessaging.Services.NotificationService do
   Queues push notifications for offline users.
   """
   def queue_push_notifications(user_ids, message) do
-    # TODO: Implement actual gRPC call
+    # Stub: logs until gRPC integration with notification service is done
     # For now, just log the notifications
-    Logger.debug("Queuing push notifications for users: #{inspect(user_ids)} for message: #{message.id}")
+    Logger.debug(
+      "Queuing push notifications for users: #{inspect(user_ids)} for message: #{message.id}"
+    )
+
     {:ok, :queued}
   end
 end

@@ -306,20 +306,24 @@ defmodule WhisprMessaging.ConversationServer do
         {:ok, message, new_state}
 
       {:error, changeset} ->
-        if duplicate_message_error?(changeset) do
-          sender_id = message_attrs[:sender_id] || message_attrs["sender_id"]
-          client_random = message_attrs[:client_random] || message_attrs["client_random"]
+        handle_message_creation_error(changeset, message_attrs)
+    end
+  end
 
-          case Messages.get_message_by_sender_and_random(sender_id, client_random) do
-            {:ok, existing_message} ->
-              {:error, {:duplicate, existing_message}}
+  defp handle_message_creation_error(changeset, message_attrs) do
+    if duplicate_message_error?(changeset) do
+      sender_id = message_attrs[:sender_id] || message_attrs["sender_id"]
+      client_random = message_attrs[:client_random] || message_attrs["client_random"]
 
-            _ ->
-              {:error, changeset}
-          end
-        else
+      case Messages.get_message_by_sender_and_random(sender_id, client_random) do
+        {:ok, existing_message} ->
+          {:error, {:duplicate, existing_message}}
+
+        _ ->
           {:error, changeset}
-        end
+      end
+    else
+      {:error, changeset}
     end
   end
 
@@ -404,7 +408,7 @@ defmodule WhisprMessaging.ConversationServer do
     # Remove sender from offline list if present
     offline_user_ids = List.delete(offline_user_ids, message.sender_id)
 
-    if length(offline_user_ids) > 0 do
+    unless Enum.empty?(offline_user_ids) do
       Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
         NotificationService.queue_push_notifications(offline_user_ids, message)
       end)

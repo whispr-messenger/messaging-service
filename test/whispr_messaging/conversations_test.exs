@@ -59,7 +59,7 @@ defmodule WhisprMessaging.ConversationsTest do
 
       assert {:ok, conversation} = Conversations.create_direct_conversation(user1_id, user2_id)
       assert conversation.type == "direct"
-      
+
       members = Conversations.list_conversation_members(conversation.id)
       assert length(members) == 2
     end

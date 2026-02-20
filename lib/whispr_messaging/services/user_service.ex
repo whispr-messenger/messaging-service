@@ -8,7 +8,7 @@ defmodule WhisprMessaging.Services.UserService do
   Checks if a user exists.
   """
   def check_user_exists(_user_id) do
-    # TODO: Implement actual gRPC call
+    # Stub: returns true until gRPC integration with user service is done
     # For now, assume user exists
     {:ok, true}
   end
@@ -18,7 +18,7 @@ defmodule WhisprMessaging.Services.UserService do
   Returns {:ok, boolean} where boolean is true if blocked.
   """
   def check_user_blocked(_blocker_id, _blocked_id) do
-    # TODO: Implement actual gRPC call
+    # Stub: returns false until gRPC integration with user service is done
     # For now, assume not blocked
     {:ok, false}
   end

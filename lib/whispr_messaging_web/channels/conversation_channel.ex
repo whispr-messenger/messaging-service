@@ -8,8 +8,11 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
   use WhisprMessagingWeb, :channel
 
-  alias WhisprMessaging.{Conversations, Messages, ConversationServer, ConversationSupervisor}
+  alias WhisprMessaging.Conversations
   alias WhisprMessaging.Conversations.ConversationMember
+  alias WhisprMessaging.ConversationServer
+  alias WhisprMessaging.ConversationSupervisor
+  alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.Presence
 
@@ -319,8 +322,6 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
-
-
   defp notify_sender_delivery_status(message_id, user_id, status) do
     case Messages.get_message_sender(message_id) do
       {:ok, sender_id} when sender_id != user_id ->
@@ -339,8 +340,6 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         :ok
     end
   end
-
-
 
   defp serialize_message(%Message{} = message) do
     %{

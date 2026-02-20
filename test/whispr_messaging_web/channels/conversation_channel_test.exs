@@ -1,11 +1,15 @@
 defmodule WhisprMessagingWeb.ConversationChannelTest do
   use WhisprMessagingWeb.ChannelCase, async: false
 
-  alias WhisprMessaging.{Conversations, Messages}
-  alias WhisprMessagingWeb.{ConversationChannel, UserSocket}
+  alias Ecto.Adapters.SQL.Sandbox
+  alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Messages
+  alias WhisprMessaging.Repo
+  alias WhisprMessagingWeb.ConversationChannel
+  alias WhisprMessagingWeb.UserSocket
 
   setup do
-    Ecto.Adapters.SQL.Sandbox.mode(WhisprMessaging.Repo, {:shared, self()})
+    Sandbox.mode(Repo, {:shared, self()})
     user_id = Ecto.UUID.generate()
     other_user_id = Ecto.UUID.generate()
 
