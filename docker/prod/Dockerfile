@@ -49,6 +49,10 @@ RUN mix compile
 # Generate swagger.json at build time (host omitted → SwaggerUI uses window.location)
 RUN mix phx.swagger.generate priv/static/swagger.json
 
+# Copy swagger.json into the OTP priv/static dir so mix release bundles it correctly
+RUN mkdir -p _build/prod/lib/whispr_messaging/priv/static && \
+    cp priv/static/swagger.json _build/prod/lib/whispr_messaging/priv/static/swagger.json
+
 # Build release
 RUN mix release
 
