@@ -46,11 +46,18 @@ COPY priv priv
 # Compile the application
 RUN mix compile
 
-# Generate swagger.json at build time (host omitted → SwaggerUI uses window.location)
-RUN mix phx.swagger.generate priv/static/swagger.json
-
 # Build release
 RUN mix release
+
+# Generate swagger.json and inject directly into the release bundle.
+# Must run AFTER mix release because:
+#   1. priv/static/ is gitignored → not present during COPY priv priv
+#   2. _build/prod/lib/whispr_messaging/priv/ is a symlink → "same file" error
+#   3. _build/prod/rel/.../priv/ is a real directory created by mix release
+RUN mix phx.swagger.generate priv/static/swagger.json && \
+    mkdir -p _build/prod/rel/whispr_messaging/lib/whispr_messaging-1.0.0/priv/static && \
+    cp priv/static/swagger.json \
+    _build/prod/rel/whispr_messaging/lib/whispr_messaging-1.0.0/priv/static/swagger.json
 
 # -----------------------------------------------------------------------------
 # STAGE 2: Runtime

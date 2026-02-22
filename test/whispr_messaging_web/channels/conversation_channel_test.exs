@@ -293,7 +293,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
   end
 
   describe "message delivery and read receipts" do
-    setup %{socket: socket, conversation: conversation, user_id: user_id} do
+    setup %{socket: socket, conversation: conversation, user_id: _user_id} do
       {:ok, _, socket} =
         subscribe_and_join(
           socket,
