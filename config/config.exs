@@ -33,48 +33,47 @@ config :whispr_messaging, WhisprMessagingWeb.UserSocket,
 
 # Redis configuration
 config :whispr_messaging, :redis,
-  host: System.get_env("REDIS_HOST", "localhost"),
-  port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
-  database: String.to_integer(System.get_env("REDIS_DB", "0")),
-  password: System.get_env("REDIS_PASSWORD")
+  host: "localhost",
+  port: 6379,
+  database: 0
 
 # gRPC configuration
 config :whispr_messaging,
-  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50052"))
+  grpc_port: 50052
 
 # Conversation GenServer configuration
 config :whispr_messaging, :conversations,
-  max_idle_time: String.to_integer(System.get_env("CONVERSATION_MAX_IDLE_TIME", "3600000")),
-  cleanup_interval: String.to_integer(System.get_env("CONVERSATION_CLEANUP_INTERVAL", "300000")),
-  max_message_cache: String.to_integer(System.get_env("MAX_MESSAGE_CACHE", "100"))
+  max_idle_time: 3_600_000,
+  cleanup_interval: 300_000,
+  max_message_cache: 100
 
 # Message configuration
 config :whispr_messaging, :messages,
-  max_content_size: String.to_integer(System.get_env("MAX_MESSAGE_SIZE", "65536")),
-  retention_days: String.to_integer(System.get_env("MESSAGE_RETENTION_DAYS", "365")),
-  cleanup_batch_size: String.to_integer(System.get_env("CLEANUP_BATCH_SIZE", "1000"))
+  max_content_size: 65536,
+  retention_days: 365,
+  cleanup_batch_size: 1000
 
 # Inter-service communication
 config :whispr_messaging, :services,
   auth_service: %{
-    host: System.get_env("AUTH_SERVICE_HOST", "auth-service"),
-    port: String.to_integer(System.get_env("AUTH_SERVICE_PORT", "50056"))
+    host: "auth-service",
+    port: 50056
   },
   user_service: %{
-    host: System.get_env("USER_SERVICE_HOST", "user-service"),
-    port: String.to_integer(System.get_env("USER_SERVICE_PORT", "50055"))
+    host: "user-service",
+    port: 50055
   },
   media_service: %{
-    host: System.get_env("MEDIA_SERVICE_HOST", "media-service"),
-    port: String.to_integer(System.get_env("MEDIA_SERVICE_PORT", "50054"))
+    host: "media-service",
+    port: 50054
   },
   notification_service: %{
-    host: System.get_env("NOTIFICATION_SERVICE_HOST", "notification-service"),
-    port: String.to_integer(System.get_env("NOTIFICATION_SERVICE_PORT", "50053"))
+    host: "notification-service",
+    port: 50053
   },
   moderation_service: %{
-    host: System.get_env("MODERATION_SERVICE_HOST", "moderation-service"),
-    port: String.to_integer(System.get_env("MODERATION_SERVICE_PORT", "50057"))
+    host: "moderation-service",
+    port: 50057
   }
 
 # Configures Elixir's Logger
