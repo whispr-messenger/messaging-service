@@ -20,6 +20,7 @@ defmodule WhisprMessagingWeb.Router do
   end
 
   # Swagger API info
+  # https://hexdocs.pm/phoenix_swagger/getting-started.html#router
   def swagger_info do
     WhisprMessagingWeb.SwaggerInfo.swagger_info()
   end
