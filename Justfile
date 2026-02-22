@@ -28,12 +28,12 @@ down ENV:
         docker compose -f docker/prod/compose.yml down --volumes
         # Remove common network if it exists and has no more containers
         if docker network inspect whispr-common-network >/dev/null 2>&1; then
-            containers=$(docker network inspect whispr-common-network -f '{{{{range .Containers}}}}{{{{.Name}}}} {{{{end}}}}' 2>/dev/null | xargs)
+            containers=$(docker ps -q --filter "network=whispr-common-network" 2>/dev/null | xargs)
             if [ -z "$containers" ]; then
                 echo "Removing unused whispr-common-network..."
                 docker network rm whispr-common-network 2>/dev/null || true
             else
-                echo "whispr-common-network still in use by: $containers"
+                echo "whispr-common-network still in use by containers: $containers"
             fi
         fi
     elif [ "{{ENV}}" = "doc" ]; then
