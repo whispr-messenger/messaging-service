@@ -14,7 +14,7 @@ defmodule WhisprMessaging.MixProject do
       # A list of dependencies of this project.
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: [:phoenix, :gettext] ++ Mix.compilers() ++ [:phoenix_swagger],
+      compilers: Mix.compilers() ++ [:phoenix_swagger],
       elixirc_options: [warnings_as_errors: false],
       test_coverage: [tool: ExCoveralls]
     ]
