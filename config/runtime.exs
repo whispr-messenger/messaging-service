@@ -1,5 +1,14 @@
 import Config
 
+# Kubernetes service discovery may inject full URIs (e.g. "tcp://10.x.x.x:50056") into
+# *_PORT variables instead of plain port numbers. This helper handles both formats.
+parse_port = fn value ->
+  case URI.parse(value) do
+    %URI{port: port} when is_integer(port) -> port
+    _ -> String.to_integer(value)
+  end
+end
+
 # Execute in all environments (dev, test, prod)
 
 # Configure the database
@@ -43,27 +52,17 @@ else
 end
 
 # Services Configuration
+# Uses full gRPC URIs (e.g. "grpc://auth-service:50051") to avoid conflicts
+# with Kubernetes auto-injected *_PORT variables (e.g. AUTH_SERVICE_PORT=tcp://...)
 config :whispr_messaging, :services,
-  auth_service: %{
-    host: System.get_env("AUTH_SERVICE_HOST", "auth-service"),
-    port: String.to_integer(System.get_env("AUTH_SERVICE_PORT", "50056"))
-  },
-  user_service: %{
-    host: System.get_env("USER_SERVICE_HOST", "user-service"),
-    port: String.to_integer(System.get_env("USER_SERVICE_PORT", "50055"))
-  },
-  media_service: %{
-    host: System.get_env("MEDIA_SERVICE_HOST", "media-service"),
-    port: String.to_integer(System.get_env("MEDIA_SERVICE_PORT", "50054"))
-  },
-  notification_service: %{
-    host: System.get_env("NOTIFICATION_SERVICE_HOST", "notification-service"),
-    port: String.to_integer(System.get_env("NOTIFICATION_SERVICE_PORT", "50053"))
-  },
-  moderation_service: %{
-    host: System.get_env("MODERATION_SERVICE_HOST", "moderation-service"),
-    port: String.to_integer(System.get_env("MODERATION_SERVICE_PORT", "50057"))
-  }
+  auth_service: System.get_env("AUTH_SERVICE_URL", "grpc://auth-service:50056"),
+  user_service: System.get_env("USER_SERVICE_URL", "grpc://user-service:50055"),
+  media_service: System.get_env("MEDIA_SERVICE_URL", "grpc://media-service:50054"),
+  notification_service:
+    System.get_env("NOTIFICATION_SERVICE_URL", "grpc://notification-service:50053"),
+  moderation_service: System.get_env("MODERATION_SERVICE_URL", "grpc://moderation-service:50057"),
+  scheduling_service:
+    System.get_env("SCHEDULING_SERVICE_GRPC_URL", "grpc://scheduling-service:50052")
 
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
@@ -90,7 +89,7 @@ redis_config =
       [
         mode: "direct",
         host: System.get_env("REDIS_HOST", "localhost"),
-        port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
+        port: parse_port.(System.get_env("REDIS_PORT", "6379")),
         database:
           String.to_integer(
             System.get_env("REDIS_DB", if(config_env() == :test, do: "1", else: "0"))
