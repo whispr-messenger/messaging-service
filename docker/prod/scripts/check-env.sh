@@ -80,7 +80,11 @@ else
     check_required "REDIS_PORT"
 fi
 
-# gRPC services
+# gRPC services – full URI (e.g. grpc://auth-service:50051)
+check_required "AUTH_SERVICE_URL"
+check_required "USER_SERVICE_URL"
+check_required "MEDIA_SERVICE_URL"
+check_required "NOTIFICATION_SERVICE_URL"
 check_required "SCHEDULING_SERVICE_GRPC_URL"
 
 # Encryption
