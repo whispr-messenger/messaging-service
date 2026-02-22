@@ -83,7 +83,7 @@ config :logger, :console,
   metadata: [:request_id, :conversation_id, :user_id, :query, :params]
 
 # PhoenixSwagger configuration
-config :phoenix_swagger,
+config :whispr_messaging, :phoenix_swagger,
   json_library: Jason,
   swagger_files: %{
     "priv/static/swagger.json" => [
