@@ -46,14 +46,7 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
           in: "header",
           description: "JWT authorization token. Format: 'Bearer {token}'"
         }
-      },
-      tags: [
-        %{name: "Health", description: "Health check endpoints"},
-        %{name: "Conversations", description: "Conversation management"},
-        %{name: "Messages", description: "Message operations"},
-        %{name: "Attachments", description: "Message attachments"},
-        %{name: "Members", description: "Conversation member management"}
-      ]
+      }
     }
   end
 end
