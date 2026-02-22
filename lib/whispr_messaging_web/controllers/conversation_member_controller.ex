@@ -1,7 +1,37 @@
 defmodule WhisprMessagingWeb.ConversationMemberController do
+  @moduledoc """
+  REST API controller for conversation member operations.
+  Handles adding and removing members from conversations.
+  """
+
   use WhisprMessagingWeb, :controller
+  use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
+
+  action_fallback WhisprMessagingWeb.FallbackController
+
+  swagger_path :create do
+    post("/conversations/{id}/members")
+    summary("Add a member to a conversation")
+    description("Adds a user to an existing conversation. Requires admin or owner role.")
+    produces("application/json")
+    consumes("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+
+    parameter(
+      :member,
+      :body,
+      Schema.ref(:ConversationMemberCreateRequest),
+      "Member to add",
+      required: true
+    )
+
+    security([%{Bearer: []}])
+    response(201, "Created", Schema.ref(:ConversationMemberResponse))
+    response(403, "Forbidden - User is not an admin or owner of this conversation")
+    response(404, "Conversation Not Found")
+  end
 
   @doc """
   Ajoute un membre à une conversation.
@@ -26,6 +56,19 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
       error ->
         error
     end
+  end
+
+  swagger_path :delete do
+    PhoenixSwagger.Path.delete("/conversations/{id}/members/{user_id}")
+    summary("Remove a member from a conversation")
+    description("Removes a user from a conversation. Requires admin or owner role.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    parameter(:user_id, :path, :string, "UUID of the member to remove", required: true)
+    security([%{Bearer: []}])
+    response(204, "No Content - Member removed successfully")
+    response(403, "Forbidden - User is not an admin or owner of this conversation")
+    response(404, "Member or Conversation Not Found")
   end
 
   @doc """
@@ -65,6 +108,30 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
       error ->
         error
     end
+  end
+
+  # Swagger Schema Definitions
+  def swagger_definitions do
+    %{
+      ConversationMemberCreateRequest:
+        swagger_schema do
+          title("Conversation Member Create Request")
+          description("Request body for adding a member to a conversation")
+
+          properties do
+            user_id(:string, "UUID of the user to add", required: true)
+          end
+        end,
+      ConversationMemberResponse:
+        swagger_schema do
+          title("Conversation Member Response")
+          description("Response containing the newly added conversation member")
+
+          properties do
+            data(:object, "Member object")
+          end
+        end
+    }
   end
 
   # Fonctions utilitaires

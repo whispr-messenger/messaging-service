@@ -6,11 +6,12 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
   use PhoenixSwagger
 
   def swagger_info do
-    # host and schemes are intentionally omitted: per Swagger 2.0 spec, when host
-    # is absent the SwaggerUI uses window.location.host for "Try it out" requests.
+    # host and schemes are intentionally omitted from the host field: per Swagger 2.0 spec,
+    # when host is absent the SwaggerUI uses window.location.host for "Try it out" requests.
     # This makes the spec environment-agnostic and allows build-time generation.
     %{
       swagger: "2.0",
+      schemes: ["http", "https"],
       info: %{
         version: "1.0.0",
         title: "Whispr Messaging Service API",
@@ -50,12 +51,9 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
         %{name: "Health", description: "Health check endpoints"},
         %{name: "Conversations", description: "Conversation management"},
         %{name: "Messages", description: "Message operations"},
-        %{name: "Attachments", description: "Message attachments"}
+        %{name: "Attachments", description: "Message attachments"},
+        %{name: "Members", description: "Conversation member management"}
       ]
     }
-  end
-
-  def swagger_path_("/api/swagger") do
-    # This is just a placeholder for the swagger UI endpoint
   end
 end
