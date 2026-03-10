@@ -7,8 +7,7 @@
 - [Documentation]()
 - [Swagger UI]()
 - [ArgoCD UI]()
-- [CodeCov]()
-- SonarQube not available for Elixir
+- [CodeCov]() (SonarQube is not available for Elixir)
 
 ## Description
 
