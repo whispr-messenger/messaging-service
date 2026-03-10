@@ -127,9 +127,18 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
           title("Conversation Member Response")
           description("Response containing the newly added conversation member")
 
-          properties do
-            data(:object, "Member object")
-          end
+          property(
+            :data,
+            Schema.new do
+              properties do
+                user_id(:string, "User UUID")
+                role(:string, "Member role (e.g. admin, owner, member)")
+                joined_at(:string, "Join timestamp", format: "date-time")
+                is_active(:boolean, "Whether the member is active")
+              end
+            end,
+            "Member object"
+          )
         end
     }
   end

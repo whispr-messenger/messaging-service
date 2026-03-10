@@ -1,0 +1,1565 @@
+{
+  "securityDefinitions": {
+    "Bearer": {
+      "description": "JWT authorization token. Format: 'Bearer {token}'",
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "basePath": "/api/v1",
+  "produces": [
+    "application/json"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "swagger": "2.0",
+  "paths": {
+    "/messages/{id}": {
+      "put": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Update a message",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User cannot edit this message"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/MessageUpdateResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Message UUID"
+          },
+          {
+            "schema": {
+              "$ref": "#/definitions/MessageUpdateRequest"
+            },
+            "required": true,
+            "name": "message",
+            "in": "body",
+            "description": "Message update parameters"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.MessageController.update",
+        "description": "Updates (edits) the content of a message",
+        "consumes": [
+          "application/json"
+        ]
+      },
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Get a message",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/MessageResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Message UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.MessageController.show",
+        "description": "Retrieves a specific message by ID with relations"
+      },
+      "delete": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Delete a message",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User cannot delete this message"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/MessageDeleteResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Message UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.MessageController.delete",
+        "description": "Deletes a message (soft delete)"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness probe",
+        "responses": {
+          "503": {
+            "description": "Service is not ready"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ReadinessResponse"
+            },
+            "description": "Service is ready"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "operationId": "WhisprMessagingWeb.HealthController.ready",
+        "description": "Returns whether the service is ready to accept traffic"
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe",
+        "responses": {
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/LivenessResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "operationId": "WhisprMessagingWeb.HealthController.live",
+        "description": "Returns whether the service is alive and responding"
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Detailed health check",
+        "responses": {
+          "503": {
+            "description": "Service Unavailable - when dependencies are unhealthy"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/HealthResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "operationId": "WhisprMessagingWeb.HealthController.detailed",
+        "description": "Returns detailed health status with comprehensive metrics and diagnostics"
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Comprehensive health check",
+        "responses": {
+          "503": {
+            "description": "Service Unavailable - when dependencies are unhealthy"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/HealthResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "operationId": "WhisprMessagingWeb.HealthController.check",
+        "description": "Returns the health status of the service and all its dependencies. Supports optional 'type' query parameter: 'live' for liveness probe (lightweight), 'ready' for readiness probe (checks dependencies), or omit for full health check with metrics."
+      }
+    },
+    "/conversations/{id}/messages": {
+      "post": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Create a new message",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Conversation Not Found"
+          },
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/MessageResponse"
+            },
+            "description": "Created"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          },
+          {
+            "schema": {
+              "$ref": "#/definitions/MessageCreateRequest"
+            },
+            "required": true,
+            "name": "message",
+            "in": "body",
+            "description": "Message parameters"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.MessageController.create",
+        "description": "Creates a new message in a conversation",
+        "consumes": [
+          "application/json"
+        ]
+      },
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "List conversation messages",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Conversation Not Found"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/MessagesResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          },
+          {
+            "type": "integer",
+            "required": false,
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of messages to return (max: 100)"
+          },
+          {
+            "type": "string",
+            "required": false,
+            "name": "before",
+            "in": "query",
+            "description": "Timestamp to get messages before (for pagination)"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.MessageController.index",
+        "description": "Lists recent messages for a specific conversation with pagination"
+      }
+    },
+    "/conversations/{id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "ConversationMember"
+        ],
+        "summary": "Remove a member from a conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Member or Conversation Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User is not an admin or owner of this conversation"
+          },
+          "204": {
+            "description": "No Content - Member removed successfully"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          },
+          {
+            "type": "string",
+            "required": true,
+            "name": "user_id",
+            "in": "path",
+            "description": "UUID of the member to remove"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationMemberController.delete",
+        "description": "Removes a user from a conversation. Requires admin or owner role."
+      }
+    },
+    "/conversations/{id}/members": {
+      "post": {
+        "tags": [
+          "ConversationMember"
+        ],
+        "summary": "Add a member to a conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Conversation Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User is not an admin or owner of this conversation"
+          },
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/ConversationMemberResponse"
+            },
+            "description": "Created"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          },
+          {
+            "schema": {
+              "$ref": "#/definitions/ConversationMemberCreateRequest"
+            },
+            "required": true,
+            "name": "member",
+            "in": "body",
+            "description": "Member to add"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationMemberController.create",
+        "description": "Adds a user to an existing conversation. Requires admin or owner role.",
+        "consumes": [
+          "application/json"
+        ]
+      }
+    },
+    "/conversations/{id}": {
+      "put": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Update a conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ConversationResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          },
+          {
+            "schema": {
+              "$ref": "#/definitions/ConversationUpdateRequest"
+            },
+            "required": true,
+            "name": "conversation",
+            "in": "body",
+            "description": "Conversation update parameters"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationController.update",
+        "description": "Updates conversation details such as name or metadata",
+        "consumes": [
+          "application/json"
+        ]
+      },
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Get a conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User is not a member"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ConversationDetailResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationController.show",
+        "description": "Retrieves a specific conversation by ID with member details"
+      },
+      "delete": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Delete a conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ConversationDeleteResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Conversation UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationController.delete",
+        "description": "Deactivates a conversation (soft delete)"
+      }
+    },
+    "/conversations": {
+      "post": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Create a new conversation",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request"
+          },
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/ConversationResponse"
+            },
+            "description": "Created"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/definitions/ConversationCreateRequest"
+            },
+            "required": true,
+            "name": "conversation",
+            "in": "body",
+            "description": "Conversation parameters"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationController.create",
+        "description": "Creates a new direct or group conversation",
+        "consumes": [
+          "application/json"
+        ]
+      },
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "List user conversations",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/ConversationsResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "integer",
+            "required": false,
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of conversations to return (max: 100)"
+          },
+          {
+            "type": "string",
+            "required": false,
+            "name": "type",
+            "in": "query",
+            "enum": [
+              "direct",
+              "group"
+            ],
+            "description": "Filter by conversation type"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.ConversationController.index",
+        "description": "Lists all conversations for the authenticated user with optional filtering"
+      }
+    },
+    "/attachments/{id}/download": {
+      "get": {
+        "tags": [
+          "Attachment"
+        ],
+        "summary": "Download a file attachment",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User cannot access this file"
+          },
+          "200": {
+            "description": "Success - File content"
+          }
+        },
+        "produces": [
+          "application/octet-stream"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Attachment UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.AttachmentController.download",
+        "description": "Downloads a file attachment by ID"
+      }
+    },
+    "/attachments/{id}": {
+      "get": {
+        "tags": [
+          "Attachment"
+        ],
+        "summary": "Get attachment metadata",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/AttachmentResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Attachment UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.AttachmentController.show",
+        "description": "Retrieves metadata for a file attachment"
+      },
+      "delete": {
+        "tags": [
+          "Attachment"
+        ],
+        "summary": "Delete an attachment",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden - User cannot delete this attachment"
+          },
+          "200": {
+            "schema": {
+              "$ref": "#/definitions/AttachmentDeleteResponse"
+            },
+            "description": "Success"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "string",
+            "required": true,
+            "name": "id",
+            "in": "path",
+            "description": "Attachment UUID"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.AttachmentController.delete",
+        "description": "Deletes a file attachment and removes the file from storage"
+      }
+    },
+    "/attachments/upload": {
+      "post": {
+        "tags": [
+          "Attachment"
+        ],
+        "summary": "Upload a file attachment",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "responses": {
+          "415": {
+            "description": "Unsupported media type"
+          },
+          "413": {
+            "description": "File too large (max 50MB)"
+          },
+          "403": {
+            "description": "Forbidden - User cannot upload to this message"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "201": {
+            "schema": {
+              "$ref": "#/definitions/AttachmentResponse"
+            },
+            "description": "Created"
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "type": "file",
+            "required": true,
+            "name": "file",
+            "in": "formData",
+            "description": "The file to upload"
+          },
+          {
+            "type": "string",
+            "required": true,
+            "name": "message_id",
+            "in": "formData",
+            "description": "UUID of the message"
+          }
+        ],
+        "operationId": "WhisprMessagingWeb.AttachmentController.upload",
+        "description": "Uploads a file attachment to a message. Supports images, documents, audio, and video files up to 50MB",
+        "consumes": [
+          "multipart/form-data"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "MessageShowResponse": {
+      "type": "object",
+      "title": "Message Show Response",
+      "properties": {
+        "data": {
+          "description": "Message object",
+          "$ref": "#/definitions/Message"
+        }
+      },
+      "description": "Response containing a single message without metadata"
+    },
+    "MessageDeleteResponse": {
+      "type": "object",
+      "title": "Message Delete Response",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "is_deleted": {
+              "type": "boolean",
+              "description": "Whether the message is deleted"
+            },
+            "id": {
+              "type": "string",
+              "description": "Message UUID"
+            },
+            "deleted_at": {
+              "type": "string",
+              "description": "Deletion timestamp"
+            },
+            "delete_for_everyone": {
+              "type": "boolean",
+              "description": "Whether the message was deleted for everyone"
+            }
+          },
+          "description": "Delete result"
+        }
+      },
+      "description": "Response after deleting a message"
+    },
+    "MessageUpdateResponse": {
+      "type": "object",
+      "title": "Message Update Response",
+      "properties": {
+        "meta": {
+          "type": "object",
+          "properties": {
+            "edited_at": {
+              "type": "string",
+              "description": "Timestamp of the edit"
+            },
+            "edited": {
+              "type": "boolean",
+              "description": "Whether the message was edited"
+            }
+          },
+          "description": "Edit metadata"
+        },
+        "data": {
+          "description": "Updated message object",
+          "$ref": "#/definitions/Message"
+        }
+      },
+      "description": "Response after updating a message"
+    },
+    "MessageUpdateRequest": {
+      "type": "object",
+      "title": "Message Update Request",
+      "properties": {
+        "message": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "description": "Additional metadata"
+            },
+            "content": {
+              "type": "string",
+              "description": "Message content"
+            }
+          },
+          "description": "Message update parameters"
+        }
+      },
+      "description": "Request body for updating a message"
+    },
+    "MessageResponse": {
+      "type": "object",
+      "title": "Message Response",
+      "properties": {
+        "meta": {
+          "type": "object",
+          "properties": {
+            "conversation_id": {
+              "type": "string",
+              "description": "Conversation UUID"
+            }
+          },
+          "description": "Response metadata"
+        },
+        "data": {
+          "description": "Message object",
+          "$ref": "#/definitions/Message"
+        }
+      },
+      "description": "Response containing a single message"
+    },
+    "MessageCreateRequest": {
+      "type": "object",
+      "title": "Message Create Request",
+      "properties": {
+        "message": {
+          "type": "object",
+          "required": [
+            "content"
+          ],
+          "properties": {
+            "reply_to_id": {
+              "type": "string",
+              "description": "UUID of message being replied to"
+            },
+            "metadata": {
+              "type": "object",
+              "description": "Additional metadata"
+            },
+            "message_type": {
+              "type": "string",
+              "description": "Message type"
+            },
+            "content": {
+              "type": "string",
+              "description": "Message content"
+            }
+          },
+          "description": "Message parameters"
+        }
+      },
+      "description": "Request body for creating a message"
+    },
+    "MessagesResponse": {
+      "type": "object",
+      "title": "Messages Response",
+      "properties": {
+        "meta": {
+          "type": "object",
+          "properties": {
+            "has_more": {
+              "type": "boolean",
+              "description": "Whether more messages are available"
+            },
+            "count": {
+              "type": "integer",
+              "description": "Total number of messages returned"
+            },
+            "conversation_id": {
+              "type": "string",
+              "description": "Conversation UUID"
+            }
+          },
+          "description": "Pagination metadata"
+        },
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Message"
+          },
+          "description": "List of messages"
+        }
+      },
+      "description": "Response containing a list of messages"
+    },
+    "ReadinessResponse": {
+      "type": "object",
+      "title": "Readiness Response",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "readiness",
+          "description": "Type of health check"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO8601 timestamp"
+        },
+        "status": {
+          "type": "string",
+          "example": "ready",
+          "description": "Readiness status (ready or not_ready)"
+        },
+        "service": {
+          "type": "string",
+          "example": "whispr-messaging",
+          "description": "Service name"
+        },
+        "checks": {
+          "type": "object",
+          "description": "Status of critical dependencies (database: ok/failed/unknown, redis: ok/failed/unknown)"
+        }
+      },
+      "description": "Readiness probe response. Status will be 'ready' when all dependencies are healthy, or 'not_ready' when any dependency fails."
+    },
+    "LivenessResponse": {
+      "type": "object",
+      "title": "Liveness Response",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Service version"
+        },
+        "uptime": {
+          "type": "object",
+          "description": "Uptime information"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO8601 timestamp"
+        },
+        "status": {
+          "type": "string",
+          "example": "alive",
+          "description": "Liveness status"
+        },
+        "service": {
+          "type": "string",
+          "example": "whispr-messaging",
+          "description": "Service name"
+        },
+        "memory": {
+          "type": "object",
+          "description": "Memory usage information"
+        }
+      },
+      "description": "Liveness probe response"
+    },
+    "HealthResponse": {
+      "type": "object",
+      "title": "Health Response",
+      "properties": {
+        "version": {
+          "type": "string",
+          "example": "1.0.0",
+          "description": "Service version (only when healthy)"
+        },
+        "uptime": {
+          "type": "object",
+          "description": "Uptime information (only when healthy)"
+        },
+        "timestamp": {
+          "type": "string",
+          "example": "2025-12-11T21:53:00Z",
+          "description": "ISO8601 timestamp"
+        },
+        "status": {
+          "type": "string",
+          "example": "healthy",
+          "description": "Overall status (healthy or unhealthy)"
+        },
+        "service": {
+          "type": "string",
+          "example": "whispr-messaging",
+          "description": "Service name"
+        },
+        "memory": {
+          "type": "object",
+          "description": "Memory usage information (only when healthy)"
+        },
+        "checks": {
+          "type": "object",
+          "description": "Status of dependencies"
+        }
+      },
+      "description": "Health check response from GET /health endpoint. When healthy, includes version, uptime, checks, and memory. When unhealthy, only includes status, service, timestamp, and checks."
+    },
+    "ConversationDeleteResult": {
+      "type": "object",
+      "title": "Conversation Delete Result",
+      "properties": {
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the conversation is active (false after deletion)"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversation UUID"
+        },
+        "deleted_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Deletion timestamp"
+        }
+      },
+      "description": "Result data from deleting a conversation"
+    },
+    "ConversationsIndexMeta": {
+      "type": "object",
+      "title": "Conversations Index Meta",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The user ID used for the query"
+        },
+        "count": {
+          "type": "integer",
+          "description": "Total number of conversations"
+        }
+      },
+      "description": "Metadata for conversations list response"
+    },
+    "ConversationWithMembers": {
+      "type": "object",
+      "title": "Conversation with Members",
+      "properties": {
+        "updated_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Last update timestamp"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "group"
+          ],
+          "description": "Conversation type (direct or group)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Conversation name (from metadata)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConversationMember"
+          },
+          "description": "List of conversation members"
+        },
+        "member_count": {
+          "type": "integer",
+          "description": "Number of members in the conversation"
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the conversation is active"
+        },
+        "inserted_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Creation timestamp"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversation UUID"
+        },
+        "external_group_id": {
+          "type": "string",
+          "description": "External group identifier"
+        }
+      },
+      "description": "A conversation object with member details"
+    },
+    "ConversationDeleteResponse": {
+      "type": "object",
+      "title": "Conversation Delete Response",
+      "properties": {
+        "data": {
+          "description": "Delete result",
+          "$ref": "#/definitions/ConversationDeleteResult"
+        }
+      },
+      "description": "Response after deleting a conversation"
+    },
+    "ConversationUpdateRequest": {
+      "type": "object",
+      "title": "Conversation Update Request",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Conversation name"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata"
+        }
+      },
+      "description": "Request body for updating a conversation"
+    },
+    "ConversationDetailResponse": {
+      "type": "object",
+      "title": "Conversation Detail Response",
+      "properties": {
+        "data": {
+          "description": "Conversation object with members",
+          "$ref": "#/definitions/ConversationWithMembers"
+        }
+      },
+      "description": "Response containing a conversation with member details"
+    },
+    "ConversationMemberResponse": {
+      "type": "object",
+      "title": "Conversation Member Response",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "user_id": {
+              "type": "string",
+              "description": "User UUID"
+            },
+            "role": {
+              "type": "string",
+              "description": "Member role (e.g. admin, owner, member)"
+            },
+            "joined_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Join timestamp"
+            },
+            "is_active": {
+              "type": "boolean",
+              "description": "Whether the member is active"
+            }
+          },
+          "description": "Member object"
+        }
+      },
+      "description": "Response containing the newly added conversation member"
+    },
+    "ConversationMemberCreateRequest": {
+      "type": "object",
+      "title": "Conversation Member Create Request",
+      "required": [
+        "user_id"
+      ],
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "UUID of the user to add"
+        }
+      },
+      "description": "Request body for adding a member to a conversation"
+    },
+    "ConversationResponse": {
+      "type": "object",
+      "title": "Conversation Response",
+      "properties": {
+        "data": {
+          "description": "Conversation object",
+          "$ref": "#/definitions/Conversation"
+        }
+      },
+      "description": "Response containing a single conversation"
+    },
+    "ConversationCreateRequest": {
+      "type": "object",
+      "title": "Conversation Create Request",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "user_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of user UUIDs to add as members"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "group"
+          ],
+          "description": "Conversation type (direct or group)"
+        },
+        "other_user_id": {
+          "type": "string",
+          "description": "Other user UUID (for direct conversations)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Conversation name (required for group conversations)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata"
+        },
+        "external_group_id": {
+          "type": "string",
+          "description": "External group identifier (optional, for group conversations)"
+        }
+      },
+      "description": "Request body for creating a conversation"
+    },
+    "ConversationsResponse": {
+      "type": "object",
+      "title": "Conversations Response",
+      "properties": {
+        "meta": {
+          "description": "Response metadata",
+          "$ref": "#/definitions/ConversationsIndexMeta"
+        },
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Conversation"
+          },
+          "description": "List of conversations"
+        }
+      },
+      "description": "Response containing a list of conversations"
+    },
+    "AttachmentDeleteResponse": {
+      "type": "object",
+      "title": "Attachment Delete Response",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Attachment UUID"
+            },
+            "deleted": {
+              "type": "boolean",
+              "description": "Whether the attachment was deleted"
+            }
+          },
+          "description": "Delete result"
+        }
+      },
+      "description": "Response after deleting an attachment"
+    },
+    "AttachmentResponse": {
+      "type": "object",
+      "title": "Attachment Response",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Success message"
+        },
+        "data": {
+          "description": "Attachment object",
+          "$ref": "#/definitions/Attachment"
+        }
+      },
+      "description": "Response containing an attachment object"
+    },
+    "ConversationMember": {
+      "type": "object",
+      "title": "Conversation Member",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User UUID"
+        },
+        "role": {
+          "type": "string",
+          "description": "Member role (e.g. member, admin)"
+        },
+        "joined_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Timestamp when the member joined"
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the member is active"
+        }
+      },
+      "description": "A member of a conversation"
+    },
+    "Conversation": {
+      "type": "object",
+      "title": "Conversation",
+      "properties": {
+        "updated_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Last update timestamp"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "group"
+          ],
+          "description": "Conversation type (direct or group)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Conversation name (from metadata)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata"
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the conversation is active"
+        },
+        "inserted_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Creation timestamp"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversation UUID"
+        },
+        "external_group_id": {
+          "type": "string",
+          "description": "External group identifier"
+        }
+      },
+      "description": "A conversation object"
+    },
+    "Attachment": {
+      "type": "object",
+      "title": "Attachment",
+      "properties": {
+        "uploaded_at": {
+          "type": "string",
+          "description": "Upload timestamp"
+        },
+        "mime_type": {
+          "type": "string",
+          "description": "MIME type of the file"
+        },
+        "message_id": {
+          "type": "string",
+          "description": "Message UUID"
+        },
+        "id": {
+          "type": "string",
+          "description": "Attachment UUID"
+        },
+        "file_url": {
+          "type": "string",
+          "description": "URL to access the file"
+        },
+        "file_size": {
+          "type": "integer",
+          "description": "File size in bytes"
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Original filename"
+        }
+      },
+      "description": "A file attachment object"
+    },
+    "Message": {
+      "type": "object",
+      "title": "Message",
+      "properties": {
+        "updated_at": {
+          "type": "string",
+          "description": "Last update timestamp"
+        },
+        "sent_at": {
+          "type": "string",
+          "description": "Sent timestamp"
+        },
+        "sender_id": {
+          "type": "string",
+          "description": "Sender UUID"
+        },
+        "reply_to_id": {
+          "type": "string",
+          "description": "UUID of message being replied to"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata"
+        },
+        "message_type": {
+          "type": "string",
+          "description": "Message type"
+        },
+        "is_edited": {
+          "type": "boolean",
+          "description": "Whether the message has been edited"
+        },
+        "is_deleted": {
+          "type": "boolean",
+          "description": "Whether the message is deleted"
+        },
+        "inserted_at": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "id": {
+          "type": "string",
+          "description": "Message UUID"
+        },
+        "edited_at": {
+          "type": "string",
+          "description": "Edit timestamp"
+        },
+        "conversation_id": {
+          "type": "string",
+          "description": "Conversation UUID"
+        },
+        "content": {
+          "type": "string",
+          "description": "Message content"
+        }
+      },
+      "description": "A message object"
+    }
+  },
+  "host": "localhost:4000",
+  "info": {
+    "contact": {
+      "email": "gabriel.lopez@epitech.eu",
+      "name": "Whispr Team"
+    },
+    "title": "Whispr Messaging Service API",
+    "description": "RESTful API for the Whispr Messaging Service.\n\nThis service handles:\n- Real-time messaging between users\n- Conversation management (1-on-1 and group chats)\n- Message delivery and read receipts\n- Message attachments\n- Conversation members management\n\n## Authentication\nAll endpoints (except health checks) require a valid JWT token in the Authorization header:\n```\nAuthorization: Bearer <your-jwt-token>\n```\n",
+    "version": "1.0.0"
+  }
+}
