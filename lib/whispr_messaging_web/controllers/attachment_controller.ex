@@ -46,7 +46,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
     produces("application/json")
     parameter(:file, :formData, :file, "The file to upload", required: true)
     parameter(:message_id, :formData, :string, "UUID of the message", required: true)
-    parameter(:user_id, :formData, :string, "UUID of the user uploading", required: true)
     security([%{Bearer: []}])
     response(201, "Created", Schema.ref(:AttachmentResponse))
     response(400, "Bad Request")
@@ -79,7 +78,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
           description("Response containing an attachment object")
 
           properties do
-            data(:object, "Attachment object")
+            data(Schema.ref(:Attachment), "Attachment object")
             message(:string, "Success message")
           end
         end,
@@ -88,9 +87,16 @@ defmodule WhisprMessagingWeb.AttachmentController do
           title("Attachment Delete Response")
           description("Response after deleting an attachment")
 
-          properties do
-            data(:object, "Delete result")
-          end
+          property(
+            :data,
+            Schema.new do
+              properties do
+                id(:string, "Attachment UUID")
+                deleted(:boolean, "Whether the attachment was deleted")
+              end
+            end,
+            "Delete result"
+          )
         end
     }
   end
@@ -102,7 +108,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
   Multipart form data:
   - file: the file to upload
   - message_id: UUID of the message
-  - user_id: UUID of the user uploading
   """
   def upload(conn, %{"file" => upload, "message_id" => message_id}) do
     user_id = conn.assigns[:user_id]
@@ -161,7 +166,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
     description("Downloads a file attachment by ID")
     produces("application/octet-stream")
     parameter(:id, :path, :string, "Attachment UUID", required: true)
-    parameter(:user_id, :query, :string, "User UUID", required: true)
     security([%{Bearer: []}])
     response(200, "Success - File content")
     response(403, "Forbidden - User cannot access this file")
@@ -170,7 +174,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Download a file attachment.
-  GET /api/v1/attachments/:id/download?user_id=uuid
+  GET /api/v1/attachments/:id/download
   """
   def download(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]
@@ -249,7 +253,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
     description("Deletes a file attachment and removes the file from storage")
     produces("application/json")
     parameter(:id, :path, :string, "Attachment UUID", required: true)
-    parameter(:user_id, :query, :string, "User UUID", required: true)
     security([%{Bearer: []}])
     response(200, "Success", Schema.ref(:AttachmentDeleteResponse))
     response(403, "Forbidden - User cannot delete this attachment")
@@ -258,7 +261,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Delete an attachment.
-  DELETE /api/v1/attachments/:id?user_id=uuid
+  DELETE /api/v1/attachments/:id
   """
   def delete(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]

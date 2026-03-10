@@ -14,9 +14,8 @@ defmodule WhisprMessagingWeb.ConversationController do
   swagger_path :index do
     get("/conversations")
     summary("List user conversations")
-    description("Lists all conversations for a specific user with optional filtering")
+    description("Lists all conversations for the authenticated user with optional filtering")
     produces("application/json")
-    parameter(:user_id, :query, :string, "User UUID", required: true)
 
     parameter(:limit, :query, :integer, "Maximum number of conversations to return (max: 100)",
       required: false
@@ -33,11 +32,10 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   @doc """
-  Lists conversations for a user.
-  GET /api/v1/conversations?user_id=uuid
+  Lists conversations for the authenticated user.
+  GET /api/v1/conversations
 
   Query params:
-  - user_id: user UUID (required if not authenticated)
   - limit: number of conversations (default: 50, max: 100)
   - type: filter by type (direct|group)
   """
@@ -241,7 +239,6 @@ defmodule WhisprMessagingWeb.ConversationController do
     description("Retrieves a specific conversation by ID with member details")
     produces("application/json")
     parameter(:id, :path, :string, "Conversation UUID", required: true)
-    parameter(:user_id, :query, :string, "User UUID (for permission check)", required: false)
     security([%{Bearer: []}])
     response(200, "Success", Schema.ref(:ConversationDetailResponse))
     response(403, "Forbidden - User is not a member")
@@ -250,7 +247,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Gets a single conversation.
-  GET /api/v1/conversations/:id?user_id=uuid
+  GET /api/v1/conversations/:id
   """
   def show(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
@@ -549,7 +546,20 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Request body for creating a conversation")
 
           properties do
-            conversation(:object, "Conversation parameters")
+            type(:string, "Conversation type (direct or group)",
+              required: true,
+              enum: [:direct, :group]
+            )
+
+            other_user_id(:string, "Other user UUID (for direct conversations)")
+            user_ids(Schema.array(:string), "List of user UUIDs to add as members")
+            name(:string, "Conversation name (required for group conversations)")
+            metadata(:object, "Additional metadata")
+
+            external_group_id(
+              :string,
+              "External group identifier (optional, for group conversations)"
+            )
           end
         end,
       ConversationUpdateRequest:
@@ -558,7 +568,8 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Request body for updating a conversation")
 
           properties do
-            conversation(:object, "Conversation update parameters")
+            name(:string, "Conversation name")
+            metadata(:object, "Additional metadata")
           end
         end,
       Conversation:
@@ -567,14 +578,14 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("A conversation object")
 
           properties do
-            id(:string, "Conversation UUID")
-            type(:string, "Conversation type")
-            name(:string, "Conversation name")
-            external_group_id(:string, "External group ID")
+            id(:string, "Conversation UUID", format: :uuid)
+            type(:string, "Conversation type (direct or group)", enum: [:direct, :group])
+            name(:string, "Conversation name (from metadata)")
+            external_group_id(:string, "External group identifier")
             metadata(:object, "Additional metadata")
             is_active(:boolean, "Whether the conversation is active")
-            inserted_at(:string, "Creation timestamp")
-            updated_at(:string, "Last update timestamp")
+            inserted_at(:string, "Creation timestamp", format: :datetime)
+            updated_at(:string, "Last update timestamp", format: :datetime)
           end
         end,
       ConversationWithMembers:
@@ -583,16 +594,16 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("A conversation object with member details")
 
           properties do
-            id(:string, "Conversation UUID")
-            type(:string, "Conversation type")
-            name(:string, "Conversation name")
-            external_group_id(:string, "External group ID")
+            id(:string, "Conversation UUID", format: :uuid)
+            type(:string, "Conversation type (direct or group)", enum: [:direct, :group])
+            name(:string, "Conversation name (from metadata)")
+            external_group_id(:string, "External group identifier")
             metadata(:object, "Additional metadata")
             is_active(:boolean, "Whether the conversation is active")
-            members(:array, "List of conversation members")
-            member_count(:integer, "Number of members")
-            inserted_at(:string, "Creation timestamp")
-            updated_at(:string, "Last update timestamp")
+            members(Schema.array(:ConversationMember), "List of conversation members")
+            member_count(:integer, "Number of members in the conversation")
+            inserted_at(:string, "Creation timestamp", format: :datetime)
+            updated_at(:string, "Last update timestamp", format: :datetime)
           end
         end,
       ConversationMember:
@@ -601,9 +612,20 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("A member of a conversation")
 
           properties do
-            user_id(:string, "User UUID")
-            role(:string, "Member role")
-            joined_at(:string, "Join timestamp")
+            user_id(:string, "User UUID", format: :uuid)
+            role(:string, "Member role (e.g. member, admin)")
+            joined_at(:string, "Timestamp when the member joined", format: :datetime)
+            is_active(:boolean, "Whether the member is active")
+          end
+        end,
+      ConversationsIndexMeta:
+        swagger_schema do
+          title("Conversations Index Meta")
+          description("Metadata for conversations list response")
+
+          properties do
+            count(:integer, "Total number of conversations")
+            user_id(:string, "The user ID used for the query", format: :uuid)
           end
         end,
       ConversationsResponse:
@@ -612,8 +634,8 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Response containing a list of conversations")
 
           properties do
-            data(:array, "List of conversations")
-            meta(:object, "Metadata")
+            data(Schema.array(:Conversation), "List of conversations")
+            meta(Schema.ref(:ConversationsIndexMeta), "Response metadata")
           end
         end,
       ConversationResponse:
@@ -622,7 +644,7 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Response containing a single conversation")
 
           properties do
-            data(:object, "Conversation object")
+            data(Schema.ref(:Conversation), "Conversation object")
           end
         end,
       ConversationDetailResponse:
@@ -631,7 +653,18 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Response containing a conversation with member details")
 
           properties do
-            data(:object, "Conversation object with members")
+            data(Schema.ref(:ConversationWithMembers), "Conversation object with members")
+          end
+        end,
+      ConversationDeleteResult:
+        swagger_schema do
+          title("Conversation Delete Result")
+          description("Result data from deleting a conversation")
+
+          properties do
+            id(:string, "Conversation UUID", format: :uuid)
+            is_active(:boolean, "Whether the conversation is active (false after deletion)")
+            deleted_at(:string, "Deletion timestamp", format: :datetime)
           end
         end,
       ConversationDeleteResponse:
@@ -640,7 +673,7 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Response after deleting a conversation")
 
           properties do
-            data(:object, "Delete result")
+            data(Schema.ref(:ConversationDeleteResult), "Delete result")
           end
         end
     }

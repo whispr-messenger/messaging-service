@@ -241,7 +241,6 @@ defmodule WhisprMessagingWeb.MessageController do
     description("Deletes a message (soft delete)")
     produces("application/json")
     parameter(:id, :path, :string, "Message UUID", required: true)
-    parameter(:user_id, :query, :string, "User UUID", required: true)
     security([%{Bearer: []}])
     response(200, "Success", Schema.ref(:MessageDeleteResponse))
     response(403, "Forbidden - User cannot delete this message")
@@ -309,18 +308,34 @@ defmodule WhisprMessagingWeb.MessageController do
           title("Message Create Request")
           description("Request body for creating a message")
 
-          properties do
-            message(:object, "Message parameters")
-          end
+          property(
+            :message,
+            Schema.new do
+              properties do
+                content(:string, "Message content", required: true)
+                message_type(:string, "Message type")
+                metadata(:object, "Additional metadata")
+                reply_to_id(:string, "UUID of message being replied to")
+              end
+            end,
+            "Message parameters"
+          )
         end,
       MessageUpdateRequest:
         swagger_schema do
           title("Message Update Request")
           description("Request body for updating a message")
 
-          properties do
-            message(:object, "Message update parameters")
-          end
+          property(
+            :message,
+            Schema.new do
+              properties do
+                content(:string, "Message content")
+                metadata(:object, "Additional metadata")
+              end
+            end,
+            "Message update parameters"
+          )
         end,
       Message:
         swagger_schema do
@@ -349,9 +364,20 @@ defmodule WhisprMessagingWeb.MessageController do
           description("Response containing a list of messages")
 
           properties do
-            data(:array, "List of messages")
-            meta(:object, "Metadata")
+            data(Schema.array(:Message), "List of messages")
           end
+
+          property(
+            :meta,
+            Schema.new do
+              properties do
+                count(:integer, "Total number of messages returned")
+                conversation_id(:string, "Conversation UUID")
+                has_more(:boolean, "Whether more messages are available")
+              end
+            end,
+            "Pagination metadata"
+          )
         end,
       MessageResponse:
         swagger_schema do
@@ -359,8 +385,26 @@ defmodule WhisprMessagingWeb.MessageController do
           description("Response containing a single message")
 
           properties do
-            data(:object, "Message object")
-            meta(:object, "Metadata")
+            data(Schema.ref(:Message), "Message object")
+          end
+
+          property(
+            :meta,
+            Schema.new do
+              properties do
+                conversation_id(:string, "Conversation UUID")
+              end
+            end,
+            "Response metadata"
+          )
+        end,
+      MessageShowResponse:
+        swagger_schema do
+          title("Message Show Response")
+          description("Response containing a single message without metadata")
+
+          properties do
+            data(Schema.ref(:Message), "Message object")
           end
         end,
       MessageUpdateResponse:
@@ -369,18 +413,37 @@ defmodule WhisprMessagingWeb.MessageController do
           description("Response after updating a message")
 
           properties do
-            data(:object, "Updated message object")
-            meta(:object, "Metadata")
+            data(Schema.ref(:Message), "Updated message object")
           end
+
+          property(
+            :meta,
+            Schema.new do
+              properties do
+                edited(:boolean, "Whether the message was edited")
+                edited_at(:string, "Timestamp of the edit")
+              end
+            end,
+            "Edit metadata"
+          )
         end,
       MessageDeleteResponse:
         swagger_schema do
           title("Message Delete Response")
           description("Response after deleting a message")
 
-          properties do
-            data(:object, "Delete result")
-          end
+          property(
+            :data,
+            Schema.new do
+              properties do
+                id(:string, "Message UUID")
+                is_deleted(:boolean, "Whether the message is deleted")
+                delete_for_everyone(:boolean, "Whether the message was deleted for everyone")
+                deleted_at(:string, "Deletion timestamp")
+              end
+            end,
+            "Delete result"
+          )
         end
     }
   end
