@@ -15,7 +15,7 @@ config :whispr_messaging, WhisprMessaging.Repo,
 
 # Configure the endpoint
 config :whispr_messaging, WhisprMessagingWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4002],
+  http: [ip: {127, 0, 0, 1}, port: 4012],
   secret_key_base:
     "VGVzdGluZ1NlY3JldEtleUJhc2VGb3JXaGlzcHJNZXNzYWdpbmdTZXJ2aWNlVGVzdEVudmlyb25tZW50",
   server: false
@@ -39,7 +39,7 @@ config :whispr_messaging, WhisprMessaging.PubSub,
   adapter: Phoenix.PubSub.PG2
 
 # Configure gRPC for testing
-config :whispr_messaging, :grpc_port, 50053
+config :whispr_messaging, :grpc_port, 40011
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime

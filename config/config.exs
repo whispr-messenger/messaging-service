@@ -39,7 +39,7 @@ config :whispr_messaging, :redis,
 
 # gRPC configuration
 config :whispr_messaging,
-  grpc_port: 50052
+  grpc_port: 40010
 
 # Conversation GenServer configuration
 config :whispr_messaging, :conversations,

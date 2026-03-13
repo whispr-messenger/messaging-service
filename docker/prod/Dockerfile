@@ -84,8 +84,8 @@ RUN addgroup -g 1000 whispr && \
 # Set environment variables (defaults, can be overridden)
 ENV MIX_ENV=prod \
     LANG=C.UTF-8 \
-    HTTP_PORT=4000 \
-    GRPC_PORT=4001 \
+    HTTP_PORT=4010 \
+    GRPC_PORT=40010 \
     PHX_HOST=0.0.0.0 \
     PHX_PORT=3999 \
     LOG_LEVEL=info
@@ -107,11 +107,11 @@ RUN chmod +x /app/entrypoint.sh /app/check-env.sh
 USER whispr
 
 # Expose ports (HTTP + gRPC)
-EXPOSE 4000 4001
+EXPOSE 4010 40010
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${HTTP_PORT:-4000}/api/v1/health?type=live || exit 1
+    CMD curl -f http://localhost:${HTTP_PORT:-4010}/api/v1/health?type=live || exit 1
 
 # OCI Labels
 LABEL org.opencontainers.image.title="Whispr Messaging Service" \
