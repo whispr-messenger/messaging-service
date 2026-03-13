@@ -115,4 +115,4 @@ config :whispr_messaging, :messages,
   cleanup_batch_size: String.to_integer(System.get_env("CLEANUP_BATCH_SIZE", "1000"))
 
 config :whispr_messaging,
-  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "50052"))
+  grpc_port: String.to_integer(System.get_env("GRPC_PORT", "40010"))

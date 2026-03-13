@@ -39,6 +39,8 @@ defmodule WhisprMessagingWeb.MessageController do
   Query params:
   - limit: number of messages to return (default: 50, max: 100)
   - before: timestamp to get messages before (pagination)
+
+  Filters out messages individually deleted by the requesting user.
   """
   def index(conn, %{"id" => conversation_id} = params) do
     limit = min(String.to_integer(params["limit"] || "50"), 100)
@@ -52,7 +54,9 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
-        messages = Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+        messages =
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+          |> Messages.filter_user_deleted_messages(user_id)
 
         json(conn, %{
           data: render_messages(messages),
@@ -248,11 +252,14 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   @doc """
-  Deletes a message (soft delete).
+  Deletes a message.
   DELETE /api/v1/messages/:id
+
+  Query params:
+  - delete_for_everyone: "true" to delete for all users (sender only, within time limit)
+    If false/absent, deletes only for the requesting user.
   """
   def delete(conn, %{"id" => id} = params) do
-    # Get user_id from conn.assigns
     user_id = conn.assigns[:user_id]
 
     delete_for_everyone =
@@ -263,15 +270,159 @@ defmodule WhisprMessagingWeb.MessageController do
       |> put_status(:unauthorized)
       |> json(%{error: "User ID required"})
     else
-      with {:ok, message} <- Messages.delete_message(id, user_id, delete_for_everyone) do
+      case Messages.delete_message(id, user_id, delete_for_everyone) do
+        {:ok, message} ->
+          json(conn, %{
+            data: %{
+              id: message.id,
+              is_deleted: if(delete_for_everyone, do: message.is_deleted, else: false),
+              delete_for_everyone: delete_for_everyone,
+              deleted_at: message.updated_at
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Message not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "Only the sender can delete a message for everyone"})
+
+        {:error, :not_deletable} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Message can no longer be deleted for everyone"})
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    end
+  end
+
+  @doc """
+  Gets edit history for a message.
+  GET /api/v1/messages/:id/edit_history
+  """
+  def edit_history(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      with {:ok, _message} <- Messages.get_message(id) do
+        history = Messages.get_edit_history(id)
+
+        json(conn, %{
+          data:
+            Enum.map(history, fn h ->
+              %{
+                id: h.id,
+                message_id: h.message_id,
+                old_content: h.old_content,
+                edited_by: h.edited_by,
+                edited_at: h.edited_at
+              }
+            end)
+        })
+      end
+    end
+  end
+
+  @doc """
+  Gets delivery status for a message.
+  GET /api/v1/messages/:id/status
+  """
+  def delivery_status(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      with {:ok, _message} <- Messages.get_message(id),
+           {:ok, summary} <- Messages.get_read_receipt_summary(id) do
+        statuses = Messages.get_delivery_statuses(id)
+
         json(conn, %{
           data: %{
-            id: message.id,
-            is_deleted: message.is_deleted,
-            delete_for_everyone: message.delete_for_everyone,
-            deleted_at: message.updated_at
+            message_id: id,
+            summary: summary,
+            statuses:
+              Enum.map(statuses, fn ds ->
+                %{
+                  user_id: ds.user_id,
+                  delivered_at: ds.delivered_at,
+                  read_at: ds.read_at
+                }
+              end)
           }
         })
+      end
+    end
+  end
+
+  @doc """
+  Marks a message as delivered for the current user.
+  POST /api/v1/messages/:id/delivered
+  """
+  def mark_delivered(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Messages.mark_message_delivered(id, user_id) do
+        {:ok, delivery_status} ->
+          json(conn, %{
+            data: %{
+              message_id: id,
+              status: "delivered",
+              delivered_at: delivery_status.delivered_at
+            }
+          })
+
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
+  @doc """
+  Marks a message as read for the current user.
+  POST /api/v1/messages/:id/read
+  """
+  def mark_read(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Messages.mark_message_read(id, user_id) do
+        {:ok, delivery_status} ->
+          json(conn, %{
+            data: %{
+              message_id: id,
+              status: "read",
+              read_at: delivery_status.read_at
+            }
+          })
+
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: inspect(reason)})
       end
     end
   end

@@ -12,7 +12,10 @@ defmodule WhisprMessaging.Messages do
     DeliveryStatus,
     Message,
     MessageAttachment,
-    MessageReaction
+    MessageEditHistory,
+    MessageReaction,
+    PinnedMessage,
+    UserDeletedMessage
   }
 
   alias WhisprMessaging.Repo
@@ -108,14 +111,32 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Edits a message (content and metadata).
+  Stores previous content in edit history before updating.
   """
   def edit_message(message_id, user_id, new_content, metadata \\ %{}) do
     with {:ok, message} <- get_message(message_id),
          :ok <- validate_edit_permissions(message, user_id),
          true <- Message.editable?(message) do
-      message
-      |> Message.edit_changeset(new_content, metadata)
-      |> Repo.update()
+      Repo.transaction(fn ->
+        # Store old content in edit history
+        {:ok, _history} =
+          %MessageEditHistory{}
+          |> MessageEditHistory.changeset(%{
+            message_id: message.id,
+            old_content: message.content,
+            edited_by: user_id,
+            edited_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          })
+          |> Repo.insert()
+
+        # Update the message
+        case message
+             |> Message.edit_changeset(new_content, metadata)
+             |> Repo.update() do
+          {:ok, updated_message} -> updated_message
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
     else
       {:error, :not_found} -> {:error, :not_found}
       {:error, :unauthorized} -> {:error, :unauthorized}
@@ -125,22 +146,44 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
-  Soft deletes a message.
+  Soft deletes a message for everyone (only the sender can do this, within time limit).
   """
-  def delete_message(message_id, user_id, delete_for_everyone \\ false) do
+  def delete_message(message_id, user_id, true = _delete_for_everyone) do
     with {:ok, message} <- get_message(message_id),
-         :ok <- validate_delete_permissions(message, user_id),
+         :ok <- validate_sender_only(message, user_id),
          true <- Message.deletable?(message) do
       message
-      |> Message.delete_changeset(delete_for_everyone)
+      |> Message.delete_changeset(true)
       |> Repo.update()
     else
       {:error, :not_found} -> {:error, :not_found}
-      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :forbidden} -> {:error, :forbidden}
       false -> {:error, :not_deletable}
       error -> error
     end
   end
+
+  @doc """
+  Soft deletes a message for the current user only.
+  Any conversation member can delete a message for themselves.
+  """
+  def delete_message(message_id, user_id, false) do
+    with {:ok, message} <- get_message(message_id) do
+      %UserDeletedMessage{}
+      |> UserDeletedMessage.changeset(%{
+        message_id: message.id,
+        user_id: user_id,
+        deleted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.insert()
+      |> case do
+        {:ok, _} -> {:ok, message}
+        {:error, changeset} -> {:error, changeset}
+      end
+    end
+  end
+
+  def delete_message(message_id, user_id, _), do: delete_message(message_id, user_id, false)
 
   @doc """
   Searches messages by metadata content.
@@ -354,6 +397,54 @@ defmodule WhisprMessaging.Messages do
     |> Enum.into(%{})
   end
 
+  # Pinned Messages
+
+  @doc """
+  Pins a message in a conversation.
+  """
+  def pin_message(message_id, user_id) do
+    with {:ok, message} <- get_message(message_id),
+         true <- not message.is_deleted || {:error, :message_deleted} do
+      %PinnedMessage{}
+      |> PinnedMessage.changeset(%{
+        message_id: message_id,
+        conversation_id: message.conversation_id,
+        pinned_by: user_id,
+        pinned_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.insert()
+    else
+      {:error, :message_deleted} -> {:error, :message_deleted}
+      {:error, :not_found} -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  @doc """
+  Unpins a message.
+  """
+  def unpin_message(message_id) do
+    case Repo.one(PinnedMessage.by_message_query(message_id)) do
+      nil -> {:error, :not_found}
+      pinned_message -> Repo.delete(pinned_message)
+    end
+  end
+
+  @doc """
+  Lists all pinned messages for a conversation.
+  """
+  def list_pinned_messages(conversation_id) do
+    PinnedMessage.by_conversation_query(conversation_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Checks if a message is pinned.
+  """
+  def message_pinned?(message_id) do
+    Repo.exists?(PinnedMessage.by_message_query(message_id))
+  end
+
   # Helper functions
 
   defp get_or_create_delivery_status(message_id, user_id) do
@@ -374,11 +465,11 @@ defmodule WhisprMessaging.Messages do
 
   defp validate_edit_permissions(_message, _user_id), do: {:error, :forbidden}
 
-  defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id)
+  defp validate_sender_only(%Message{sender_id: sender_id}, user_id)
        when sender_id == user_id,
        do: :ok
 
-  defp validate_delete_permissions(_message, _user_id), do: {:error, :forbidden}
+  defp validate_sender_only(_message, _user_id), do: {:error, :forbidden}
 
   # Text message helpers
 
@@ -467,5 +558,74 @@ defmodule WhisprMessaging.Messages do
   def user_can_access_message?(conversation_id, user_id) do
     alias WhisprMessaging.Conversations
     Conversations.conversation_member?(conversation_id, user_id)
+  end
+
+  # Per-user deletion operations
+
+  @doc """
+  Checks if a message has been deleted by a specific user.
+  """
+  def message_deleted_for_user?(message_id, user_id) do
+    Repo.exists?(UserDeletedMessage.by_message_and_user_query(message_id, user_id))
+  end
+
+  @doc """
+  Filters out messages that a user has individually deleted.
+  """
+  def filter_user_deleted_messages(messages, user_id) do
+    message_ids = Enum.map(messages, & &1.id)
+
+    deleted_ids =
+      UserDeletedMessage.deleted_message_ids_for_user_query(user_id, message_ids)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.reject(messages, fn msg ->
+      MapSet.member?(deleted_ids, msg.id)
+    end)
+  end
+
+  # Edit history operations
+
+  @doc """
+  Gets the edit history for a message.
+  """
+  def get_edit_history(message_id) do
+    MessageEditHistory.by_message_query(message_id)
+    |> Repo.all()
+  end
+
+  # Delivery status query operations
+
+  @doc """
+  Gets delivery statuses for a specific message.
+  """
+  def get_delivery_statuses(message_id) do
+    DeliveryStatus.by_message_query(message_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Marks multiple messages as delivered for a user in bulk.
+  """
+  def mark_messages_delivered(message_ids, user_id) when is_list(message_ids) do
+    delivered_time = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    update_query =
+      from ds in DeliveryStatus,
+        where: ds.user_id == ^user_id,
+        where: ds.message_id in ^message_ids,
+        where: is_nil(ds.delivered_at),
+        update: [
+          set: [
+            delivered_at: ^delivered_time,
+            updated_at: ^delivered_time
+          ]
+        ]
+
+    case Repo.update_all(update_query, []) do
+      {count, _} -> {:ok, count}
+      error -> error
+    end
   end
 end

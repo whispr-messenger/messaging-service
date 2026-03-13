@@ -61,9 +61,16 @@ defmodule WhisprMessagingWeb.Router do
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
+    get "/conversations/:id/pins", PinController, :index
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+    get "/messages/:id/edit_history", MessageController, :edit_history
+    get "/messages/:id/status", MessageController, :delivery_status
+    post "/messages/:id/delivered", MessageController, :mark_delivered
+    post "/messages/:id/read", MessageController, :mark_read
+    post "/messages/:id/pin", PinController, :create
+    delete "/messages/:id/pin", PinController, :delete
 
     # Attachment routes
     post "/attachments/upload", AttachmentController, :upload

@@ -70,7 +70,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     {:noreply, socket}
   end
 
-  # Handle new message sending
+  # Handle new message sending (with optional reply_to_id for quote/reply)
   @impl true
   def handle_in(
         "new_message",
@@ -84,15 +84,18 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     conversation_id = socket.assigns.conversation_id
     sender_id = socket.assigns.user_id
     metadata = Map.get(payload, "metadata", %{})
+    reply_to_id = Map.get(payload, "reply_to_id")
 
-    message_attrs = %{
-      conversation_id: conversation_id,
-      sender_id: sender_id,
-      message_type: message_type,
-      content: encrypted_content,
-      client_random: client_random,
-      metadata: metadata
-    }
+    message_attrs =
+      %{
+        conversation_id: conversation_id,
+        sender_id: sender_id,
+        message_type: message_type,
+        content: encrypted_content,
+        client_random: client_random,
+        metadata: metadata
+      }
+      |> maybe_put_reply_to_id(reply_to_id)
 
     case ConversationServer.send_message(conversation_id, message_attrs) do
       {:ok, message} ->
@@ -120,22 +123,24 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       }}, socket}
   end
 
-  # Handle message editing
+  # Handle message editing (stores edit history automatically)
   def handle_in(
         "edit_message",
         %{
           "message_id" => message_id,
-          "content" => new_content,
-          "metadata" => metadata
-        },
+          "content" => new_content
+        } = payload,
         socket
       ) do
     user_id = socket.assigns.user_id
+    metadata = Map.get(payload, "metadata", %{})
 
-    case Messages.edit_message(message_id, user_id, new_content, metadata || %{}) do
+    case Messages.edit_message(message_id, user_id, new_content, metadata) do
       {:ok, message} ->
         broadcast(socket, "message_edited", %{
-          message: serialize_message(message)
+          message: serialize_message(message),
+          edited_by: user_id,
+          edited_at: message.edited_at
         })
 
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
@@ -149,30 +154,36 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, :unauthorized} ->
         {:reply, {:error, %{reason: "unauthorized"}}, socket}
 
-      {:error, _} ->
+      {:error, :not_editable} ->
         {:reply, {:error, %{reason: "message_not_editable"}}, socket}
+
+      {:error, _} ->
+        {:reply, {:error, %{reason: "edit_failed"}}, socket}
     end
   end
 
-  # Handle message deletion
+  # Handle message deletion (supports both "for me" and "for everyone")
   def handle_in(
         "delete_message",
-        %{
-          "message_id" => message_id,
-          "delete_for_everyone" => delete_for_everyone
-        },
+        %{"message_id" => message_id} = payload,
         socket
       ) do
     user_id = socket.assigns.user_id
+    delete_for_everyone = Map.get(payload, "delete_for_everyone", false)
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
       {:ok, message} ->
-        broadcast(socket, "message_deleted", %{
-          message_id: message_id,
-          delete_for_everyone: delete_for_everyone
-        })
+        if delete_for_everyone do
+          # Broadcast deletion to all channel members
+          broadcast(socket, "message_deleted", %{
+            message_id: message_id,
+            delete_for_everyone: true,
+            deleted_by: user_id
+          })
+        end
 
-        {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+        # Always reply to the sender with success
+        {:reply, {:ok, %{message: serialize_message(message), delete_for_everyone: delete_for_everyone}}, socket}
 
       {:error, :not_found} ->
         {:reply, {:error, %{reason: "message_not_found"}}, socket}
@@ -183,8 +194,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, :forbidden} ->
         {:reply, {:error, %{reason: "forbidden"}}, socket}
 
-      {:error, :unauthorized} ->
-        {:reply, {:error, %{reason: "unauthorized"}}, socket}
+      {:error, _} ->
+        {:reply, {:error, %{reason: "delete_failed"}}, socket}
     end
   end
 
@@ -302,7 +313,102 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
+  # Handle message pinning
+  def handle_in(
+        "pin_message",
+        %{"message_id" => message_id},
+        socket
+      ) do
+    user_id = socket.assigns.user_id
+
+    case Messages.pin_message(message_id, user_id) do
+      {:ok, pinned_message} ->
+        broadcast(socket, "message_pinned", %{
+          message_id: message_id,
+          pinned_by: user_id,
+          pinned_at: pinned_message.pinned_at
+        })
+
+        {:reply, {:ok, %{message_id: message_id, pinned: true}}, socket}
+
+      {:error, :not_found} ->
+        {:reply, {:error, %{reason: "message_not_found"}}, socket}
+
+      {:error, :message_deleted} ->
+        {:reply, {:error, %{reason: "message_deleted"}}, socket}
+
+      {:error, %Ecto.Changeset{}} ->
+        {:reply, {:error, %{reason: "already_pinned"}}, socket}
+    end
+  end
+
+  # Handle message unpinning
+  def handle_in(
+        "unpin_message",
+        %{"message_id" => message_id},
+        socket
+      ) do
+    user_id = socket.assigns.user_id
+
+    case Messages.unpin_message(message_id) do
+      {:ok, _pinned_message} ->
+        broadcast(socket, "message_unpinned", %{
+          message_id: message_id,
+          unpinned_by: user_id
+        })
+
+        {:reply, {:ok, %{message_id: message_id, unpinned: true}}, socket}
+
+      {:error, :not_found} ->
+        {:reply, {:error, %{reason: "not_pinned"}}, socket}
+    end
+  end
+
+  # Handle get edit history for a message
+  def handle_in("get_edit_history", %{"message_id" => message_id}, socket) do
+    history = Messages.get_edit_history(message_id)
+
+    serialized =
+      Enum.map(history, fn h ->
+        %{
+          id: h.id,
+          message_id: h.message_id,
+          old_content: h.old_content,
+          edited_by: h.edited_by,
+          edited_at: h.edited_at
+        }
+      end)
+
+    {:reply, {:ok, %{history: serialized}}, socket}
+  end
+
+  # Handle get delivery status for a message
+  def handle_in("get_delivery_status", %{"message_id" => message_id}, socket) do
+    case Messages.get_read_receipt_summary(message_id) do
+      {:ok, summary} ->
+        statuses = Messages.get_delivery_statuses(message_id)
+
+        serialized =
+          Enum.map(statuses, fn ds ->
+            %{
+              user_id: ds.user_id,
+              delivered_at: ds.delivered_at,
+              read_at: ds.read_at
+            }
+          end)
+
+        {:reply, {:ok, %{summary: summary, statuses: serialized}}, socket}
+
+      {:error, reason} ->
+        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+    end
+  end
+
   # Private functions
+
+  defp maybe_put_reply_to_id(attrs, nil), do: attrs
+  defp maybe_put_reply_to_id(attrs, ""), do: attrs
+  defp maybe_put_reply_to_id(attrs, reply_to_id), do: Map.put(attrs, :reply_to_id, reply_to_id)
 
   defp verify_conversation_access(conversation_id, user_id) do
     # First check if conversation exists
