@@ -34,9 +34,42 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   end
 
   @doc """
-  Ajoute un membre à une conversation.
+  Adds one or more members to a conversation.
   POST /api/v1/conversations/:id/members
+
+  Supports both single member (user_id) and batch (user_ids) requests.
   """
+  def create(conn, %{"id" => id, "user_ids" => user_ids} = _params) when is_list(user_ids) do
+    current_user_id = conn.assigns[:user_id]
+
+    case Conversations.add_conversation_members(id, user_ids, current_user_id) do
+      {:ok, members} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: Enum.map(members, &render_member/1)})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Conversation not found"})
+
+      {:error, :forbidden} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "Not authorized to add members"})
+
+      {:error, :not_group} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Batch add is only supported for group conversations"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: inspect(reason)})
+    end
+  end
+
   def create(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
     current_user_id = conn.assigns[:user_id]
@@ -52,6 +85,11 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Not authorized to add members"})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Conversation not found"})
 
       error ->
         error
@@ -110,6 +148,48 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
     end
   end
 
+  @doc """
+  Updates a member's role in a conversation.
+  PATCH /api/v1/conversations/:id/members/:user_id/role
+
+  Body: {"role": "admin"} or {"role": "member"}
+  """
+  def update_role(conn, %{"id" => id, "user_id" => target_user_id} = params) do
+    current_user_id = conn.assigns[:user_id]
+    new_role = params["role"]
+
+    if is_nil(new_role) or new_role not in ["admin", "member"] do
+      conn
+      |> put_status(:bad_request)
+      |> json(%{error: "Invalid role. Must be 'admin' or 'member'"})
+    else
+      case Conversations.update_member_role(id, target_user_id, new_role, current_user_id) do
+        {:ok, updated_member} ->
+          json(conn, %{data: render_member(updated_member)})
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation or member not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "Only admins can change member roles"})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
   # Swagger Schema Definitions
   def swagger_definitions do
     %{
@@ -143,7 +223,14 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
     }
   end
 
-  # Fonctions utilitaires
+  defp translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+  end
+
   defp can_manage_members?(_conversation, nil), do: false
 
   defp can_manage_members?(conversation, user_id) do

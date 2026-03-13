@@ -50,14 +50,21 @@ defmodule WhisprMessagingWeb.Router do
 
     # Conversation routes
     get "/conversations", ConversationController, :index
+    get "/conversations/search", ConversationController, :search
     post "/conversations", ConversationController, :create
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
+    post "/conversations/:id/delete_for_me", ConversationController, :delete_for_me
+    delete "/conversations/:id/all", ConversationController, :delete_for_all
+    post "/conversations/:id/leave", ConversationController, :leave
+    post "/conversations/:id/pin", ConversationController, :pin
+    delete "/conversations/:id/pin", ConversationController, :unpin
 
     # Conversation members
     post "/conversations/:id/members", ConversationMemberController, :create
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
+    patch "/conversations/:id/members/:user_id/role", ConversationMemberController, :update_role
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create

@@ -468,6 +468,245 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  @doc """
+  Searches conversations for the authenticated user.
+  GET /api/v1/conversations/search?q=query
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:user_id]
+    query = params["q"] || ""
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      if String.length(query) < 1 do
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Search query parameter 'q' is required"})
+      else
+        limit = min(String.to_integer(params["limit"] || "20"), 50)
+        conversations = Conversations.search_user_conversations(user_id, query, limit)
+
+        json(conn, %{
+          data: render_conversations(conversations),
+          meta: %{
+            count: length(conversations),
+            query: query
+          }
+        })
+      end
+    end
+  end
+
+  @doc """
+  Deletes a conversation for the current user only (per-user soft delete).
+  POST /api/v1/conversations/:id/delete_for_me
+  """
+  def delete_for_me(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.delete_conversation_for_user(id, user_id) do
+        {:ok, _record} ->
+          json(conn, %{
+            data: %{
+              conversation_id: id,
+              deleted_for_user: true,
+              deleted_at: DateTime.utc_now()
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "User is not a member of this conversation"})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+      end
+    end
+  end
+
+  @doc """
+  Deletes a group conversation for all members. Admin only.
+  DELETE /api/v1/conversations/:id/all
+  """
+  def delete_for_all(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.delete_group_for_all(id, user_id) do
+        {:ok, conversation} ->
+          # Broadcast deletion to all connected clients
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "conversation:#{id}",
+            "conversation_deleted",
+            %{
+              conversation_id: id,
+              deleted_by: user_id,
+              timestamp: DateTime.utc_now()
+            }
+          )
+
+          json(conn, %{
+            data: %{
+              id: conversation.id,
+              is_active: false,
+              deleted_at: DateTime.utc_now()
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "Only admins can delete a group for all members"})
+
+        {:error, :not_group} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: "Only group conversations can be deleted for all"})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
+  @doc """
+  Leave a group conversation. Broadcasts a system message.
+  POST /api/v1/conversations/:id/leave
+  """
+  def leave(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.leave_group(id, user_id) do
+        {:ok, _} ->
+          json(conn, %{
+            data: %{
+              conversation_id: id,
+              left: true,
+              left_at: DateTime.utc_now()
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation not found or user is not a member"})
+
+        {:error, :not_group} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: "Can only leave group conversations"})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: inspect(reason)})
+      end
+    end
+  end
+
+  @doc """
+  Pins a conversation for the current user.
+  POST /api/v1/conversations/:id/pin
+  """
+  def pin(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.pin_conversation(id, user_id) do
+        {:ok, pinned} ->
+          conn
+          |> put_status(:created)
+          |> json(%{
+            data: %{
+              conversation_id: id,
+              pinned: true,
+              pinned_at: pinned.pinned_at
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "User is not a member of this conversation"})
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:conflict)
+          |> json(%{error: "Conversation is already pinned"})
+      end
+    end
+  end
+
+  @doc """
+  Unpins a conversation for the current user.
+  DELETE /api/v1/conversations/:id/pin
+  """
+  def unpin(conn, %{"id" => id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unpin_conversation(id, user_id) do
+        {:ok, _} ->
+          json(conn, %{
+            data: %{
+              conversation_id: id,
+              pinned: false
+            }
+          })
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Conversation is not pinned"})
+      end
+    end
+  end
+
   # Private rendering functions
 
   defp render_conversations(conversations) do
