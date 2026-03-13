@@ -9,7 +9,15 @@ defmodule WhisprMessaging.Conversations do
   import Ecto.Query, warn: false
   alias WhisprMessaging.Repo
 
-  alias WhisprMessaging.Conversations.{Conversation, ConversationMember, ConversationSettings}
+  alias WhisprMessaging.Conversations.{
+    Conversation,
+    ConversationMember,
+    ConversationSettings,
+    PinnedConversation,
+    UserDeletedConversation
+  }
+
+  alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Services.UserService
 
@@ -502,6 +510,28 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Searches conversations for a specific user by conversation name or participant name.
+  Returns conversations where the user is an active member and the query matches
+  the conversation metadata (name) or any member's user_id.
+  """
+  def search_user_conversations(user_id, search_term, limit \\ 20) do
+    search_pattern = "%#{search_term}%"
+
+    query =
+      from c in Conversation,
+        join: cm in ConversationMember,
+        on: cm.conversation_id == c.id,
+        where: cm.user_id == ^user_id and cm.is_active == true,
+        where: c.is_active == true,
+        where: ilike(fragment("?::text", c.metadata), ^search_pattern),
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
+        distinct: true
+
+    Repo.all(query)
+  end
+
+  @doc """
   Gets a conversation with members preloaded.
   """
   def get_conversation_with_members(conversation_id) do
@@ -534,6 +564,258 @@ defmodule WhisprMessaging.Conversations do
 
       conversation ->
         {:ok, conversation}
+    end
+  end
+
+  # Per-user conversation deletion (delete conversation for me)
+
+  @doc """
+  Soft-deletes a conversation for a specific user.
+  The conversation remains visible to other members.
+  """
+  def delete_conversation_for_user(conversation_id, user_id) do
+    with {:ok, _conversation} <- get_conversation(conversation_id),
+         true <- member_of_conversation?(conversation_id, user_id) do
+      %UserDeletedConversation{}
+      |> UserDeletedConversation.changeset(%{
+        conversation_id: conversation_id,
+        user_id: user_id,
+        deleted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.insert(
+        on_conflict: {:replace, [:deleted_at, :updated_at]},
+        conflict_target: [:conversation_id, :user_id]
+      )
+    else
+      false -> {:error, :forbidden}
+      error -> error
+    end
+  end
+
+  @doc """
+  Restores a per-user deleted conversation (e.g., when a new message arrives).
+  """
+  def restore_conversation_for_user(conversation_id, user_id) do
+    case Repo.one(
+           UserDeletedConversation.by_conversation_and_user_query(conversation_id, user_id)
+         ) do
+      nil -> {:ok, :not_deleted}
+      record -> Repo.delete(record)
+    end
+  end
+
+  @doc """
+  Checks if a user has deleted a conversation for themselves.
+  """
+  def conversation_deleted_for_user?(conversation_id, user_id) do
+    Repo.exists?(
+      UserDeletedConversation.by_conversation_and_user_query(conversation_id, user_id)
+    )
+  end
+
+  # Pinned conversations
+
+  @doc """
+  Pins a conversation for a user.
+  """
+  def pin_conversation(conversation_id, user_id) do
+    with {:ok, _conversation} <- get_conversation(conversation_id),
+         true <- member_of_conversation?(conversation_id, user_id) do
+      %PinnedConversation{}
+      |> PinnedConversation.changeset(%{
+        conversation_id: conversation_id,
+        user_id: user_id,
+        pinned_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.insert()
+    else
+      false -> {:error, :forbidden}
+      error -> error
+    end
+  end
+
+  @doc """
+  Unpins a conversation for a user.
+  """
+  def unpin_conversation(conversation_id, user_id) do
+    case Repo.one(
+           PinnedConversation.by_conversation_and_user_query(conversation_id, user_id)
+         ) do
+      nil -> {:error, :not_found}
+      pinned -> Repo.delete(pinned)
+    end
+  end
+
+  @doc """
+  Checks if a conversation is pinned for a user.
+  """
+  def conversation_pinned?(conversation_id, user_id) do
+    Repo.exists?(
+      PinnedConversation.by_conversation_and_user_query(conversation_id, user_id)
+    )
+  end
+
+  @doc """
+  Lists pinned conversations for a user.
+  """
+  def list_pinned_conversations(user_id) do
+    PinnedConversation.by_user_query(user_id)
+    |> Repo.all()
+  end
+
+  # Member role management
+
+  @doc """
+  Updates a member's role in a conversation.
+  Only admins/owners can delegate roles.
+  """
+  def update_member_role(conversation_id, target_user_id, new_role, current_user_id) do
+    with {:ok, _conversation} <- get_conversation(conversation_id),
+         %ConversationMember{} = current_member <-
+           get_conversation_member(conversation_id, current_user_id),
+         :ok <- validate_role_management(current_member),
+         %ConversationMember{is_active: true} = target_member <-
+           get_conversation_member(conversation_id, target_user_id) do
+      new_settings = Map.put(target_member.settings || %{}, "role", new_role)
+      update_member_settings(target_member, new_settings)
+    else
+      nil -> {:error, :not_found}
+      %ConversationMember{is_active: false} -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp validate_role_management(%ConversationMember{settings: settings}) do
+    role = Map.get(settings || %{}, "role", "member")
+
+    if role in ["admin", "owner"] do
+      :ok
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  # Delete group for all (admin-only)
+
+  @doc """
+  Deletes a group conversation for all members. Only admins can do this.
+  Deactivates the conversation and all memberships.
+  """
+  def delete_group_for_all(conversation_id, user_id) do
+    with {:ok, conversation} <- get_conversation(conversation_id),
+         true <- conversation.type == "group" || {:error, :not_group},
+         %ConversationMember{} = member <-
+           get_conversation_member(conversation_id, user_id),
+         :ok <- validate_role_management(member) do
+      Repo.transaction(fn ->
+        # Deactivate all members
+        from(cm in ConversationMember,
+          where: cm.conversation_id == ^conversation_id and cm.is_active == true
+        )
+        |> Repo.update_all(set: [is_active: false, updated_at: DateTime.utc_now()])
+
+        # Deactivate the conversation
+        {:ok, deactivated} = deactivate_conversation(conversation)
+
+        # Broadcast system message about group deletion
+        Messages.create_system_message(
+          conversation_id,
+          "Group deleted by admin",
+          %{"event" => "group_deleted", "deleted_by" => user_id}
+        )
+
+        deactivated
+      end)
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  # Leave group with system message
+
+  @doc """
+  Removes a user from a group conversation and broadcasts a system message.
+  """
+  def leave_group(conversation_id, user_id) do
+    with {:ok, conversation} <- get_conversation(conversation_id),
+         true <- conversation.type == "group" || {:error, :not_group},
+         %ConversationMember{is_active: true} <-
+           get_conversation_member(conversation_id, user_id) do
+      Repo.transaction(fn ->
+        # Remove the member
+        {:ok, _} = remove_conversation_member(conversation_id, user_id)
+
+        # Broadcast system message about user leaving
+        Messages.create_system_message(
+          conversation_id,
+          "A member left the group",
+          %{"event" => "member_left", "user_id" => user_id}
+        )
+
+        # Broadcast via channel so connected clients get notified
+        WhisprMessagingWeb.Endpoint.broadcast(
+          "conversation:#{conversation_id}",
+          "member_left",
+          %{
+            user_id: user_id,
+            timestamp: DateTime.utc_now()
+          }
+        )
+
+        :ok
+      end)
+    else
+      nil -> {:error, :not_found}
+      %ConversationMember{is_active: false} -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  # Batch member operations
+
+  @doc """
+  Adds multiple members to a conversation at once.
+  Returns {:ok, added_members} or {:error, reason}.
+  """
+  def add_conversation_members(conversation_id, user_ids, current_user_id) do
+    with {:ok, conversation} <- get_conversation(conversation_id),
+         true <- conversation.type == "group" || {:error, :not_group},
+         %ConversationMember{} = current_member <-
+           get_conversation_member(conversation_id, current_user_id),
+         :ok <- validate_role_management(current_member) do
+      Repo.transaction(fn ->
+        results =
+          Enum.map(user_ids, fn uid ->
+            case add_conversation_member(conversation_id, uid) do
+              {:ok, member} ->
+                # Broadcast system message for each new member
+                Messages.create_system_message(
+                  conversation_id,
+                  "A new member was added",
+                  %{"event" => "member_added", "user_id" => uid, "added_by" => current_user_id}
+                )
+
+                {:ok, member}
+
+              {:error, changeset} ->
+                {:error, uid, changeset}
+            end
+          end)
+
+        added =
+          results
+          |> Enum.filter(fn
+            {:ok, _} -> true
+            _ -> false
+          end)
+          |> Enum.map(fn {:ok, m} -> m end)
+
+        added
+      end)
+    else
+      nil -> {:error, :not_found}
+      {:error, _} = error -> error
     end
   end
 end
