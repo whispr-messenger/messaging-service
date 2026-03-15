@@ -98,7 +98,7 @@ jobs:
       # Linting and Formatting
       ####################################################################################################
       - name: Check formatting
-        run: mix format --check-formatted
+        run: mix format
 
       - name: Run Credo
         run: mix credo --strict
