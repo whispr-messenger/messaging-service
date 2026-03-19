@@ -28,8 +28,8 @@ config :logger, level: :warning
 
 # Configure Redis for testing
 config :whispr_messaging, :redis,
-  host: "localhost",
-  port: 6379,
+  host: System.get_env("REDIS_HOST", "localhost"),
+  port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
   # Different database for tests
   database: 1
 
