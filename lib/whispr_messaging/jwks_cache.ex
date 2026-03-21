@@ -78,9 +78,8 @@ defmodule WhisprMessaging.JwksCache do
     case Finch.build(:get, url)
          |> Finch.request(WhisprMessaging.Finch, receive_timeout: @fetch_timeout_ms) do
       {:ok, %Finch.Response{status: 200, body: body}} ->
-        with {:ok, doc} <- Jason.decode(body),
-             {:ok, jwk} <- extract_ec_key(doc) do
-          {:ok, jwk}
+        with {:ok, doc} <- Jason.decode(body) do
+          extract_ec_key(doc)
         end
 
       {:ok, %Finch.Response{status: status}} ->
