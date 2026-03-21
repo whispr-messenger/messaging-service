@@ -41,7 +41,8 @@ defmodule WhisprMessaging.JwksCache do
   @impl true
   def init(_opts) do
     url = System.get_env("JWT_JWKS_URL", @default_jwks_url)
-    refresh_ms = System.get_env("JWT_JWKS_REFRESH_MS", "#{@default_refresh_ms}") |> String.to_integer()
+    refresh_ms =
+      System.get_env("JWT_JWKS_REFRESH_MS", "#{@default_refresh_ms}") |> String.to_integer()
     state = %{url: url, refresh_ms: refresh_ms, jwk: nil}
     send(self(), :refresh)
     {:ok, state}
@@ -72,7 +73,8 @@ defmodule WhisprMessaging.JwksCache do
   # ─────────────────────────────────────────────── Private ─────────────────────
 
   defp fetch_signing_key(url) do
-    case Finch.build(:get, url) |> Finch.request(WhisprMessaging.Finch, receive_timeout: @fetch_timeout_ms) do
+    case Finch.build(:get, url)
+         |> Finch.request(WhisprMessaging.Finch, receive_timeout: @fetch_timeout_ms) do
       {:ok, %Finch.Response{status: 200, body: body}} ->
         with {:ok, doc} <- Jason.decode(body),
              {:ok, jwk} <- extract_ec_key(doc) do
