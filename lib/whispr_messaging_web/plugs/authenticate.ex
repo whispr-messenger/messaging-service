@@ -69,7 +69,7 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
       {:ok, user_id}
     else
       {:error, :not_loaded} ->
-        Logger.warn("[Authenticate] JWKS key not yet loaded — rejecting request")
+        Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
         {:error, :unauthorized}
 
       {:error, reason} ->
