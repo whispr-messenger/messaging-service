@@ -1,10 +1,32 @@
 defmodule WhisprMessagingWeb.Plugs.Authenticate do
   @moduledoc """
   Plug to authenticate users and assign user_id to the connection.
-  Supports both X-User-Id (trusted gateway header) and Authorization: Bearer <token>.
+
+  ## Authentication chain
+
+  1. **x-user-id** trusted gateway header — used when the upstream API gateway
+     has already validated the JWT and forwarded the user ID.
+  2. **Authorization: Bearer <jwt>** — validates the JWT against the EC P-256
+     public key loaded dynamically from the auth-service JWKS endpoint
+     (`JWT_JWKS_URL`).  The `sub` claim is used as the user ID.
+
+  ## Migration from PEM file (WHISPR-386)
+
+  The previous implementation read a static PEM public key file at startup.
+  This version fetches the key from the JWKS endpoint via `JwksCache`, enabling:
+  - Zero-downtime key rotation (new key takes effect on next cache refresh)
+  - No shared volume mount between the auth-service and this service
+
+  ## Configuration
+
+  - `JWT_JWKS_URL` — JWKS endpoint URL (default: http://auth-service/auth/.well-known/jwks.json)
+  - `JWT_JWKS_REFRESH_MS` — Key refresh interval in ms (default: 3_600_000)
   """
+
   import Plug.Conn
   require Logger
+
+  alias WhisprMessaging.JwksCache
 
   def init(opts), do: opts
 
@@ -14,24 +36,25 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
         assign(conn, :user_id, user_id)
 
       {:error, :unauthorized} ->
-        # For certain routes, we might want to fail open or handle elsewhere,
-        # but for now we enforce identity if any auth header is present
-        # or just proceed to let controllers handle missing assignments.
         conn
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Private helpers
+  # ---------------------------------------------------------------------------
+
   defp get_user_id(conn) do
-    # 1. Check for trusted gateway header
+    # 1. Trusted gateway header (already authenticated upstream)
     case get_req_header(conn, "x-user-id") do
       [user_id | _] when user_id != "" ->
         {:ok, user_id}
 
       _ ->
-        # 2. Check for Bearer token
+        # 2. Bearer JWT
         case get_req_header(conn, "authorization") do
           ["Bearer " <> token] ->
-            verify_token(token)
+            verify_jwt(token)
 
           _ ->
             {:error, :unauthorized}
@@ -39,21 +62,46 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
     end
   end
 
-  defp verify_token(token) do
-    # Local development/test convenience for legacy tokens if needed
-    if String.starts_with?(token, "test_token_") do
-      user_id = String.replace(token, "test_token_", "")
+  defp verify_jwt(token) do
+    with {:ok, jwk} <- JwksCache.get_signing_key(),
+         {:ok, claims} <- validate_token(token, jwk),
+         {:ok, user_id} <- extract_sub(claims) do
       {:ok, user_id}
     else
-      case Phoenix.Token.verify(
-             WhisprMessagingWeb.Endpoint,
-             "user auth",
-             token,
-             max_age: 86_400
-           ) do
-        {:ok, user_id} -> {:ok, user_id}
-        {:error, _reason} -> {:error, :unauthorized}
-      end
+      {:error, :not_loaded} ->
+        Logger.warn("[Authenticate] JWKS key not yet loaded — rejecting request")
+        {:error, :unauthorized}
+
+      {:error, reason} ->
+        Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
+        {:error, :unauthorized}
     end
   end
+
+  defp validate_token(token, jwk) do
+    signer = Joken.Signer.create("ES256", %{"pem" => jwk_to_pem(jwk)})
+
+    case Joken.verify_and_validate(token_config(), token, signer) do
+      {:ok, claims} -> {:ok, claims}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp token_config do
+    Joken.Config.default_claims(
+      skip: [:exp, :iat, :nbf],
+      validate_exp: true
+    )
+  end
+
+  defp jwk_to_pem(jwk) do
+    {_, pem} = JOSE.JWK.to_pem(jwk)
+    pem
+  end
+
+  defp extract_sub(%{"sub" => sub}) when is_binary(sub) and sub != "" do
+    {:ok, sub}
+  end
+
+  defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
 end

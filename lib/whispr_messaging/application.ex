@@ -37,6 +37,13 @@ defmodule WhisprMessaging.Application do
       # Database
       WhisprMessaging.Repo,
 
+      # HTTP client pool (used by JwksCache to fetch JWKS)
+      {Finch, name: WhisprMessaging.Finch},
+
+      # JWKS public-key cache — must start before the Endpoint so that
+      # the Authenticate plug can call JwksCache.get_signing_key/0
+      WhisprMessaging.JwksCache,
+
       # PubSub for Phoenix Channels
       {Phoenix.PubSub, name: WhisprMessaging.PubSub},
 
