@@ -41,8 +41,10 @@ defmodule WhisprMessaging.JwksCache do
   @impl true
   def init(_opts) do
     url = System.get_env("JWT_JWKS_URL", @default_jwks_url)
+
     refresh_ms =
       System.get_env("JWT_JWKS_REFRESH_MS", "#{@default_refresh_ms}") |> String.to_integer()
+
     state = %{url: url, refresh_ms: refresh_ms, jwk: nil}
     send(self(), :refresh)
     {:ok, state}
