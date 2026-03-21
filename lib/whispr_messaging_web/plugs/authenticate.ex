@@ -63,20 +63,36 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   defp verify_jwt(token) do
-    with {:ok, jwk} <- JwksCache.get_signing_key(),
-         {:ok, claims} <- validate_token(token, jwk),
-         {:ok, user_id} <- extract_sub(claims) do
-      {:ok, user_id}
-    else
-      {:error, :not_loaded} ->
-        Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
-        {:error, :unauthorized}
+    case maybe_test_token(token) do
+      {:ok, _user_id} = ok ->
+        ok
 
-      {:error, reason} ->
-        Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
-        {:error, :unauthorized}
+      :not_test_token ->
+        with {:ok, jwk} <- JwksCache.get_signing_key(),
+             {:ok, claims} <- validate_token(token, jwk),
+             {:ok, user_id} <- extract_sub(claims) do
+          {:ok, user_id}
+        else
+          {:error, :not_loaded} ->
+            Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
+            {:error, :unauthorized}
+
+          {:error, reason} ->
+            Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
+            {:error, :unauthorized}
+        end
     end
   end
+
+  # In the test environment, accept tokens prefixed with "test_token_" followed
+  # by the user-id.  This avoids the need for a real JWKS endpoint during tests.
+  if Mix.env() == :test do
+    defp maybe_test_token("test_token_" <> user_id) when user_id != "" do
+      {:ok, user_id}
+    end
+  end
+
+  defp maybe_test_token(_token), do: :not_test_token
 
   defp validate_token(token, jwk) do
     signer = Joken.Signer.create("ES256", %{"pem" => jwk_to_pem(jwk)})

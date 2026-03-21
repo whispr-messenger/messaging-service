@@ -4,6 +4,9 @@ defmodule WhisprMessaging.JwksCacheTest do
 
   We avoid HTTP calls by using Finch mocking via :meck (the project already
   depends on {:mock, ~> 0.3.0}).
+
+  The JwksCache GenServer is started by the supervision tree, so we reset its
+  internal state before each test via `:sys.replace_state/2`.
   """
 
   use ExUnit.Case, async: false
@@ -25,13 +28,18 @@ defmodule WhisprMessaging.JwksCacheTest do
 
   @valid_jwks_body Jason.encode!(%{"keys" => [@valid_jwk]})
 
+  setup do
+    # Reset the JwksCache state before each test so tests don't leak state
+    :sys.replace_state(JwksCache, fn state -> %{state | jwk: nil} end)
+    :ok
+  end
+
   describe "get_signing_key/0" do
     test "returns :not_loaded when key has not been fetched yet" do
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
           {:error, %Mint.TransportError{reason: :econnrefused}}
         end do
-        # Send a refresh to force the cache to try (and fail) with our mock
         send(JwksCache, :refresh)
         Process.sleep(100)
 
