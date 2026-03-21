@@ -25,25 +25,14 @@ defmodule WhisprMessaging.JwksCacheTest do
 
   @valid_jwks_body Jason.encode!(%{"keys" => [@valid_jwk]})
 
-  setup do
-    # Ensure any existing JwksCache is stopped before each test
-    if pid = Process.whereis(JwksCache) do
-      GenServer.stop(pid)
-      Process.sleep(50)
-    end
-
-    :ok
-  end
-
   describe "get_signing_key/0" do
     test "returns :not_loaded when key has not been fetched yet" do
-      # Start the server but mock Finch to never respond
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
           {:error, %Mint.TransportError{reason: :econnrefused}}
         end do
-        {:ok, _pid} = start_supervised({JwksCache, []})
-        # Give the GenServer time to process the :refresh message
+        # Send a refresh to force the cache to try (and fail) with our mock
+        send(JwksCache, :refresh)
         Process.sleep(100)
 
         assert {:error, :not_loaded} = JwksCache.get_signing_key()
@@ -55,7 +44,7 @@ defmodule WhisprMessaging.JwksCacheTest do
         request: fn _req, _name, _opts ->
           {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
         end do
-        {:ok, _pid} = start_supervised({JwksCache, []})
+        send(JwksCache, :refresh)
         Process.sleep(200)
 
         assert {:ok, jwk} = JwksCache.get_signing_key()
@@ -64,24 +53,26 @@ defmodule WhisprMessaging.JwksCacheTest do
     end
 
     test "keeps previous key when refresh returns a non-200 response" do
-      # First call succeeds, second call fails
-      call_count = :counters.new(1, [])
-
+      # First load a valid key
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
-          :counters.add(call_count, 1, 1)
-
-          if :counters.get(call_count, 1) == 1 do
-            {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
-          else
-            {:ok, %Finch.Response{status: 503, body: "service unavailable", headers: []}}
-          end
+          {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
         end do
-        # Start with very short refresh interval so we can trigger a second refresh
-        {:ok, _pid} = start_supervised({JwksCache, []})
+        send(JwksCache, :refresh)
         Process.sleep(200)
 
-        # Key should be loaded after first fetch
+        assert {:ok, _jwk} = JwksCache.get_signing_key()
+      end
+
+      # Now mock a failure and verify the key is still available
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 503, body: "service unavailable", headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(100)
+
+        # Key should still be available from the previous successful fetch
         assert {:ok, _jwk} = JwksCache.get_signing_key()
       end
     end
