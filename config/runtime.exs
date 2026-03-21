@@ -126,5 +126,4 @@ config :whispr_messaging, :jwks,
       "JWT_JWKS_URL",
       "http://auth-service/auth/.well-known/jwks.json"
     ),
-  refresh_ms:
-    System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
+  refresh_ms: System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
