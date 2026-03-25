@@ -525,26 +525,25 @@ sequenceDiagram
 
 ### 9.1 Interaction avec User Service
 
+L'appartenance à la conversation est vérifiée **localement** par le `ConversationProcess` à partir de son état en mémoire — c'est une donnée qui appartient au bounded context du messaging-service. Il n'y a pas d'appel gRPC pour cette vérification.
+
+Les **blocages entre utilisateurs** sont gérés en **eventual consistency** : lorsqu'un utilisateur en bloque un autre, le user-service publie un événement que le messaging-service consomme pour mettre à jour son état local. Aucun appel synchrone n'est nécessaire au moment de l'envoi d'un message.
+
 ```mermaid
 sequenceDiagram
     participant ConvProcess as Conversation Process
-    participant UserService
     participant MessageStore
-    
-    ConvProcess->>UserService: validateMessagePermissions (gRPC)
-    Note over ConvProcess,UserService: {senderId, conversationId, participantIds}
-    
-    UserService->>UserService: Vérifier appartenance conversation
-    UserService->>UserService: Vérifier blocages entre utilisateurs
-    UserService->>UserService: Vérifier permissions d'envoi (groupes)
-    
-    alt Permissions refusées
-        UserService-->>ConvProcess: permission_denied
-        ConvProcess-->>ConvProcess: Rejeter le message
-    else Permissions accordées
-        UserService-->>ConvProcess: permission_granted + recipient_list
+    participant UserService
+
+    Note over ConvProcess: Vérification locale de l'appartenance<br/>(état en mémoire du ConversationProcess)
+
+    alt Expéditeur non membre
+        ConvProcess-->>ConvProcess: Rejeter le message (unauthorized)
+    else Expéditeur membre
         ConvProcess->>MessageStore: Continuer traitement normal
     end
+
+    Note over UserService,ConvProcess: Mise à jour des blocages via événements async<br/>(UserService publie → MessagingService consomme)
 ```
 
 ### 9.2 Interaction avec Media Service
@@ -577,24 +576,31 @@ sequenceDiagram
 
 ### 9.3 Interaction avec Notification Service
 
+Le flux de notification est **entièrement asynchrone** et déclenché en parallèle du broadcast PubSub, après que la réponse `sent` a déjà été renvoyée au client. Le `ConversationProcess` n'attend pas la confirmation des notifications pour libérer le client.
+
 ```mermaid
 sequenceDiagram
     participant ConvProcess as Conversation Process
+    participant PubSub
+    participant Client
+    participant Task as Task (async)
     participant UserService
     participant NotifService as Notification Service
-    
-    ConvProcess->>UserService: getOfflineRecipients (gRPC)
-    UserService-->>ConvProcess: offline_users + notification_preferences
-    
-    ConvProcess->>NotifService: sendPushNotifications (gRPC)
-    Note over ConvProcess,NotifService: {userIds, messagePreview, conversationInfo}
-    
-    NotifService->>NotifService: Générer notifications localisées
-    NotifService->>NotifService: Respecter paramètres utilisateur
-    NotifService->>NotifService: Envoyer via FCM/APNS
-    
-    NotifService-->>ConvProcess: notifications_sent + delivery_stats
-    ConvProcess->>ConvProcess: Logger statistiques de notification
+
+    ConvProcess->>PubSub: broadcast_to_conversation
+    ConvProcess-->>Client: reply: {messageId, status: "sent"}
+
+    Note over ConvProcess,Task: Fire-and-forget via Task.Supervisor
+
+    ConvProcess-)Task: start_async_notification_task
+
+    Task->>UserService: getOfflineRecipients (gRPC)
+    UserService-->>Task: offline_users + notification_preferences
+
+    alt Destinataires hors ligne présents
+        Task-)NotifService: sendPushNotifications (gRPC, fire-and-forget)
+        Note over Task,NotifService: {userIds, messagePreview, conversationInfo}<br/>Aucun retour attendu par le ConversationProcess
+    end
 ```
 
 ## 10. Considérations techniques
