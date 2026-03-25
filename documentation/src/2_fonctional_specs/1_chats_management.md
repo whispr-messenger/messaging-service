@@ -63,11 +63,11 @@ sequenceDiagram
             MessagingService->>MessagingService: Créer conversation directe
             MessagingService->>MessagingService: Ajouter les deux participants
             MessagingService->>MessagingService: Créer paramètres par défaut
-            
-            MessagingService->>NotifService: notifyNewConversation (gRPC)
-            NotifService->>NotifService: Notifier l'utilisateur cible
-            
+
             MessagingService-->>Client: 201 Created (nouvelle conversation)
+
+            Note over MessagingService,NotifService: Fire-and-forget async
+            MessagingService-)NotifService: notifyNewConversation (async)
         end
     end
 ```
@@ -111,10 +111,10 @@ sequenceDiagram
                 MediaService-->>MessagingService: groupImageUrl
             end
             
-            MessagingService->>NotifService: notifyNewGroupConversation (gRPC)
-            NotifService->>NotifService: Notifier tous les membres
-            
             MessagingService-->>Client: 201 Created (nouvelle conversation de groupe)
+
+            Note over MessagingService,NotifService: Fire-and-forget async
+            MessagingService-)NotifService: notifyNewGroupConversation (async)
         end
     end
 ```
