@@ -107,6 +107,11 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         # Return existing message as success, but don't re-notify or re-broadcast
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
+      {:error, reason}
+      when reason in [:invalid_signature, :missing_signature_fields, :invalid_key_length,
+                      :invalid_signature_length, :verification_error] ->
+        {:reply, {:error, %{reason: "invalid_signature"}}, socket}
+
       {:error, changeset} ->
         {:reply, {:error, %{errors: format_changeset_errors(changeset)}}, socket}
     end
