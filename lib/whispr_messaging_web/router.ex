@@ -67,6 +67,11 @@ defmodule WhisprMessagingWeb.Router do
     post "/conversations/:id/pin", ConversationController, :pin
     delete "/conversations/:id/pin", ConversationController, :unpin
 
+    # Conversation archive / unarchive (WHISPR-466)
+    get "/conversations/archived", ConversationController, :archived
+    post "/conversations/:id/archive", ConversationController, :archive
+    delete "/conversations/:id/archive", ConversationController, :unarchive
+
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
     get "/messages/:id", MessageController, :show
