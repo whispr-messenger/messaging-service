@@ -74,7 +74,13 @@ defmodule WhisprMessagingWeb.ConversationController do
     )
 
     produces("application/json")
-    parameter(:q, :query, :string, "Search term (name fragment or exact participant user_id)", required: true)
+    parameter(
+      :q,
+      :query,
+      :string,
+      "Search term (name fragment or exact participant user_id)",
+      required: true
+    )
 
     parameter(:limit, :query, :integer, "Maximum number of results to return (max: 50)",
       required: false
