@@ -169,10 +169,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
       {:ok, message} ->
-        broadcast(socket, "message_deleted", camelize_keys(%{
-          message_id: message_id,
-          delete_for_everyone: delete_for_everyone
-        }))
+        broadcast(
+          socket,
+          "message_deleted",
+          camelize_keys(%{
+            message_id: message_id,
+            delete_for_everyone: delete_for_everyone
+          })
+        )
 
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
@@ -266,11 +270,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.add_reaction(message_id, user_id, reaction) do
       {:ok, message_reaction} ->
-        broadcast(socket, "reaction_added", camelize_keys(%{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        }))
+        broadcast(
+          socket,
+          "reaction_added",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{reaction: serialize_reaction(message_reaction)}}, socket}
 
@@ -291,11 +299,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.remove_reaction(message_id, user_id, reaction) do
       {:ok, _} ->
-        broadcast(socket, "reaction_removed", camelize_keys(%{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        }))
+        broadcast(
+          socket,
+          "reaction_removed",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{status: "removed"}}, socket}
 
