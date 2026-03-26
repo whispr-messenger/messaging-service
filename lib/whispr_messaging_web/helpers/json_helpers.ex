@@ -20,6 +20,8 @@ defmodule WhisprMessagingWeb.JsonHelpers do
       %{"members" => [%{"userId" => "abc", "isActive" => true}]}
   """
   @spec camelize_keys(map() | list()) :: map() | list()
+  def camelize_keys(%{__struct__: _} = struct), do: struct
+
   def camelize_keys(%{} = map) do
     Map.new(map, fn {key, value} ->
       {camelize_key(key), camelize_value(value)}
@@ -32,6 +34,7 @@ defmodule WhisprMessagingWeb.JsonHelpers do
 
   def camelize_keys(value), do: value
 
+  defp camelize_value(%{__struct__: _} = struct), do: struct
   defp camelize_value(%{} = map), do: camelize_keys(map)
   defp camelize_value(list) when is_list(list), do: Enum.map(list, &camelize_value/1)
   defp camelize_value(value), do: value

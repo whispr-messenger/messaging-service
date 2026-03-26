@@ -83,6 +83,24 @@ defmodule WhisprMessagingWeb.JsonHelpersTest do
       assert JsonHelpers.camelize_keys([]) == []
     end
 
+    test "preserves structs (e.g., DateTime, NaiveDateTime) as values" do
+      now = ~N[2026-01-01 00:00:00]
+
+      input = %{
+        created_at: now,
+        user_id: "abc"
+      }
+
+      result = JsonHelpers.camelize_keys(input)
+      assert result["createdAt"] == now
+      assert result["userId"] == "abc"
+    end
+
+    test "does not recurse into structs" do
+      now = DateTime.utc_now()
+      assert JsonHelpers.camelize_keys(now) == now
+    end
+
     test "converts list of maps" do
       input = [%{user_id: "a"}, %{user_id: "b"}]
       expected = [%{"userId" => "a"}, %{"userId" => "b"}]
