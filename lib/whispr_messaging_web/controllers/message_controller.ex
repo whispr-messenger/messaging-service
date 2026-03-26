@@ -10,6 +10,8 @@ defmodule WhisprMessagingWeb.MessageController do
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Messages
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :index do
@@ -58,11 +60,11 @@ defmodule WhisprMessagingWeb.MessageController do
 
         json(conn, %{
           data: render_messages(messages),
-          meta: %{
+          meta: camelize_keys(%{
             count: length(messages),
             conversation_id: conversation_id,
             has_more: length(messages) == limit
-          }
+          })
         })
       else
         {:error, :not_found} ->
@@ -123,9 +125,9 @@ defmodule WhisprMessagingWeb.MessageController do
         |> put_status(:created)
         |> json(%{
           data: render_message(message),
-          meta: %{
+          meta: camelize_keys(%{
             conversation_id: conversation_id
-          }
+          })
         })
       else
         {:error, :not_found} ->
@@ -211,10 +213,10 @@ defmodule WhisprMessagingWeb.MessageController do
 
           json(conn, %{
             data: render_message(message),
-            meta: %{
+            meta: camelize_keys(%{
               edited: true,
               edited_at: message.edited_at
-            }
+            })
           })
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -270,12 +272,12 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, message} <- Messages.delete_message(id, user_id, delete_for_everyone) do
         json(conn, %{
-          data: %{
+          data: camelize_keys(%{
             id: message.id,
             is_deleted: message.is_deleted,
             delete_for_everyone: message.delete_for_everyone,
             deleted_at: message.updated_at
-          }
+          })
         })
       end
     end
@@ -308,14 +310,16 @@ defmodule WhisprMessagingWeb.MessageController do
       updated_at: message.updated_at
     }
 
-    # Add delivery_status if delivery_statuses are preloaded
-    case message do
-      %{delivery_statuses: statuses} when is_list(statuses) ->
-        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+    result =
+      case message do
+        %{delivery_statuses: statuses} when is_list(statuses) ->
+          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
 
-      _ ->
-        Map.put(base, :delivery_status, "sent")
-    end
+        _ ->
+          Map.put(base, :delivery_status, "sent")
+      end
+
+    camelize_keys(result)
   end
 
   # Convert ttl_seconds convenience param to an explicit expires_at timestamp.

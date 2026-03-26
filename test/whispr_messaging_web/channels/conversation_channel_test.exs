@@ -107,15 +107,15 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref = push(socket, "new_message", message_attrs)
 
       assert_reply ref, :ok, %{message: reply_message}
-      assert reply_message.content == "encrypted_test_content"
-      assert reply_message.message_type == "text"
-      assert reply_message.sender_id == user_id
-      assert reply_message.conversation_id == conversation.id
-      assert reply_message.delivery_status in ["sent", "pending"]
+      assert reply_message["content"] == "encrypted_test_content"
+      assert reply_message["messageType"] == "text"
+      assert reply_message["senderId"] == user_id
+      assert reply_message["conversationId"] == conversation.id
+      assert reply_message["deliveryStatus"] in ["sent", "pending"]
 
       # Should broadcast to all channel subscribers
       assert_broadcast "new_message", %{message: broadcast_message}
-      assert broadcast_message.id == reply_message.id
+      assert broadcast_message["id"] == reply_message["id"]
     end
 
     test "fails with invalid message data", %{socket: socket} do
@@ -147,7 +147,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref2 = push(socket, "new_message", message_attrs)
       assert_reply ref2, :ok, %{message: message2}
 
-      assert message1.id == message2.id
+      assert message1["id"] == message2["id"]
     end
   end
 
@@ -186,13 +186,13 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref = push(socket, "edit_message", edit_attrs)
 
       assert_reply ref, :ok, %{message: edited_message}
-      assert edited_message.content == "edited_content"
-      assert edited_message.metadata["edited"] == true
-      assert edited_message.edited_at != nil
+      assert edited_message["content"] == "edited_content"
+      assert edited_message["metadata"]["edited"] == true
+      assert edited_message["editedAt"] != nil
 
       # Should broadcast edit to all subscribers
       assert_broadcast "message_edited", %{message: broadcast_message}
-      assert broadcast_message.id == message.id
+      assert broadcast_message["id"] == message.id
     end
 
     test "fails to edit non-existent message", %{socket: socket} do
@@ -268,16 +268,16 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref = push(socket, "delete_message", delete_attrs)
 
       assert_reply ref, :ok, %{message: deleted_message}
-      assert deleted_message.is_deleted == true
-      assert deleted_message.delete_for_everyone == true
+      assert deleted_message["isDeleted"] == true
+      assert deleted_message["deleteForEveryone"] == true
 
       # Should broadcast deletion to all subscribers
       assert_broadcast "message_deleted", %{
-        message_id: message_id,
-        delete_for_everyone: true
+        "messageId" => broadcast_message_id,
+        "deleteForEveryone" => true
       }
 
-      assert message_id == message.id
+      assert broadcast_message_id == message.id
     end
 
     test "fails to delete non-existent message", %{socket: socket} do
@@ -352,9 +352,9 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       push(socket, "typing_start", %{})
 
       assert_broadcast "user_typing", %{
-        user_id: broadcast_user_id,
-        conversation_id: broadcast_conversation_id,
-        typing: true
+        "userId" => broadcast_user_id,
+        "conversationId" => broadcast_conversation_id,
+        "typing" => true
       }
 
       assert broadcast_user_id == user_id
@@ -365,9 +365,9 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       push(socket, "typing_stop", %{})
 
       assert_broadcast "user_typing", %{
-        user_id: broadcast_user_id,
-        conversation_id: broadcast_conversation_id,
-        typing: false
+        "userId" => broadcast_user_id,
+        "conversationId" => broadcast_conversation_id,
+        "typing" => false
       }
 
       assert broadcast_user_id == user_id
@@ -410,15 +410,15 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref = push(socket, "add_reaction", reaction_attrs)
 
       assert_reply ref, :ok, %{reaction: reply_reaction}
-      assert reply_reaction.message_id == message.id
-      assert reply_reaction.user_id == user_id
-      assert reply_reaction.reaction == "👍"
+      assert reply_reaction["messageId"] == message.id
+      assert reply_reaction["userId"] == user_id
+      assert reply_reaction["reaction"] == "👍"
 
       # Should broadcast reaction to all subscribers
       assert_broadcast "reaction_added", %{
-        message_id: broadcast_message_id,
-        user_id: broadcast_user_id,
-        reaction: "👍"
+        "messageId" => broadcast_message_id,
+        "userId" => broadcast_user_id,
+        "reaction" => "👍"
       }
 
       assert broadcast_message_id == message.id
@@ -443,9 +443,9 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
       # Should broadcast removal to all subscribers
       assert_broadcast "reaction_removed", %{
-        message_id: broadcast_message_id,
-        user_id: broadcast_user_id,
-        reaction: "👍"
+        "messageId" => broadcast_message_id,
+        "userId" => broadcast_user_id,
+        "reaction" => "👍"
       }
 
       assert broadcast_message_id == message.id

@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   alias WhisprMessaging.Conversations
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :index do
@@ -57,10 +59,10 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       json(conn, %{
         data: render_conversations(conversations),
-        meta: %{
+        meta: camelize_keys(%{
           count: length(conversations),
           user_id: user_id
-        }
+        })
       })
     end
   end
@@ -384,11 +386,11 @@ defmodule WhisprMessagingWeb.ConversationController do
          true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
-        data: %{
+        data: camelize_keys(%{
           id: deactivated_conversation.id,
           is_active: deactivated_conversation.is_active,
           deleted_at: DateTime.utc_now()
-        }
+        })
       })
     else
       false ->
@@ -574,7 +576,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         %{}
       end
 
-    %{
+    camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
       name: Map.get(conversation.metadata || %{}, "name"),
@@ -586,23 +588,23 @@ defmodule WhisprMessagingWeb.ConversationController do
       is_muted: Map.get(settings, "is_muted", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
-    }
+    })
   end
 
   defp render_conversation_with_members(conversation, member_info) do
     base =
       conversation
       |> render_conversation()
-      |> Map.put(:members, render_members(conversation.members))
-      |> Map.put(:member_count, length(conversation.members))
+      |> Map.put("members", Enum.map(conversation.members, &render_member/1))
+      |> Map.put("memberCount", length(conversation.members))
 
     if member_info do
       settings = member_info.settings || %{}
 
       base
-      |> Map.put(:is_muted, Map.get(settings, "is_muted", false))
-      |> Map.put(:is_pinned, Map.get(settings, "is_pinned", false))
-      |> Map.put(:is_archived, Map.get(settings, "is_archived", false))
+      |> Map.put("isMuted", Map.get(settings, "is_muted", false))
+      |> Map.put("isPinned", Map.get(settings, "is_pinned", false))
+      |> Map.put("isArchived", Map.get(settings, "is_archived", false))
     else
       base
     end
@@ -633,6 +635,10 @@ defmodule WhisprMessagingWeb.ConversationController do
       joined_at: member.joined_at,
       is_active: member.is_active
     }
+  end
+
+  defp render_member(member) do
+    camelize_keys(render_member_raw(member))
   end
 
   defp filter_by_type(conversations, nil), do: conversations
