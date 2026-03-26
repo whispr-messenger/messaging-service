@@ -93,6 +93,94 @@ defmodule WhisprMessaging.ConversationsTest do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Archive / Unarchive tests (WHISPR-466)
+  # ---------------------------------------------------------------------------
+
+  describe "archive_conversation/2" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "archives a conversation successfully", %{conversation: c, user_id: user_id} do
+      assert {:ok, member} = Conversations.archive_conversation(c.id, user_id)
+      assert member.settings["is_archived"] == true
+    end
+
+    test "returns :already_archived when already archived", %{conversation: c, user_id: user_id} do
+      {:ok, _} = Conversations.archive_conversation(c.id, user_id)
+      assert {:error, :already_archived} = Conversations.archive_conversation(c.id, user_id)
+    end
+
+    test "returns :not_member when user is not a member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.archive_conversation(c.id, stranger)
+    end
+  end
+
+  describe "unarchive_conversation/2" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+      {:ok, _} = Conversations.archive_conversation(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "unarchives a conversation successfully", %{conversation: c, user_id: user_id} do
+      assert {:ok, member} = Conversations.unarchive_conversation(c.id, user_id)
+      assert member.settings["is_archived"] == false
+    end
+
+    test "returns :not_archived when conversation is not archived", %{user_id: user_id} do
+      {:ok, other} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(other.id, user_id)
+
+      assert {:error, :not_archived} = Conversations.unarchive_conversation(other.id, user_id)
+    end
+
+    test "returns :not_member when user is not a member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.unarchive_conversation(c.id, stranger)
+    end
+  end
+
+  describe "list_archived_conversations/2" do
+    test "returns only archived conversations for the user" do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conv1} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, conv2} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv1.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user_id)
+
+      {:ok, _} = Conversations.archive_conversation(conv1.id, user_id)
+
+      archived = Conversations.list_archived_conversations(user_id)
+      ids = Enum.map(archived, & &1.id)
+
+      assert conv1.id in ids
+      refute conv2.id in ids
+    end
+  end
+
   describe "update_conversation/2" do
     setup do
       {:ok, conversation} =
