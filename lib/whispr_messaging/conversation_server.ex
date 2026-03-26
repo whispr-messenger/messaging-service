@@ -497,6 +497,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   defp serialize_message(message) do
     alias WhisprMessaging.Messages.DeliveryStatus
+    alias WhisprMessaging.Messages.Message
 
     base = %{
       id: message.id,
@@ -520,6 +521,21 @@ defmodule WhisprMessaging.ConversationServer do
 
         _ ->
           Map.put(base, :delivery_status, "sent")
+      end
+
+    result =
+      case message do
+        %{reply_to: %Message{} = parent} ->
+          Map.put(result, :reply_to, camelize_keys(%{
+            id: parent.id,
+            sender_id: parent.sender_id,
+            content: parent.content,
+            message_type: parent.message_type,
+            is_deleted: parent.is_deleted
+          }))
+
+        _ ->
+          result
       end
 
     camelize_keys(result)
