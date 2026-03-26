@@ -17,7 +17,9 @@ defmodule WhisprMessagingWeb.DraftController do
   swagger_path :create do
     post("/messages/drafts")
     summary("Save a message draft")
-    description("Saves or updates a draft for a conversation. Only one draft per user per conversation is kept.")
+    description(
+      "Saves or updates a draft for a conversation. Only one draft per user per conversation is kept."
+    )
     produces("application/json")
     consumes("application/json")
 
