@@ -947,7 +947,7 @@ defmodule WhisprMessaging.MessagesTest do
         })
 
       messages = Messages.list_scheduled_messages(user_id)
-      assert length(messages) >= 1
+      refute Enum.empty?(messages)
       assert Enum.all?(messages, &(&1.status == "pending"))
     end
 
