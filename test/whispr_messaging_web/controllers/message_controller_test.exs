@@ -162,6 +162,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["data"]["message_type"] == "text"
       assert response["data"]["sender_id"] == user1_id
       assert response["data"]["conversation_id"] == conversation.id
+      assert response["data"]["delivery_status"] in ["sent", "pending"]
     end
 
     test "returns 422 with invalid attributes", %{

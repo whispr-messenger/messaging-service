@@ -299,6 +299,74 @@ defmodule WhisprMessaging.MessagesTest do
       assert delivery_status.delivered_at != nil
     end
 
+    test "get_message_delivery_status/2 returns 'sent' when no status exists", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      assert Messages.get_message_delivery_status(message.id, user2_id) == "sent"
+    end
+
+    test "get_message_delivery_status/2 returns 'pending' after status creation", %{
+      conversation: conversation,
+      message: message,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      Messages.create_delivery_statuses_for_conversation(
+        message.id,
+        conversation.id,
+        user1_id
+      )
+
+      assert Messages.get_message_delivery_status(message.id, user2_id) == "pending"
+    end
+
+    test "get_message_delivery_status/2 returns 'delivered' after delivery", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      Messages.mark_message_delivered(message.id, user2_id)
+      assert Messages.get_message_delivery_status(message.id, user2_id) == "delivered"
+    end
+
+    test "get_message_delivery_status/2 returns 'read' after reading", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      Messages.mark_message_read(message.id, user2_id)
+      assert Messages.get_message_delivery_status(message.id, user2_id) == "read"
+    end
+
+    test "get_aggregate_delivery_status/1 returns 'sent' when no statuses exist", %{
+      message: message
+    } do
+      assert Messages.get_aggregate_delivery_status(message.id) == "sent"
+    end
+
+    test "get_aggregate_delivery_status/1 returns correct aggregate", %{
+      conversation: conversation,
+      message: message,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      Messages.create_delivery_statuses_for_conversation(
+        message.id,
+        conversation.id,
+        user1_id
+      )
+
+      # Initially pending
+      assert Messages.get_aggregate_delivery_status(message.id) == "pending"
+
+      # After delivery
+      Messages.mark_message_delivered(message.id, user2_id)
+      assert Messages.get_aggregate_delivery_status(message.id) == "delivered"
+
+      # After reading
+      Messages.mark_message_read(message.id, user2_id)
+      assert Messages.get_aggregate_delivery_status(message.id) == "read"
+    end
+
     test "mark_conversation_read/3 marks all messages as read" do
       _conversation_id = Ecto.UUID.generate()
       user1_id = Ecto.UUID.generate()

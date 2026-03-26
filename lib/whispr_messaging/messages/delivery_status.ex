@@ -152,6 +152,40 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   end
 
   @doc """
+  Computes the delivery status string from timestamps.
+
+  Returns one of: "pending", "sent", "delivered", "read".
+  The "expired" status is not yet implemented (requires expires_at field).
+  """
+  @spec compute_status(t()) :: String.t()
+  def compute_status(%__MODULE__{read_at: read_at}) when not is_nil(read_at), do: "read"
+  def compute_status(%__MODULE__{delivered_at: delivered_at}) when not is_nil(delivered_at), do: "delivered"
+  def compute_status(%__MODULE__{}), do: "pending"
+
+  @doc """
+  Computes the aggregate delivery status for a list of delivery statuses.
+
+  The aggregate status represents the "worst" status across all recipients:
+  - If any recipient is "pending", the aggregate is "pending"
+  - If all are at least "delivered" but not all "read", the aggregate is "delivered"
+  - If all are "read", the aggregate is "read"
+  - If no delivery statuses exist (e.g., sender's own message), returns "sent"
+  """
+  @spec compute_aggregate_status([t()]) :: String.t()
+  def compute_aggregate_status([]), do: "sent"
+
+  def compute_aggregate_status(statuses) when is_list(statuses) do
+    individual_statuses = Enum.map(statuses, &compute_status/1)
+
+    cond do
+      "pending" in individual_statuses -> "pending"
+      "delivered" in individual_statuses -> "delivered"
+      Enum.all?(individual_statuses, &(&1 == "read")) -> "read"
+      true -> "sent"
+    end
+  end
+
+  @doc """
   Checks if message has been delivered.
   """
   def delivered?(%__MODULE__{delivered_at: nil}), do: false

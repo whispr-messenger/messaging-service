@@ -52,7 +52,9 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
-        messages = Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+        messages =
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+          |> WhisprMessaging.Repo.preload(:delivery_statuses)
 
         json(conn, %{
           data: render_messages(messages),
@@ -204,6 +206,8 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       case Messages.edit_message(id, user_id, content, metadata) do
         {:ok, message} ->
+          message = WhisprMessaging.Repo.preload(message, :delivery_statuses)
+
           json(conn, %{
             data: render_message(message),
             meta: %{
@@ -283,7 +287,9 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   defp render_message(message) do
-    %{
+    alias WhisprMessaging.Messages.DeliveryStatus
+
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -298,6 +304,15 @@ defmodule WhisprMessagingWeb.MessageController do
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
+
+    # Add delivery_status if delivery_statuses are preloaded
+    case message do
+      %{delivery_statuses: statuses} when is_list(statuses) ->
+        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+
+      _ ->
+        Map.put(base, :delivery_status, "sent")
+    end
   end
 
   # Swagger Schema Definitions
@@ -353,6 +368,9 @@ defmodule WhisprMessagingWeb.MessageController do
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
+            delivery_status(:string, "Delivery status (pending, sent, delivered, read)",
+              enum: [:pending, :sent, :delivered, :read]
+            )
             sent_at(:string, "Sent timestamp")
             inserted_at(:string, "Creation timestamp")
             updated_at(:string, "Last update timestamp")
