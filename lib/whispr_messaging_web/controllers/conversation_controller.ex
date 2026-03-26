@@ -577,7 +577,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp render_conversation(conversation) do
     member_info = Map.get(conversation, :member_info)
-    is_pinned = if member_info, do: Map.get(member_info.settings || %{}, "is_pinned", false), else: false
+    settings = if member_info, do: member_info.settings || %{}, else: %{}
 
     %{
       id: conversation.id,
@@ -586,7 +586,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       external_group_id: conversation.external_group_id,
       metadata: conversation.metadata,
       is_active: conversation.is_active,
-      is_pinned: is_pinned,
+      is_pinned: Map.get(settings, "is_pinned", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     }
