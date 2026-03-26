@@ -595,25 +595,25 @@ defmodule WhisprMessaging.Conversations do
   """
   def pin_conversation(conversation_id, user_id) do
     case get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member ->
-        if Map.get(member.settings, "is_pinned", false) do
-          {:error, :already_pinned}
-        else
-          pinned_count = count_pinned_conversations(user_id)
+      %ConversationMember{is_active: true} = member -> do_pin_conversation(member, user_id)
+      _ -> {:error, :not_member}
+    end
+  end
 
-          if pinned_count >= @max_pinned_conversations do
-            {:error, :pin_limit_reached}
-          else
-            new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+  defp do_pin_conversation(member, user_id) do
+    cond do
+      Map.get(member.settings, "is_pinned", false) ->
+        {:error, :already_pinned}
 
-            member
-            |> ConversationMember.update_settings_changeset(new_settings)
-            |> Repo.update()
-          end
-        end
+      count_pinned_conversations(user_id) >= @max_pinned_conversations ->
+        {:error, :pin_limit_reached}
 
-      _ ->
-        {:error, :not_member}
+      true ->
+        new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+
+        member
+        |> ConversationMember.update_settings_changeset(new_settings)
+        |> Repo.update()
     end
   end
 
