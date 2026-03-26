@@ -85,14 +85,18 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     sender_id = socket.assigns.user_id
     metadata = Map.get(payload, "metadata", %{})
 
-    message_attrs = %{
-      conversation_id: conversation_id,
-      sender_id: sender_id,
-      message_type: message_type,
-      content: encrypted_content,
-      client_random: client_random,
-      metadata: metadata
-    }
+    reply_to_id = Map.get(payload, "reply_to_id")
+
+    message_attrs =
+      %{
+        conversation_id: conversation_id,
+        sender_id: sender_id,
+        message_type: message_type,
+        content: encrypted_content,
+        client_random: client_random,
+        metadata: metadata
+      }
+      |> maybe_put(:reply_to_id, reply_to_id)
 
     case ConversationServer.send_message(conversation_id, message_attrs) do
       {:ok, message} ->
@@ -342,7 +346,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   defp serialize_message(%Message{} = message) do
-    %{
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -358,6 +362,25 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
+
+    # Add reply_to context when available
+    case message do
+      %{reply_to: %Message{} = parent} ->
+        Map.put(base, :reply_to, serialize_reply_context(parent))
+
+      _ ->
+        base
+    end
+  end
+
+  defp serialize_reply_context(%Message{} = parent) do
+    %{
+      id: parent.id,
+      sender_id: parent.sender_id,
+      content: parent.content,
+      message_type: parent.message_type,
+      is_deleted: parent.is_deleted
+    }
   end
 
   defp serialize_reaction(reaction) do
@@ -369,6 +392,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       inserted_at: reaction.inserted_at
     }
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

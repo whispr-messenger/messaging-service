@@ -52,7 +52,9 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
-        messages = Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+        messages =
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+          |> WhisprMessaging.Repo.preload(:reply_to)
 
         json(conn, %{
           data: render_messages(messages),
@@ -283,7 +285,7 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   defp render_message(message) do
-    %{
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -297,6 +299,25 @@ defmodule WhisprMessagingWeb.MessageController do
       sent_at: message.sent_at,
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
+    }
+
+    # Add reply_to context when available
+    case message do
+      %{reply_to: %WhisprMessaging.Messages.Message{} = parent} ->
+        Map.put(base, :reply_to, render_reply_context(parent))
+
+      _ ->
+        base
+    end
+  end
+
+  defp render_reply_context(parent_message) do
+    %{
+      id: parent_message.id,
+      sender_id: parent_message.sender_id,
+      content: parent_message.content,
+      message_type: parent_message.message_type,
+      is_deleted: parent_message.is_deleted
     }
   end
 
@@ -350,6 +371,12 @@ defmodule WhisprMessagingWeb.MessageController do
             message_type(:string, "Message type")
             metadata(:object, "Additional metadata")
             reply_to_id(:string, "UUID of message being replied to")
+
+            reply_to(
+              Schema.ref(:MessageReplyContext),
+              "Parent message preview (present when reply_to_id is set)"
+            )
+
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
@@ -426,6 +453,19 @@ defmodule WhisprMessagingWeb.MessageController do
             end,
             "Edit metadata"
           )
+        end,
+      MessageReplyContext:
+        swagger_schema do
+          title("Message Reply Context")
+          description("Preview of the parent message for reply threading")
+
+          properties do
+            id(:string, "Parent message UUID", format: :uuid)
+            sender_id(:string, "Parent message sender UUID", format: :uuid)
+            content(:string, "Parent message content")
+            message_type(:string, "Parent message type")
+            is_deleted(:boolean, "Whether the parent message is deleted")
+          end
         end,
       MessageDeleteResponse:
         swagger_schema do

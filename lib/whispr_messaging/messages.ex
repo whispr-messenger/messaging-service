@@ -25,17 +25,20 @@ defmodule WhisprMessaging.Messages do
   Creates a new message in a conversation.
   """
   def create_message(attrs \\ %{}) do
-    %Message{}
-    |> Message.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, message} ->
-        # Preload associations for channels
-        message = Repo.preload(message, [:conversation, :reply_to])
-        {:ok, message}
+    changeset = Message.changeset(%Message{}, attrs)
 
-      error ->
-        error
+    with :ok <- validate_reply_to(changeset) do
+      changeset
+      |> Repo.insert()
+      |> case do
+        {:ok, message} ->
+          # Preload associations for channels
+          message = Repo.preload(message, [:conversation, :reply_to])
+          {:ok, message}
+
+        error ->
+          error
+      end
     end
   end
 
@@ -365,6 +368,37 @@ defmodule WhisprMessaging.Messages do
 
       delivery_status ->
         {:ok, delivery_status}
+    end
+  end
+
+  defp validate_reply_to(changeset) do
+    reply_to_id = Ecto.Changeset.get_field(changeset, :reply_to_id)
+    conversation_id = Ecto.Changeset.get_field(changeset, :conversation_id)
+
+    cond do
+      is_nil(reply_to_id) ->
+        :ok
+
+      is_nil(conversation_id) ->
+        :ok
+
+      true ->
+        case Repo.get(Message, reply_to_id) do
+          nil ->
+            {:error,
+             Ecto.Changeset.add_error(changeset, :reply_to_id, "referenced message does not exist")}
+
+          %Message{conversation_id: ^conversation_id} ->
+            :ok
+
+          %Message{} ->
+            {:error,
+             Ecto.Changeset.add_error(
+               changeset,
+               :reply_to_id,
+               "must reference a message in the same conversation"
+             )}
+        end
     end
   end
 
