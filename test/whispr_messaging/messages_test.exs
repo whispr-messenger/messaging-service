@@ -1,4 +1,3 @@
-defmodule WhisprMessaging.MessagesTest do
   use WhisprMessaging.DataCase, async: true
 
   alias WhisprMessaging.{Conversations, Messages}
@@ -700,6 +699,67 @@ defmodule WhisprMessaging.MessagesTest do
       assert normal_msg.id in ids
       assert live_ephemeral.id in ids
       refute expired_id in ids
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Draft tests (WHISPR-471)
+  # ---------------------------------------------------------------------------
+
+  describe "drafts" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "upsert_draft/4 creates a draft", %{conversation: c, user_id: user_id} do
+      assert {:ok, draft} = Messages.upsert_draft(c.id, user_id, "draft content")
+      assert draft.conversation_id == c.id
+      assert draft.user_id == user_id
+      assert draft.content == "draft content"
+    end
+
+    test "upsert_draft/4 replaces existing draft", %{conversation: c, user_id: user_id} do
+      {:ok, _first} = Messages.upsert_draft(c.id, user_id, "first draft")
+      {:ok, second} = Messages.upsert_draft(c.id, user_id, "updated draft")
+      assert second.content == "updated draft"
+      {:ok, fetched} = Messages.get_draft(c.id, user_id)
+      assert fetched.content == "updated draft"
+    end
+
+    test "get_draft/2 returns draft when it exists", %{conversation: c, user_id: user_id} do
+      {:ok, _draft} = Messages.upsert_draft(c.id, user_id, "my draft")
+      assert {:ok, draft} = Messages.get_draft(c.id, user_id)
+      assert draft.content == "my draft"
+    end
+
+    test "get_draft/2 returns not_found when no draft exists", %{conversation: c} do
+      other_user = Ecto.UUID.generate()
+      assert {:error, :not_found} = Messages.get_draft(c.id, other_user)
+    end
+
+    test "delete_draft/2 deletes owned draft", %{conversation: c, user_id: user_id} do
+      {:ok, draft} = Messages.upsert_draft(c.id, user_id, "to delete")
+      assert {:ok, _} = Messages.delete_draft(draft.id, user_id)
+      assert {:error, :not_found} = Messages.get_draft(c.id, user_id)
+    end
+
+    test "delete_draft/2 returns forbidden for another user's draft", %{
+      conversation: c,
+      user_id: user_id
+    } do
+      {:ok, draft} = Messages.upsert_draft(c.id, user_id, "not yours")
+      other_user = Ecto.UUID.generate()
+      assert {:error, :forbidden} = Messages.delete_draft(draft.id, other_user)
+    end
+
+    test "delete_draft/2 returns not_found for missing draft", %{user_id: user_id} do
+      assert {:error, :not_found} = Messages.delete_draft(Ecto.UUID.generate(), user_id)
     end
   end
 end
