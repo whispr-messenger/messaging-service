@@ -25,7 +25,9 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
       :scheduled_message,
       :body,
       Schema.ref(:ScheduledMessageCreateRequest),
-      "Scheduled message parameters", required: true)
+      "Scheduled message parameters",
+      required: true
+    )
 
     security([%{Bearer: []}])
 
