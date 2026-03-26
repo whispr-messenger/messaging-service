@@ -592,7 +592,9 @@ defmodule WhisprMessaging.Conversations do
         join: c in Conversation,
         on: c.id == m.conversation_id and c.is_active == true,
         join: other in ConversationMember,
-        on: other.conversation_id == c.id and other.user_id != ^user_id and other.is_active == true,
+        on:
+          other.conversation_id == c.id and other.user_id != ^user_id and
+            other.is_active == true,
         where: other.user_id == ^query_term,
         select: {m, c}
 
