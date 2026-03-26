@@ -506,10 +506,6 @@ defmodule WhisprMessagingWeb.ConversationController do
     camelize_keys(base)
   end
 
-  defp render_members(members) do
-    Enum.map(members, &render_member/1)
-  end
-
   defp render_member_raw(member) do
     %{
       user_id: member.user_id,
