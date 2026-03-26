@@ -418,41 +418,61 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_member_added(member, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_added", camelize_keys(%{
-      member: serialize_member(member),
-      conversation_id: state.conversation_id
-    }))
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "member_added",
+      camelize_keys(%{
+        member: serialize_member(member),
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_member_removed(user_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_removed", camelize_keys(%{
-      user_id: user_id,
-      conversation_id: state.conversation_id
-    }))
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "member_removed",
+      camelize_keys(%{
+        user_id: user_id,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_typing_status(user_id, typing, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "user_typing", camelize_keys(%{
-      user_id: user_id,
-      typing: typing,
-      conversation_id: state.conversation_id
-    }))
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "user_typing",
+      camelize_keys(%{
+        user_id: user_id,
+        typing: typing,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_read_receipt(user_id, message_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read", camelize_keys(%{
-      user_id: user_id,
-      message_id: message_id,
-      conversation_id: state.conversation_id,
-      timestamp: DateTime.utc_now()
-    }))
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "message_read",
+      camelize_keys(%{
+        user_id: user_id,
+        message_id: message_id,
+        conversation_id: state.conversation_id,
+        timestamp: DateTime.utc_now()
+      })
+    )
   end
 
   defp broadcast_settings_updated(settings, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "settings_updated", camelize_keys(%{
-      settings: settings,
-      conversation_id: state.conversation_id
-    }))
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "settings_updated",
+      camelize_keys(%{
+        settings: settings,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp create_member_joined_message(user_id, state) do
