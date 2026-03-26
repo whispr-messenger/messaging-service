@@ -263,13 +263,12 @@ defmodule WhisprMessaging.Conversations do
   def get_conversation_member_settings(conversation_id, user_id) do
     case get_conversation_member(conversation_id, user_id) do
       %ConversationMember{is_active: true, settings: settings} ->
-        public_settings =
-          Map.take(settings || %{}, @member_settings_allowlist)
+        public_settings = Map.take(settings || %{}, @member_settings_allowlist)
 
-        # Merge with defaults so callers always get all known keys
-        defaults =
+        base_defaults =
           Map.take(ConversationMember.default_settings(), @member_settings_allowlist)
-          |> Map.merge(%{"is_muted" => false, "custom_name" => nil})
+
+        defaults = Map.merge(base_defaults, %{"is_muted" => false, "custom_name" => nil})
 
         {:ok, Map.merge(defaults, public_settings)}
 
@@ -287,7 +286,7 @@ defmodule WhisprMessaging.Conversations do
   def update_conversation_member_settings(conversation_id, user_id, attrs) do
     case get_conversation_member(conversation_id, user_id) do
       %ConversationMember{is_active: true} = member ->
-        # Only merge allowed keys; preserve protected keys (role, is_pinned…)
+        # Only merge allowed keys; preserve protected keys (role, is_pinned, etc.)
         allowed_updates = Map.take(attrs, @member_settings_allowlist)
         new_settings = Map.merge(member.settings || %{}, allowed_updates)
 
