@@ -30,7 +30,7 @@ defmodule WhisprMessaging.JwksCacheTest do
 
   setup do
     # Reset the JwksCache state before each test so tests don't leak state
-    :sys.replace_state(JwksCache, fn state -> %{state | jwk: nil} end)
+    :sys.replace_state(JwksCache, fn state -> %{state | keys: %{}} end)
     :ok
   end
 
@@ -47,7 +47,7 @@ defmodule WhisprMessaging.JwksCacheTest do
       end
     end
 
-    test "returns {:ok, jwk} after a successful JWKS fetch" do
+    test "returns {:ok, pem} after a successful JWKS fetch" do
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
           {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
@@ -55,8 +55,9 @@ defmodule WhisprMessaging.JwksCacheTest do
         send(JwksCache, :refresh)
         Process.sleep(200)
 
-        assert {:ok, jwk} = JwksCache.get_signing_key()
-        assert is_struct(jwk, JOSE.JWK)
+        assert {:ok, pem} = JwksCache.get_signing_key()
+        assert is_binary(pem)
+        assert String.starts_with?(pem, "-----BEGIN")
       end
     end
 
@@ -69,19 +70,46 @@ defmodule WhisprMessaging.JwksCacheTest do
         send(JwksCache, :refresh)
         Process.sleep(200)
 
-        assert {:ok, _jwk} = JwksCache.get_signing_key()
+        assert {:ok, _pem} = JwksCache.get_signing_key()
       end
 
-      # Now mock a failure and verify the key is still available
+      # Trigger a second refresh with a mock failure and verify key is retained
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
           {:ok, %Finch.Response{status: 503, body: "service unavailable", headers: []}}
         end do
         send(JwksCache, :refresh)
-        Process.sleep(100)
+        Process.sleep(200)
 
         # Key should still be available from the previous successful fetch
-        assert {:ok, _jwk} = JwksCache.get_signing_key()
+        assert {:ok, _pem} = JwksCache.get_signing_key()
+      end
+    end
+  end
+
+  describe "get_signing_key/1 with kid" do
+    test "returns the key matching the given kid" do
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(200)
+
+        assert {:ok, pem} = JwksCache.get_signing_key("test-kid-1")
+        assert is_binary(pem)
+      end
+    end
+
+    test "returns :not_loaded for an unknown kid" do
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(200)
+
+        assert {:error, :not_loaded} = JwksCache.get_signing_key("unknown-kid")
       end
     end
   end

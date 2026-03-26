@@ -68,8 +68,11 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
         ok
 
       :not_test_token ->
-        with {:ok, jwk} <- JwksCache.get_signing_key(),
-             {:ok, claims} <- validate_token(token, jwk),
+        # Extract kid from token header to select the correct cached key
+        kid = peek_kid(token)
+
+        with {:ok, pem} <- JwksCache.get_signing_key(kid),
+             {:ok, claims} <- validate_token(token, pem),
              {:ok, user_id} <- extract_sub(claims) do
           {:ok, user_id}
         else
@@ -94,8 +97,9 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
 
   defp maybe_test_token(_token), do: :not_test_token
 
-  defp validate_token(token, jwk) do
-    signer = Joken.Signer.create("ES256", %{"pem" => jwk_to_pem(jwk)})
+  # `pem` comes pre-built from JwksCache — no per-request JWK conversion.
+  defp validate_token(token, pem) do
+    signer = Joken.Signer.create("ES256", %{"pem" => pem})
 
     case Joken.verify_and_validate(token_config(), token, signer) do
       {:ok, claims} -> {:ok, claims}
@@ -104,15 +108,22 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   defp token_config do
-    Joken.Config.default_claims(
-      skip: [:exp, :iat, :nbf],
-      validate_exp: true
-    )
+    # Skip :iat and :nbf (clock-skew prone) but validate :exp so expired tokens
+    # are rejected.  Do NOT list :exp in `skip` — that would disable expiration
+    # validation regardless of the validate_exp option.
+    Joken.Config.default_claims(skip: [:iat, :nbf])
   end
 
-  defp jwk_to_pem(jwk) do
-    {_, pem} = JOSE.JWK.to_pem(jwk)
-    pem
+  # Attempt to read the `kid` header field from a JWT without verifying it.
+  # Returns nil if the token is malformed or has no kid.
+  defp peek_kid(token) do
+    with [header_b64 | _] <- String.split(token, "."),
+         {:ok, json} <- Base.url_decode64(header_b64, padding: false),
+         {:ok, %{"kid" => kid}} when is_binary(kid) <- Jason.decode(json) do
+      kid
+    else
+      _ -> nil
+    end
   end
 
   defp extract_sub(%{"sub" => sub}) when is_binary(sub) and sub != "" do
