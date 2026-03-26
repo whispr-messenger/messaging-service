@@ -68,6 +68,63 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  swagger_path :search do
+    get("/conversations/search")
+    summary("Search user conversations")
+
+    description(
+      "Searches the authenticated user's conversations by group name or participant user ID"
+    )
+
+    produces("application/json")
+    parameter(:q, :query, :string, "Search term (name fragment or exact participant user_id)", required: true)
+
+    parameter(:limit, :query, :integer, "Maximum number of results to return (max: 50)",
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationsResponse))
+    response(400, "Bad Request - missing q parameter")
+  end
+
+  @doc """
+  Searches conversations for the authenticated user.
+  GET /api/v1/conversations/search?q=...
+
+  Query params:
+  - q: search term (required) — matched against group name or participant user_id
+  - limit: max results (default: 20, max: 50)
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:user_id]
+    query_term = params["q"]
+
+    cond do
+      is_nil(user_id) ->
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Unauthorized"})
+
+      is_nil(query_term) or String.trim(query_term) == "" ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Missing required parameter: q"})
+
+      true ->
+        limit = min(String.to_integer(params["limit"] || "20"), 50)
+        conversations = Conversations.search_user_conversations(user_id, query_term, limit: limit)
+
+        json(conn, %{
+          data: render_conversations(conversations),
+          meta: %{
+            count: length(conversations),
+            query: query_term
+          }
+        })
+    end
+  end
+
   swagger_path :create do
     post("/conversations")
     summary("Create a new conversation")
