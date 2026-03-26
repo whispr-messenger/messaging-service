@@ -386,7 +386,11 @@ defmodule WhisprMessaging.Messages do
         case Repo.get(Message, reply_to_id) do
           nil ->
             {:error,
-             Ecto.Changeset.add_error(changeset, :reply_to_id, "referenced message does not exist")}
+             Ecto.Changeset.add_error(
+               changeset,
+               :reply_to_id,
+               "referenced message does not exist"
+             )}
 
           %Message{conversation_id: ^conversation_id} ->
             :ok
