@@ -606,9 +606,9 @@ defmodule WhisprMessaging.MessagesTest do
 
       WhisprMessaging.Repo.insert_all("messages", [
         %{
-          id: Ecto.UUID.dump!(expired_id) |> elem(1),
-          conversation_id: Ecto.UUID.dump!(c.id) |> elem(1),
-          sender_id: Ecto.UUID.dump!(user_id) |> elem(1),
+          id: Ecto.UUID.dump!(expired_id),
+          conversation_id: Ecto.UUID.dump!(c.id),
+          sender_id: Ecto.UUID.dump!(user_id),
           message_type: "text",
           content: "expired",
           client_random: 102,
