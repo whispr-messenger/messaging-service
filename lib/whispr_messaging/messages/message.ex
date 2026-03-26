@@ -27,6 +27,7 @@ defmodule WhisprMessaging.Messages.Message do
     field :client_random, :integer
     field :sent_at, :utc_datetime
     field :edited_at, :utc_datetime
+    field :expires_at, :utc_datetime
     field :is_deleted, :boolean, default: false
     field :delete_for_everyone, :boolean, default: false
 
@@ -53,9 +54,11 @@ defmodule WhisprMessaging.Messages.Message do
       :content,
       :metadata,
       :client_random,
-      :sent_at
+      :sent_at,
+      :expires_at
     ])
     |> validate_required([:conversation_id, :sender_id, :message_type, :content, :client_random])
+    |> validate_expires_at()
     |> validate_inclusion(:message_type, @message_types)
     |> validate_content_size()
     |> validate_metadata()
@@ -102,9 +105,12 @@ defmodule WhisprMessaging.Messages.Message do
   Query to get recent messages from a conversation.
   """
   def recent_messages_query(conversation_id, limit \\ 50, before_timestamp \\ nil) do
+    now = DateTime.utc_now()
+
     query =
       from m in __MODULE__,
         where: m.conversation_id == ^conversation_id and m.is_deleted == false,
+        where: is_nil(m.expires_at) or m.expires_at > ^now,
         order_by: [desc: m.sent_at],
         limit: ^limit
 
@@ -245,6 +251,31 @@ defmodule WhisprMessaging.Messages.Message do
       metadata: metadata,
       client_random: client_random
     })
+  end
+
+  @doc """
+  Checks if an ephemeral message has passed its expiry time.
+  """
+  def expired?(%__MODULE__{expires_at: nil}), do: false
+
+  def expired?(%__MODULE__{expires_at: expires_at}) do
+    DateTime.compare(DateTime.utc_now(), expires_at) == :gt
+  end
+
+  defp validate_expires_at(%Ecto.Changeset{} = changeset) do
+    case get_field(changeset, :expires_at) do
+      nil ->
+        changeset
+
+      expires_at ->
+        sent_at = get_field(changeset, :sent_at) || DateTime.utc_now()
+
+        if DateTime.compare(expires_at, sent_at) == :gt do
+          changeset
+        else
+          add_error(changeset, :expires_at, "must be in the future")
+        end
+    end
   end
 
   defp validate_content_size(%Ecto.Changeset{} = changeset) do

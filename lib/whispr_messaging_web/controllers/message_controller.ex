@@ -107,6 +107,7 @@ defmodule WhisprMessagingWeb.MessageController do
       message_params
       |> Map.put("conversation_id", conversation_id)
       |> Map.put_new("sender_id", user_id)
+      |> resolve_ttl_seconds()
 
     if is_nil(user_id) do
       conn
@@ -294,11 +295,30 @@ defmodule WhisprMessagingWeb.MessageController do
       is_edited: message.edited_at != nil,
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,
+      is_ephemeral: not is_nil(message.expires_at),
+      expires_at: message.expires_at,
       sent_at: message.sent_at,
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
   end
+
+  # Convert ttl_seconds convenience param to an explicit expires_at timestamp.
+  # If both are provided, expires_at takes precedence.
+  defp resolve_ttl_seconds(%{"expires_at" => _} = params), do: params
+
+  defp resolve_ttl_seconds(%{"ttl_seconds" => ttl} = params) when is_integer(ttl) and ttl > 0 do
+    expires_at =
+      DateTime.utc_now()
+      |> DateTime.add(ttl, :second)
+      |> DateTime.truncate(:second)
+
+    params
+    |> Map.put("expires_at", expires_at)
+    |> Map.delete("ttl_seconds")
+  end
+
+  defp resolve_ttl_seconds(params), do: params
 
   # Swagger Schema Definitions
   def swagger_definitions do
