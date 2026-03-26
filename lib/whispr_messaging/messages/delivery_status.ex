@@ -157,9 +157,12 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   Returns one of: "pending", "sent", "delivered", "read".
   The "expired" status is not yet implemented (requires expires_at field).
   """
-  @spec compute_status(t()) :: String.t()
+  @spec compute_status(%__MODULE__{}) :: String.t()
   def compute_status(%__MODULE__{read_at: read_at}) when not is_nil(read_at), do: "read"
-  def compute_status(%__MODULE__{delivered_at: delivered_at}) when not is_nil(delivered_at), do: "delivered"
+
+  def compute_status(%__MODULE__{delivered_at: delivered_at}) when not is_nil(delivered_at),
+    do: "delivered"
+
   def compute_status(%__MODULE__{}), do: "pending"
 
   @doc """
@@ -171,7 +174,7 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   - If all are "read", the aggregate is "read"
   - If no delivery statuses exist (e.g., sender's own message), returns "sent"
   """
-  @spec compute_aggregate_status([t()]) :: String.t()
+  @spec compute_aggregate_status([%__MODULE__{}]) :: String.t()
   def compute_aggregate_status([]), do: "sent"
 
   def compute_aggregate_status(statuses) when is_list(statuses) do
