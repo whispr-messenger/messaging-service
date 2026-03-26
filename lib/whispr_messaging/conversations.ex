@@ -551,7 +551,7 @@ defmodule WhisprMessaging.Conversations do
 
     (name_results ++ participant_results)
     |> Enum.uniq_by(fn {_m, c} -> c.id end)
-    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, DateTime})
+    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, NaiveDateTime})
     |> Enum.take(limit)
     |> Enum.map(fn {member, conversation} ->
       Map.put(conversation, :member_info, member)
