@@ -21,12 +21,14 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
     produces("application/json")
     consumes("application/json")
 
-    parameter(:scheduled_message, :body, Schema.ref(:ScheduledMessageCreateRequest),
-      "Scheduled message parameters",
-      required: true
-    )
+    parameter(
+      :scheduled_message,
+      :body,
+      Schema.ref(:ScheduledMessageCreateRequest),
+      "Scheduled message parameters", required: true)
 
     security([%{Bearer: []}])
+
     response(201, "Created", Schema.ref(:ScheduledMessageResponse))
     response(404, "Conversation Not Found")
     response(403, "Forbidden")
