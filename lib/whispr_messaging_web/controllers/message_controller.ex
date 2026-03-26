@@ -368,9 +368,11 @@ defmodule WhisprMessagingWeb.MessageController do
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
+
             delivery_status(:string, "Delivery status (pending, sent, delivered, read)",
               enum: [:pending, :sent, :delivered, :read]
             )
+
             sent_at(:string, "Sent timestamp")
             inserted_at(:string, "Creation timestamp")
             updated_at(:string, "Last update timestamp")
