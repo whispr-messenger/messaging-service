@@ -114,4 +114,79 @@ defmodule WhisprMessaging.ConversationsTest do
       assert updated.metadata["name"] == "New Name"
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Conversation member settings tests (WHISPR-467)
+  # ---------------------------------------------------------------------------
+
+  describe "get_conversation_member_settings/2" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "returns default settings for a new member", %{conversation: c, user_id: user_id} do
+      assert {:ok, settings} = Conversations.get_conversation_member_settings(c.id, user_id)
+      assert settings["notifications"] == true
+      assert settings["is_muted"] == false
+      assert settings["custom_name"] == nil
+    end
+
+    test "returns :not_member for non-member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.get_conversation_member_settings(c.id, stranger)
+    end
+  end
+
+  describe "update_conversation_member_settings/3" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "updates allowed settings", %{conversation: c, user_id: user_id} do
+      assert {:ok, _} =
+               Conversations.update_conversation_member_settings(c.id, user_id, %{
+                 "is_muted" => true,
+                 "custom_name" => "My Friend"
+               })
+
+      {:ok, settings} = Conversations.get_conversation_member_settings(c.id, user_id)
+      assert settings["is_muted"] == true
+      assert settings["custom_name"] == "My Friend"
+    end
+
+    test "ignores disallowed keys (e.g. role)", %{conversation: c, user_id: user_id} do
+      # "role" is an internal key and should not be writable via this API
+      assert {:ok, _} =
+               Conversations.update_conversation_member_settings(c.id, user_id, %{
+                 "role" => "admin"
+               })
+
+      # Member is still a regular member
+      member = Conversations.get_conversation_member(c.id, user_id)
+      assert Map.get(member.settings, "role", "member") == "member"
+    end
+
+    test "returns :not_member for non-member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+
+      assert {:error, :not_member} =
+               Conversations.update_conversation_member_settings(c.id, stranger, %{
+                 "is_muted" => true
+               })
+    end
+  end
 end
