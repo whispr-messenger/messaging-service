@@ -54,6 +54,8 @@ defmodule WhisprMessagingWeb.Router do
 
     # Literal paths must come before parameterized :id routes
     get "/conversations/archived", ConversationController, :archived
+    # Search must be declared before /:id to avoid Phoenix treating "search" as an ID
+    get "/conversations/search", ConversationController, :search
 
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
