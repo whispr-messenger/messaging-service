@@ -82,6 +82,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     )
 
     produces("application/json")
+
     parameter(
       :q,
       :query,
