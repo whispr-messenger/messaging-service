@@ -140,7 +140,8 @@ defmodule WhisprMessaging.ConversationsTest do
 
     test "returns :not_member for non-member", %{conversation: c} do
       stranger = Ecto.UUID.generate()
-      assert {:error, :not_member} = Conversations.get_conversation_member_settings(c.id, stranger)
+      assert {:error, :not_member} =
+               Conversations.get_conversation_member_settings(c.id, stranger)
     end
   end
 
