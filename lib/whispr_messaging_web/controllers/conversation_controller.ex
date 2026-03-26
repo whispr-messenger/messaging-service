@@ -59,10 +59,11 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       json(conn, %{
         data: render_conversations(conversations),
-        meta: camelize_keys(%{
-          count: length(conversations),
-          user_id: user_id
-        })
+        meta:
+          camelize_keys(%{
+            count: length(conversations),
+            user_id: user_id
+          })
       })
     end
   end
@@ -384,11 +385,12 @@ defmodule WhisprMessagingWeb.ConversationController do
          true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
-        data: camelize_keys(%{
-          id: deactivated_conversation.id,
-          is_active: deactivated_conversation.is_active,
-          deleted_at: DateTime.utc_now()
-        })
+        data:
+          camelize_keys(%{
+            id: deactivated_conversation.id,
+            is_active: deactivated_conversation.is_active,
+            deleted_at: DateTime.utc_now()
+          })
       })
     else
       false ->
