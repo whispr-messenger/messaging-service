@@ -18,6 +18,8 @@ defmodule WhisprMessaging.ConversationServer do
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   # @typep conversation_state :: %{
   #          conversation_id: binary(),
   #          conversation: Conversation.t(),
@@ -416,41 +418,41 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_member_added(member, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_added", %{
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_added", camelize_keys(%{
       member: serialize_member(member),
       conversation_id: state.conversation_id
-    })
+    }))
   end
 
   defp broadcast_member_removed(user_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_removed", %{
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_removed", camelize_keys(%{
       user_id: user_id,
       conversation_id: state.conversation_id
-    })
+    }))
   end
 
   defp broadcast_typing_status(user_id, typing, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "user_typing", %{
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "user_typing", camelize_keys(%{
       user_id: user_id,
       typing: typing,
       conversation_id: state.conversation_id
-    })
+    }))
   end
 
   defp broadcast_read_receipt(user_id, message_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read", %{
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read", camelize_keys(%{
       user_id: user_id,
       message_id: message_id,
       conversation_id: state.conversation_id,
       timestamp: DateTime.utc_now()
-    })
+    }))
   end
 
   defp broadcast_settings_updated(settings, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "settings_updated", %{
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "settings_updated", camelize_keys(%{
       settings: settings,
       conversation_id: state.conversation_id
-    })
+    }))
   end
 
   defp create_member_joined_message(user_id, state) do
@@ -474,7 +476,7 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp serialize_message(message) do
-    %{
+    camelize_keys(%{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -487,11 +489,11 @@ defmodule WhisprMessaging.ConversationServer do
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,
       delete_for_everyone: message.delete_for_everyone
-    }
+    })
   end
 
   defp serialize_member(member) do
-    %{
+    camelize_keys(%{
       id: member.id,
       conversation_id: member.conversation_id,
       user_id: member.user_id,
@@ -499,7 +501,7 @@ defmodule WhisprMessaging.ConversationServer do
       joined_at: member.joined_at,
       last_read_at: member.last_read_at,
       is_active: member.is_active
-    }
+    })
   end
 
   defp init_metrics do

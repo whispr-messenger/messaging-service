@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   alias WhisprMessaging.Conversations
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :index do
@@ -57,10 +59,10 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       json(conn, %{
         data: render_conversations(conversations),
-        meta: %{
+        meta: camelize_keys(%{
           count: length(conversations),
           user_id: user_id
-        }
+        })
       })
     end
   end
@@ -382,11 +384,11 @@ defmodule WhisprMessagingWeb.ConversationController do
          true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
-        data: %{
+        data: camelize_keys(%{
           id: deactivated_conversation.id,
           is_active: deactivated_conversation.is_active,
           deleted_at: DateTime.utc_now()
-        }
+        })
       })
     else
       false ->
@@ -475,7 +477,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_conversation(conversation) do
-    %{
+    camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
       name: Map.get(conversation.metadata || %{}, "name"),
@@ -484,27 +486,41 @@ defmodule WhisprMessagingWeb.ConversationController do
       is_active: conversation.is_active,
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
-    }
+    })
   end
 
   defp render_conversation_with_members(conversation) do
-    conversation
-    |> render_conversation()
-    |> Map.put(:members, render_members(conversation.members))
-    |> Map.put(:member_count, length(conversation.members))
+    base = %{
+      id: conversation.id,
+      type: conversation.type,
+      name: Map.get(conversation.metadata || %{}, "name"),
+      external_group_id: conversation.external_group_id,
+      metadata: conversation.metadata,
+      is_active: conversation.is_active,
+      inserted_at: conversation.inserted_at,
+      updated_at: conversation.updated_at,
+      members: Enum.map(conversation.members, &render_member_raw/1),
+      member_count: length(conversation.members)
+    }
+
+    camelize_keys(base)
   end
 
   defp render_members(members) do
     Enum.map(members, &render_member/1)
   end
 
-  defp render_member(member) do
+  defp render_member_raw(member) do
     %{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
       joined_at: member.joined_at,
       is_active: member.is_active
     }
+  end
+
+  defp render_member(member) do
+    camelize_keys(render_member_raw(member))
   end
 
   defp filter_by_type(conversations, nil), do: conversations

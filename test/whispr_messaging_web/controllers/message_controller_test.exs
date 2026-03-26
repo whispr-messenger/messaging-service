@@ -159,9 +159,9 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert response["data"]["id"] != nil
       assert response["data"]["content"] == "encrypted_content"
-      assert response["data"]["message_type"] == "text"
-      assert response["data"]["sender_id"] == user1_id
-      assert response["data"]["conversation_id"] == conversation.id
+      assert response["data"]["messageType"] == "text"
+      assert response["data"]["senderId"] == user1_id
+      assert response["data"]["conversationId"] == conversation.id
     end
 
     test "returns 422 with invalid attributes", %{
@@ -317,7 +317,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert response["data"]["content"] == "updated_content"
       assert response["data"]["metadata"]["edited"] == true
-      assert response["data"]["edited_at"] != nil
+      assert response["data"]["editedAt"] != nil
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -424,8 +424,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      assert response["data"]["is_deleted"] == true
-      assert response["data"]["delete_for_everyone"] == true
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == true
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -484,8 +484,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      assert response["data"]["is_deleted"] == true
-      assert response["data"]["delete_for_everyone"] == false
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == false
     end
   end
 end
