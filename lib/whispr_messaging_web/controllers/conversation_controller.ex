@@ -474,24 +474,11 @@ defmodule WhisprMessagingWeb.ConversationController do
       conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
     else
       case Conversations.update_conversation_member_settings(conversation_id, user_id, attrs) do
-        {:ok, member} ->
+        {:ok, _member} ->
           {:ok, settings} =
             Conversations.get_conversation_member_settings(conversation_id, user_id)
 
-          # Broadcast mute change to the user's other devices if is_muted changed
-          if Map.has_key?(attrs, "is_muted") do
-            WhisprMessagingWeb.Endpoint.broadcast(
-              "user:#{user_id}",
-              "conversation_settings_updated",
-              %{
-                conversation_id: conversation_id,
-                settings: settings,
-                timestamp: DateTime.utc_now()
-              }
-            )
-          end
-
-          _ = member
+          maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings)
           json(conn, %{data: %{conversation_id: conversation_id, settings: settings}})
 
         {:error, :not_member} ->
@@ -609,6 +596,20 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp render_members(members) do
     Enum.map(members, &render_member/1)
+  end
+
+  defp maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings) do
+    if Map.has_key?(attrs, "is_muted") do
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "user:#{user_id}",
+        "conversation_settings_updated",
+        %{
+          conversation_id: conversation_id,
+          settings: settings,
+          timestamp: DateTime.utc_now()
+        }
+      )
+    end
   end
 
   defp render_member(member) do
