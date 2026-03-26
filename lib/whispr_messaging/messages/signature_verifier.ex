@@ -79,21 +79,26 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   signed_data = content <> conversation_id_bytes <> <<client_random::big-32>>
   """
   def build_signed_data(attrs) do
-    content = attrs["content"] || attrs[:content] || ""
-    conversation_id = attrs["conversation_id"] || attrs[:conversation_id] || ""
-    client_random = attrs["client_random"] || attrs[:client_random] || 0
+    content = fetch_attr(attrs, "content", :content, "")
+    conversation_id = fetch_attr(attrs, "conversation_id", :conversation_id, "")
+    client_random = fetch_attr(attrs, "client_random", :client_random, 0)
 
-    # Convert UUIDs to raw binary if they are string form
-    conversation_id_bytes =
-      case Ecto.UUID.dump(conversation_id) do
-        {:ok, bytes} -> bytes
-        _ -> conversation_id
-      end
-
-    content_bytes = if is_binary(content), do: content, else: to_string(content)
-
-    content_bytes <> conversation_id_bytes <> <<client_random::big-32>>
+    content_bytes(content) <> uuid_to_bytes(conversation_id) <> <<client_random::big-32>>
   end
+
+  defp fetch_attr(attrs, key, atom_key, default) do
+    attrs[key] || attrs[atom_key] || default
+  end
+
+  defp uuid_to_bytes(conversation_id) do
+    case Ecto.UUID.dump(conversation_id) do
+      {:ok, bytes} -> bytes
+      _ -> conversation_id
+    end
+  end
+
+  defp content_bytes(content) when is_binary(content), do: content
+  defp content_bytes(content), do: to_string(content)
 
   defp decode_base64(b64, field) do
     case Base.decode64(b64) do
