@@ -14,7 +14,8 @@ defmodule WhisprMessaging.Messages do
     MessageAttachment,
     MessageDraft,
     MessageReaction,
-    ScheduledMessage
+    ScheduledMessage,
+    SignatureVerifier
   }
 
   alias WhisprMessaging.Repo
@@ -25,21 +26,28 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Creates a new message in a conversation.
+
+  Verifies the Ed25519 signature when `signature` and `sender_public_key`
+  are present in attrs. Returns `{:error, :invalid_signature}` if the
+  signature check fails without touching the database.
   """
   def create_message(attrs \\ %{}) do
-    changeset = Message.changeset(%Message{}, attrs)
+    # Verify signature before persisting (no DB write on failure)
+    with :ok <- SignatureVerifier.verify(attrs) do
+      changeset = Message.changeset(%Message{}, attrs)
 
-    with :ok <- validate_reply_to(changeset) do
-      changeset
-      |> Repo.insert()
-      |> case do
-        {:ok, message} ->
-          # Preload associations for channels
-          message = Repo.preload(message, [:conversation, :reply_to])
-          {:ok, message}
+      with :ok <- validate_reply_to(changeset) do
+        changeset
+        |> Repo.insert()
+        |> case do
+          {:ok, message} ->
+            # Preload associations for channels
+            message = Repo.preload(message, [:conversation, :reply_to])
+            {:ok, message}
 
-        error ->
-          error
+          error ->
+            error
+        end
       end
     end
   end

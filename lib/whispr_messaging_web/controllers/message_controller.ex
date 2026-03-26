@@ -142,6 +142,13 @@ defmodule WhisprMessagingWeb.MessageController do
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
 
+        {:error, reason}
+        when reason in [:invalid_signature, :missing_signature_fields, :invalid_key_length,
+                        :invalid_signature_length, :verification_error] ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Invalid message signature"})
+
         {:error, changeset} ->
           {:error, changeset}
       end
