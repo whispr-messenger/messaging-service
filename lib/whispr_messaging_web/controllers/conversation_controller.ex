@@ -577,7 +577,13 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp render_conversation(conversation) do
     member_info = Map.get(conversation, :member_info)
-    settings = if member_info, do: member_info.settings || %{}, else: %{}
+
+    settings =
+      if member_info do
+        member_info.settings || %{}
+      else
+        %{}
+      end
 
     %{
       id: conversation.id,
