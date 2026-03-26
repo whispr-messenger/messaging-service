@@ -579,6 +579,81 @@ defmodule WhisprMessaging.Conversations do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Conversation pin / unpin (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  @max_pinned_conversations 5
+
+  @doc """
+  Pins a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, `{:error, :already_pinned}` if already pinned, or
+  `{:error, :pin_limit_reached}` when the user already has
+  #{@max_pinned_conversations} pinned conversations.
+  """
+  def pin_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_pinned", false) do
+          {:error, :already_pinned}
+        else
+          pinned_count = count_pinned_conversations(user_id)
+
+          if pinned_count >= @max_pinned_conversations do
+            {:error, :pin_limit_reached}
+          else
+            new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+
+            member
+            |> ConversationMember.update_settings_changeset(new_settings)
+            |> Repo.update()
+          end
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Unpins a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :not_pinned}` if the conversation is not
+  currently pinned.
+  """
+  def unpin_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_pinned", false) do
+          new_settings = Map.put(member.settings, "is_pinned", false)
+
+          member
+          |> ConversationMember.update_settings_changeset(new_settings)
+          |> Repo.update()
+        else
+          {:error, :not_pinned}
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Counts the number of pinned conversations for a user.
+  """
+  def count_pinned_conversations(user_id) do
+    from(m in ConversationMember,
+      where: m.user_id == ^user_id,
+      where: m.is_active == true,
+      where: fragment("(?->>'is_pinned')::boolean = true", m.settings)
+    )
+    |> Repo.aggregate(:count, :id)
+  end
+
   @doc """
   Finds or creates a direct conversation between two users.
   """
