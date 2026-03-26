@@ -114,4 +114,93 @@ defmodule WhisprMessaging.ConversationsTest do
       assert updated.metadata["name"] == "New Name"
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Pin / Unpin tests (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  describe "pin_conversation/2" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "pins a conversation successfully", %{conversation: c, user_id: user_id} do
+      assert {:ok, member} = Conversations.pin_conversation(c.id, user_id)
+      assert member.settings["is_pinned"] == true
+    end
+
+    test "returns :already_pinned when already pinned", %{conversation: c, user_id: user_id} do
+      {:ok, _} = Conversations.pin_conversation(c.id, user_id)
+      assert {:error, :already_pinned} = Conversations.pin_conversation(c.id, user_id)
+    end
+
+    test "returns :not_member when user is not a member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.pin_conversation(c.id, stranger)
+    end
+
+    test "returns :pin_limit_reached when 5 conversations are already pinned", %{
+      user_id: user_id
+    } do
+      # Pin 5 conversations
+      for _i <- 1..5 do
+        {:ok, conv} =
+          Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+        {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+        {:ok, _} = Conversations.pin_conversation(conv.id, user_id)
+      end
+
+      # 6th should fail
+      {:ok, sixth} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(sixth.id, user_id)
+
+      assert {:error, :pin_limit_reached} = Conversations.pin_conversation(sixth.id, user_id)
+    end
+  end
+
+  describe "unpin_conversation/2" do
+    setup do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+      {:ok, _} = Conversations.pin_conversation(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "unpins a conversation successfully", %{conversation: c, user_id: user_id} do
+      assert {:ok, member} = Conversations.unpin_conversation(c.id, user_id)
+      assert member.settings["is_pinned"] == false
+    end
+
+    test "returns :not_pinned when conversation is not pinned", %{
+      conversation: _c,
+      user_id: user_id
+    } do
+      {:ok, other} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(other.id, user_id)
+
+      assert {:error, :not_pinned} = Conversations.unpin_conversation(other.id, user_id)
+    end
+
+    test "returns :not_member when user is not a member", %{conversation: c} do
+      stranger = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.unpin_conversation(c.id, stranger)
+    end
+  end
 end
