@@ -539,7 +539,15 @@ defmodule WhisprMessaging.Conversations do
         select: {m, c}
 
     name_results = Repo.all(by_name)
-    participant_results = Repo.all(by_participant)
+
+    # Only query by participant when the term is a valid UUID — the user_id
+    # field is a binary_id and Ecto raises a CastError otherwise.
+    participant_results =
+      if valid_uuid?(query_term) do
+        Repo.all(by_participant)
+      else
+        []
+      end
 
     (name_results ++ participant_results)
     |> Enum.uniq_by(fn {_m, c} -> c.id end)
@@ -549,6 +557,15 @@ defmodule WhisprMessaging.Conversations do
       Map.put(conversation, :member_info, member)
     end)
   end
+
+  defp valid_uuid?(str) when is_binary(str) do
+    case Ecto.UUID.cast(str) do
+      {:ok, _} -> true
+      :error -> false
+    end
+  end
+
+  defp valid_uuid?(_), do: false
 
   @doc """
   Gets a conversation with members preloaded.
