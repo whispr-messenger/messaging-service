@@ -12,7 +12,8 @@ defmodule WhisprMessaging.Messages do
     DeliveryStatus,
     Message,
     MessageAttachment,
-    MessageReaction
+    MessageReaction,
+    ScheduledMessage
   }
 
   alias WhisprMessaging.Repo
@@ -493,5 +494,52 @@ defmodule WhisprMessaging.Messages do
   def user_can_access_message?(conversation_id, user_id) do
     alias WhisprMessaging.Conversations
     Conversations.conversation_member?(conversation_id, user_id)
+  end
+
+  # Scheduled message operations
+
+  @doc """
+  Schedules a message to be sent at a future time.
+  """
+  def schedule_message(attrs \\ %{}) do
+    %ScheduledMessage{}
+    |> ScheduledMessage.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Lists pending scheduled messages for a sender.
+  """
+  def list_scheduled_messages(sender_id) do
+    ScheduledMessage.pending_by_sender_query(sender_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a single scheduled message by id.
+  """
+  def get_scheduled_message(id) do
+    case Repo.get(ScheduledMessage, id) do
+      nil -> {:error, :not_found}
+      sm -> {:ok, sm}
+    end
+  end
+
+  @doc """
+  Cancels a pending scheduled message. Only the sender can cancel.
+  """
+  def cancel_scheduled_message(id, user_id) do
+    case Repo.get(ScheduledMessage, id) do
+      nil ->
+        {:error, :not_found}
+
+      %ScheduledMessage{sender_id: ^user_id} = sm ->
+        sm
+        |> ScheduledMessage.cancel_changeset()
+        |> Repo.update()
+
+      %ScheduledMessage{} ->
+        {:error, :forbidden}
+    end
   end
 end

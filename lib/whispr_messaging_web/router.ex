@@ -69,6 +69,11 @@ defmodule WhisprMessagingWeb.Router do
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
 
+    # Scheduled message routes — declared before /messages/:id pattern
+    get "/messages/scheduled", ScheduledMessageController, :index
+    post "/messages/scheduled", ScheduledMessageController, :create
+    delete "/messages/scheduled/:id", ScheduledMessageController, :delete
+
     # Attachment routes
     post "/attachments/upload", AttachmentController, :upload
     get "/attachments/:id", AttachmentController, :show

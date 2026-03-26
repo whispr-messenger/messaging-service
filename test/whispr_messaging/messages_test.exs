@@ -702,4 +702,128 @@ defmodule WhisprMessaging.MessagesTest do
       refute expired_id in ids
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Scheduled message tests (WHISPR-470)
+  # ---------------------------------------------------------------------------
+
+  describe "scheduled messages" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      future = DateTime.add(DateTime.utc_now(), 3600, :second) |> DateTime.truncate(:second)
+
+      %{conversation: conversation, user_id: user_id, future: future}
+    end
+
+    test "schedule_message/1 creates a scheduled message", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      assert {:ok, sm} =
+               Messages.schedule_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "hello future",
+                 client_random: 5001,
+                 scheduled_at: future
+               })
+
+      assert sm.status == "pending"
+      assert sm.scheduled_at == future
+      assert sm.sender_id == user_id
+    end
+
+    test "schedule_message/1 rejects scheduled_at in the past", %{
+      conversation: c,
+      user_id: user_id
+    } do
+      past = DateTime.add(DateTime.utc_now(), -60, :second) |> DateTime.truncate(:second)
+
+      assert {:error, changeset} =
+               Messages.schedule_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "late",
+                 client_random: 5002,
+                 scheduled_at: past
+               })
+
+      assert "must be in the future" in errors_on(changeset).scheduled_at
+    end
+
+    test "list_scheduled_messages/1 returns pending messages for sender", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, _} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "msg1",
+          client_random: 5010,
+          scheduled_at: future
+        })
+
+      messages = Messages.list_scheduled_messages(user_id)
+      refute Enum.empty?(messages)
+      assert Enum.all?(messages, &(&1.status == "pending"))
+    end
+
+    test "cancel_scheduled_message/2 cancels a pending message", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, sm} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "cancel me",
+          client_random: 5020,
+          scheduled_at: future
+        })
+
+      assert {:ok, cancelled} = Messages.cancel_scheduled_message(sm.id, user_id)
+      assert cancelled.status == "cancelled"
+    end
+
+    test "cancel_scheduled_message/2 returns forbidden for another user", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, sm} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "not yours",
+          client_random: 5030,
+          scheduled_at: future
+        })
+
+      other_user = Ecto.UUID.generate()
+      assert {:error, :forbidden} = Messages.cancel_scheduled_message(sm.id, other_user)
+    end
+
+    test "cancel_scheduled_message/2 returns not_found for missing message", %{user_id: user_id} do
+      assert {:error, :not_found} =
+               Messages.cancel_scheduled_message(Ecto.UUID.generate(), user_id)
+    end
+  end
 end
