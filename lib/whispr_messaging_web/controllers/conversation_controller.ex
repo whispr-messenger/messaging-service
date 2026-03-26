@@ -404,6 +404,130 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Archive / Unarchive (WHISPR-466)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :archived do
+    get("/conversations/archived")
+    summary("List archived conversations")
+    description("Returns all conversations the authenticated user has archived.")
+    produces("application/json")
+
+    parameter(:limit, :query, :integer, "Maximum number of archived conversations to return",
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationsResponse))
+  end
+
+  @doc """
+  Lists archived conversations for the authenticated user.
+  GET /api/v1/conversations/archived
+  """
+  def archived(conn, params) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      limit = min(String.to_integer(params["limit"] || "50"), 100)
+      conversations = Conversations.list_archived_conversations(user_id, limit)
+
+      json(conn, %{
+        data: render_conversations(conversations),
+        meta: %{count: length(conversations), user_id: user_id}
+      })
+    end
+  end
+
+  swagger_path :archive do
+    post("/conversations/{id}/archive")
+    summary("Archive a conversation")
+    description("Archives a conversation for the authenticated user.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation archived")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Already archived")
+  end
+
+  @doc """
+  Archives a conversation for the authenticated user.
+  POST /api/v1/conversations/:id/archive
+  """
+  def archive(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.archive_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_archived",
+            %{conversation_id: conversation_id, archived: true, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, archived: true}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :already_archived} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is already archived"})
+      end
+    end
+  end
+
+  swagger_path :unarchive do
+    PhoenixSwagger.Path.delete("/conversations/{id}/archive")
+    summary("Unarchive a conversation")
+    description("Removes a conversation from the user's archive.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation unarchived")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Conversation is not archived")
+  end
+
+  @doc """
+  Unarchives a conversation for the authenticated user.
+  DELETE /api/v1/conversations/:id/archive
+  """
+  def unarchive(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unarchive_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_archived",
+            %{conversation_id: conversation_id, archived: false, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, archived: false}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :not_archived} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is not archived"})
+      end
+    end
+  end
+
   @doc """
   Adds a member to a conversation.
   POST /api/v1/conversations/:id/members
@@ -475,6 +599,9 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_conversation(conversation) do
+    member_info = Map.get(conversation, :member_info)
+    settings = if member_info, do: member_info.settings || %{}, else: %{}
+
     %{
       id: conversation.id,
       type: conversation.type,
@@ -482,6 +609,8 @@ defmodule WhisprMessagingWeb.ConversationController do
       external_group_id: conversation.external_group_id,
       metadata: conversation.metadata,
       is_active: conversation.is_active,
+      is_pinned: Map.get(settings, "is_pinned", false),
+      is_archived: Map.get(settings, "is_archived", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     }
