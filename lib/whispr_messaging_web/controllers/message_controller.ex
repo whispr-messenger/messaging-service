@@ -56,7 +56,7 @@ defmodule WhisprMessagingWeb.MessageController do
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
           Messages.list_recent_messages(conversation_id, limit, before_timestamp)
-          |> WhisprMessaging.Repo.preload(:delivery_statuses)
+          |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
         json(conn, %{
           data: render_messages(messages),
@@ -323,7 +323,26 @@ defmodule WhisprMessagingWeb.MessageController do
           Map.put(base, :delivery_status, "sent")
       end
 
+    result =
+      case message do
+        %{reply_to: %WhisprMessaging.Messages.Message{} = parent} ->
+          Map.put(result, :reply_to, render_reply_context(parent))
+
+        _ ->
+          result
+      end
+
     camelize_keys(result)
+  end
+
+  defp render_reply_context(parent_message) do
+    camelize_keys(%{
+      id: parent_message.id,
+      sender_id: parent_message.sender_id,
+      content: parent_message.content,
+      message_type: parent_message.message_type,
+      is_deleted: parent_message.is_deleted
+    })
   end
 
   # Convert ttl_seconds convenience param to an explicit expires_at timestamp.
@@ -393,6 +412,12 @@ defmodule WhisprMessagingWeb.MessageController do
             message_type(:string, "Message type")
             metadata(:object, "Additional metadata")
             reply_to_id(:string, "UUID of message being replied to")
+
+            reply_to(
+              Schema.ref(:MessageReplyContext),
+              "Parent message preview (present when reply_to_id is set)"
+            )
+
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
@@ -474,6 +499,19 @@ defmodule WhisprMessagingWeb.MessageController do
             end,
             "Edit metadata"
           )
+        end,
+      MessageReplyContext:
+        swagger_schema do
+          title("Message Reply Context")
+          description("Preview of the parent message for reply threading")
+
+          properties do
+            id(:string, "Parent message UUID", format: :uuid)
+            sender_id(:string, "Parent message sender UUID", format: :uuid)
+            content(:string, "Parent message content")
+            message_type(:string, "Parent message type")
+            is_deleted(:boolean, "Whether the parent message is deleted")
+          end
         end,
       MessageDeleteResponse:
         swagger_schema do
