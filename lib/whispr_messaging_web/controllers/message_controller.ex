@@ -60,11 +60,12 @@ defmodule WhisprMessagingWeb.MessageController do
 
         json(conn, %{
           data: render_messages(messages),
-          meta: camelize_keys(%{
-            count: length(messages),
-            conversation_id: conversation_id,
-            has_more: length(messages) == limit
-          })
+          meta:
+            camelize_keys(%{
+              count: length(messages),
+              conversation_id: conversation_id,
+              has_more: length(messages) == limit
+            })
         })
       else
         {:error, :not_found} ->
@@ -125,9 +126,10 @@ defmodule WhisprMessagingWeb.MessageController do
         |> put_status(:created)
         |> json(%{
           data: render_message(message),
-          meta: camelize_keys(%{
-            conversation_id: conversation_id
-          })
+          meta:
+            camelize_keys(%{
+              conversation_id: conversation_id
+            })
         })
       else
         {:error, :not_found} ->
@@ -213,10 +215,11 @@ defmodule WhisprMessagingWeb.MessageController do
 
           json(conn, %{
             data: render_message(message),
-            meta: camelize_keys(%{
-              edited: true,
-              edited_at: message.edited_at
-            })
+            meta:
+              camelize_keys(%{
+                edited: true,
+                edited_at: message.edited_at
+              })
           })
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -272,12 +275,13 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, message} <- Messages.delete_message(id, user_id, delete_for_everyone) do
         json(conn, %{
-          data: camelize_keys(%{
-            id: message.id,
-            is_deleted: message.is_deleted,
-            delete_for_everyone: message.delete_for_everyone,
-            deleted_at: message.updated_at
-          })
+          data:
+            camelize_keys(%{
+              id: message.id,
+              is_deleted: message.is_deleted,
+              delete_for_everyone: message.delete_for_everyone,
+              deleted_at: message.updated_at
+            })
         })
       end
     end
