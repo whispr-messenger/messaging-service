@@ -112,8 +112,13 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
       {:error, reason}
-      when reason in [:invalid_signature, :missing_signature_fields, :invalid_key_length,
-                      :invalid_signature_length, :verification_error] ->
+      when reason in [
+             :invalid_signature,
+             :missing_signature_fields,
+             :invalid_key_length,
+             :invalid_signature_length,
+             :verification_error
+           ] ->
         {:reply, {:error, %{reason: "invalid_signature"}}, socket}
 
       {:error, changeset} ->
