@@ -629,16 +629,12 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_member(member) do
-    %{
+    camelize_keys(%{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
       joined_at: member.joined_at,
       is_active: member.is_active
-    }
-  end
-
-  defp render_member(member) do
-    camelize_keys(render_member_raw(member))
+    })
   end
 
   defp filter_by_type(conversations, nil), do: conversations
