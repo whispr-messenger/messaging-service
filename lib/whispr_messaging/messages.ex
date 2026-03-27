@@ -306,6 +306,32 @@ defmodule WhisprMessaging.Messages do
     end
   end
 
+  @doc """
+  Computes the delivery status string for a specific message and user.
+
+  Returns one of: "pending", "sent", "delivered", "read".
+  If no delivery status record exists, returns "sent" (message was persisted).
+  """
+  def get_message_delivery_status(message_id, user_id) do
+    case Repo.one(DeliveryStatus.by_message_and_user_query(message_id, user_id)) do
+      nil -> "sent"
+      delivery_status -> DeliveryStatus.compute_status(delivery_status)
+    end
+  end
+
+  @doc """
+  Computes the aggregate delivery status for a message across all recipients.
+
+  Returns one of: "sent", "pending", "delivered", "read".
+  """
+  def get_aggregate_delivery_status(message_id) do
+    statuses =
+      DeliveryStatus.by_message_query(message_id)
+      |> Repo.all()
+
+    DeliveryStatus.compute_aggregate_status(statuses)
+  end
+
   # Message Reactions
 
   @doc """
