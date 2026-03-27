@@ -536,4 +536,81 @@ defmodule WhisprMessaging.Conversations do
         {:ok, conversation}
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Conversation archive / unarchive (WHISPR-466)
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Archives a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :already_archived}` if already archived.
+  """
+  def archive_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_archived", false) do
+          {:error, :already_archived}
+        else
+          new_settings = Map.put(member.settings || %{}, "is_archived", true)
+
+          member
+          |> ConversationMember.update_settings_changeset(new_settings)
+          |> Repo.update()
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Unarchives a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :not_archived}` if the conversation is
+  not currently archived.
+  """
+  def unarchive_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_archived", false) do
+          new_settings = Map.put(member.settings, "is_archived", false)
+
+          member
+          |> ConversationMember.update_settings_changeset(new_settings)
+          |> Repo.update()
+        else
+          {:error, :not_archived}
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Lists archived conversations for a user.
+  """
+  def list_archived_conversations(user_id, limit \\ 50) do
+    query =
+      from m in ConversationMember,
+        join: c in Conversation,
+        on: c.id == m.conversation_id,
+        where: m.user_id == ^user_id,
+        where: m.is_active == true,
+        where: c.is_active == true,
+        where: fragment("(?->>'is_archived')::boolean = true", m.settings),
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
+        select: {m, c}
+
+    results = Repo.all(query)
+
+    Enum.map(results, fn {member, conversation} ->
+      conversation
+      |> Map.put(:member_info, member)
+    end)
+  end
 end
