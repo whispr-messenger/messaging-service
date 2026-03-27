@@ -51,6 +51,8 @@ defmodule WhisprMessagingWeb.Router do
     # Conversation routes
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
+    # Search must be declared before /:id to avoid Phoenix treating "search" as an ID
+    get "/conversations/search", ConversationController, :search
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete

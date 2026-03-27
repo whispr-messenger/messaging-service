@@ -502,6 +502,72 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Searches the authenticated user's conversations by name or participant user_id.
+
+  The `q` parameter is matched case-insensitively against:
+  - the group conversation name stored in `metadata->>'name'`
+  - the `user_id` of any other member in the conversation (exact match)
+
+  Returns a list of conversations enriched with `:member_info` (the calling
+  user's `ConversationMember` record) so that `render_conversation/1` in the
+  controller can expose per-user flags like `is_pinned`, `is_archived`, etc.
+  """
+  def search_user_conversations(user_id, query_term, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    search_pattern = "%#{query_term}%"
+
+    # Conversations the user belongs to, filtered by name match
+    by_name =
+      from m in ConversationMember,
+        where: m.user_id == ^user_id and m.is_active == true,
+        join: c in Conversation,
+        on: c.id == m.conversation_id and c.is_active == true,
+        where: ilike(fragment("(?->>'name')", c.metadata), ^search_pattern),
+        select: {m, c}
+
+    # Conversations the user belongs to where another participant matches the query
+    by_participant =
+      from m in ConversationMember,
+        where: m.user_id == ^user_id and m.is_active == true,
+        join: c in Conversation,
+        on: c.id == m.conversation_id and c.is_active == true,
+        join: other in ConversationMember,
+        on:
+          other.conversation_id == c.id and other.user_id != ^user_id and
+            other.is_active == true,
+        where: other.user_id == ^query_term,
+        select: {m, c}
+
+    name_results = Repo.all(by_name)
+
+    # Only query by participant when the term is a valid UUID — the user_id
+    # field is a binary_id and Ecto raises a CastError otherwise.
+    participant_results =
+      if valid_uuid?(query_term) do
+        Repo.all(by_participant)
+      else
+        []
+      end
+
+    (name_results ++ participant_results)
+    |> Enum.uniq_by(fn {_m, c} -> c.id end)
+    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, NaiveDateTime})
+    |> Enum.take(limit)
+    |> Enum.map(fn {member, conversation} ->
+      Map.put(conversation, :member_info, member)
+    end)
+  end
+
+  defp valid_uuid?(str) when is_binary(str) do
+    case Ecto.UUID.cast(str) do
+      {:ok, _} -> true
+      :error -> false
+    end
+  end
+
+  defp valid_uuid?(_), do: false
+
+  @doc """
   Gets a conversation with members preloaded.
   """
   def get_conversation_with_members(conversation_id) do
