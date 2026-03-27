@@ -67,6 +67,10 @@ defmodule WhisprMessaging.MixProject do
       # {:httpoison, "~> 2.0"}, # Removed in favor of Finch
       {:finch, "~> 0.16"},
 
+      # JWT verification (WHISPR-386)
+      {:joken, "~> 2.6"},
+      {:jose, "~> 1.11"},
+
       # Email
       {:swoosh, "~> 1.11"},
 
