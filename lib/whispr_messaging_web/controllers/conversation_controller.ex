@@ -468,6 +468,107 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Pin / Unpin (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :pin do
+    post("/conversations/{id}/pin")
+    summary("Pin a conversation")
+
+    description(
+      "Pins a conversation for the authenticated user. Maximum #{5} pinned conversations."
+    )
+
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation pinned")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Pin limit reached (max 5) or already pinned")
+  end
+
+  @doc """
+  Pins a conversation for the authenticated user.
+  POST /api/v1/conversations/:id/pin
+  """
+  def pin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.pin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: true, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: true}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :already_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is already pinned"})
+
+        {:error, :pin_limit_reached} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Pin limit reached: you may pin at most 5 conversations"})
+      end
+    end
+  end
+
+  swagger_path :unpin do
+    PhoenixSwagger.Path.delete("/conversations/{id}/pin")
+    summary("Unpin a conversation")
+    description("Removes the pin from a conversation for the authenticated user.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation unpinned")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Conversation is not pinned")
+  end
+
+  @doc """
+  Unpins a conversation for the authenticated user.
+  DELETE /api/v1/conversations/:id/pin
+  """
+  def unpin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unpin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: false, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: false}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :not_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is not pinned"})
+      end
+    end
+  end
+
   # Private rendering functions
 
   defp render_conversations(conversations) do
@@ -475,6 +576,9 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_conversation(conversation) do
+    member_info = Map.get(conversation, :member_info)
+    settings = if member_info, do: member_info.settings || %{}, else: %{}
+
     %{
       id: conversation.id,
       type: conversation.type,
@@ -482,6 +586,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       external_group_id: conversation.external_group_id,
       metadata: conversation.metadata,
       is_active: conversation.is_active,
+      is_pinned: Map.get(settings, "is_pinned", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     }
