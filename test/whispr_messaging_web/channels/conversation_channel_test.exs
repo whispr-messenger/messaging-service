@@ -111,6 +111,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       assert reply_message.message_type == "text"
       assert reply_message.sender_id == user_id
       assert reply_message.conversation_id == conversation.id
+      assert reply_message.delivery_status in ["sent", "pending"]
 
       # Should broadcast to all channel subscribers
       assert_broadcast "new_message", %{message: broadcast_message}
