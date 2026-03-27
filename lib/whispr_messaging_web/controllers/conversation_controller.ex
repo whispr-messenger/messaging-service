@@ -253,7 +253,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = conn.assigns[:user_id]
 
     if user_id do
-      with {:ok, conversation} <- Conversations.get_conversation_with_members(id),
+      with {:ok, conversation} <- Conversations.get_conversation_with_members(id, user_id),
            true <- user_is_member?(conversation, user_id) do
         json(conn, %{
           data: render_conversation_with_members(conversation)
@@ -404,6 +404,94 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Per-user conversation settings (WHISPR-467)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :get_member_settings do
+    get("/conversations/{id}/settings")
+    summary("Get conversation settings for current user")
+
+    description(
+      "Returns the authenticated user's per-conversation settings " <>
+        "(mute, notifications, custom name, etc.)."
+    )
+
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success")
+    response(404, "Conversation not found or user not a member")
+  end
+
+  @doc """
+  Returns the current user's per-conversation settings.
+  GET /api/v1/conversations/:id/settings
+  """
+  def get_member_settings(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.get_conversation_member_settings(conversation_id, user_id) do
+        {:ok, settings} ->
+          json(conn, %{data: %{conversation_id: conversation_id, settings: settings}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+      end
+    end
+  end
+
+  swagger_path :update_member_settings do
+    put("/conversations/{id}/settings")
+    summary("Update conversation settings for current user")
+
+    description(
+      "Partially updates the authenticated user's per-conversation settings. " <>
+        "Only recognised keys are accepted; others are silently ignored."
+    )
+
+    produces("application/json")
+    consumes("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success")
+    response(404, "Conversation not found or user not a member")
+    response(400, "Invalid request body")
+  end
+
+  @doc """
+  Partially updates the current user's per-conversation settings.
+  PUT /api/v1/conversations/:id/settings
+  """
+  def update_member_settings(conn, %{"id" => conversation_id} = params) do
+    user_id = conn.assigns[:user_id]
+    attrs = params["settings"] || Map.drop(params, ["id"])
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.update_conversation_member_settings(conversation_id, user_id, attrs) do
+        {:ok, _member} ->
+          {:ok, settings} =
+            Conversations.get_conversation_member_settings(conversation_id, user_id)
+
+          maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings)
+          json(conn, %{data: %{conversation_id: conversation_id, settings: settings}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: translate_errors(changeset)})
+      end
+    end
+  end
+
   @doc """
   Adds a member to a conversation.
   POST /api/v1/conversations/:id/members
@@ -475,6 +563,15 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_conversation(conversation) do
+    member_info = Map.get(conversation, :member_info)
+
+    settings =
+      if member_info do
+        member_info.settings || %{}
+      else
+        %{}
+      end
+
     %{
       id: conversation.id,
       type: conversation.type,
@@ -482,6 +579,9 @@ defmodule WhisprMessagingWeb.ConversationController do
       external_group_id: conversation.external_group_id,
       metadata: conversation.metadata,
       is_active: conversation.is_active,
+      is_pinned: Map.get(settings, "is_pinned", false),
+      is_archived: Map.get(settings, "is_archived", false),
+      is_muted: Map.get(settings, "is_muted", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     }
@@ -496,6 +596,20 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp render_members(members) do
     Enum.map(members, &render_member/1)
+  end
+
+  defp maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings) do
+    if Map.has_key?(attrs, "is_muted") do
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "user:#{user_id}",
+        "conversation_settings_updated",
+        %{
+          conversation_id: conversation_id,
+          settings: settings,
+          timestamp: DateTime.utc_now()
+        }
+      )
+    end
   end
 
   defp render_member(member) do
