@@ -255,8 +255,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     if user_id do
       with {:ok, conversation} <- Conversations.get_conversation_with_members(id, user_id),
            true <- user_is_member?(conversation, user_id) do
+        member_info = Map.get(conversation, :member_info)
+
         json(conn, %{
-          data: render_conversation_with_members(conversation)
+          data: render_conversation_with_members(conversation, member_info)
         })
       else
         false ->
@@ -587,11 +589,23 @@ defmodule WhisprMessagingWeb.ConversationController do
     }
   end
 
-  defp render_conversation_with_members(conversation) do
-    conversation
-    |> render_conversation()
-    |> Map.put(:members, render_members(conversation.members))
-    |> Map.put(:member_count, length(conversation.members))
+  defp render_conversation_with_members(conversation, member_info \\ nil) do
+    base =
+      conversation
+      |> render_conversation()
+      |> Map.put(:members, render_members(conversation.members))
+      |> Map.put(:member_count, length(conversation.members))
+
+    if member_info do
+      settings = member_info.settings || %{}
+
+      base
+      |> Map.put(:is_muted, Map.get(settings, "is_muted", false))
+      |> Map.put(:is_pinned, Map.get(settings, "is_pinned", false))
+      |> Map.put(:is_archived, Map.get(settings, "is_archived", false))
+    else
+      base
+    end
   end
 
   defp render_members(members) do
