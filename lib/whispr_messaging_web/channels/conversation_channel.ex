@@ -16,6 +16,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.Presence
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   require Logger
 
   @impl true
@@ -167,10 +169,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
       {:ok, message} ->
-        broadcast(socket, "message_deleted", %{
-          message_id: message_id,
-          delete_for_everyone: delete_for_everyone
-        })
+        broadcast(
+          socket,
+          "message_deleted",
+          camelize_keys(%{
+            message_id: message_id,
+            delete_for_everyone: delete_for_everyone
+          })
+        )
 
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
@@ -264,11 +270,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.add_reaction(message_id, user_id, reaction) do
       {:ok, message_reaction} ->
-        broadcast(socket, "reaction_added", %{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        })
+        broadcast(
+          socket,
+          "reaction_added",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{reaction: serialize_reaction(message_reaction)}}, socket}
 
@@ -289,11 +299,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.remove_reaction(message_id, user_id, reaction) do
       {:ok, _} ->
-        broadcast(socket, "reaction_removed", %{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        })
+        broadcast(
+          socket,
+          "reaction_removed",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{status: "removed"}}, socket}
 
@@ -328,12 +342,12 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         WhisprMessagingWeb.Endpoint.broadcast(
           "user:#{sender_id}",
           "delivery_status",
-          %{
+          camelize_keys(%{
             message_id: message_id,
             user_id: user_id,
             status: status,
             timestamp: DateTime.utc_now()
-          }
+          })
         )
 
       _ ->
@@ -342,7 +356,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   defp serialize_message(%Message{} = message) do
-    %{
+    camelize_keys(%{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -357,17 +371,17 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       delete_for_everyone: message.delete_for_everyone,
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
-    }
+    })
   end
 
   defp serialize_reaction(reaction) do
-    %{
+    camelize_keys(%{
       id: reaction.id,
       message_id: reaction.message_id,
       user_id: reaction.user_id,
       reaction: reaction.reaction,
       inserted_at: reaction.inserted_at
-    }
+    })
   end
 
   defp format_changeset_errors(changeset) do
