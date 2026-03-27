@@ -474,7 +474,9 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp serialize_message(message) do
-    %{
+    alias WhisprMessaging.Messages.Message
+
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -488,6 +490,21 @@ defmodule WhisprMessaging.ConversationServer do
       is_deleted: message.is_deleted,
       delete_for_everyone: message.delete_for_everyone
     }
+
+    # Add reply_to context when available
+    case message do
+      %{reply_to: %Message{} = parent} ->
+        Map.put(base, :reply_to, %{
+          id: parent.id,
+          sender_id: parent.sender_id,
+          content: parent.content,
+          message_type: parent.message_type,
+          is_deleted: parent.is_deleted
+        })
+
+      _ ->
+        base
+    end
   end
 
   defp serialize_member(member) do
