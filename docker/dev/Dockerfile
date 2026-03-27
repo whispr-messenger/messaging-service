@@ -21,6 +21,9 @@ RUN --mount=type=cache,target=/root/.hex \
     --mount=type=cache,target=/root/.mix \
     mix deps.get
 
+# Pre-compile dependencies so the container starts immediately without compilation delay
+RUN MIX_ENV=dev mix deps.compile
+
 COPY ./docker/dev/entrypoint.sh /tmp/entrypoint.sh
 RUN chmod +x /tmp/entrypoint.sh
 
