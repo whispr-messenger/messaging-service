@@ -474,7 +474,9 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp serialize_message(message) do
-    %{
+    alias WhisprMessaging.Messages.DeliveryStatus
+
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -488,6 +490,15 @@ defmodule WhisprMessaging.ConversationServer do
       is_deleted: message.is_deleted,
       delete_for_everyone: message.delete_for_everyone
     }
+
+    # Add delivery_status if delivery_statuses are preloaded
+    case message do
+      %{delivery_statuses: statuses} when is_list(statuses) ->
+        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+
+      _ ->
+        Map.put(base, :delivery_status, "sent")
+    end
   end
 
   defp serialize_member(member) do
