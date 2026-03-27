@@ -253,7 +253,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     user_id = conn.assigns[:user_id]
 
     if user_id do
-      with {:ok, conversation} <- Conversations.get_conversation_with_members(id),
+      with {:ok, conversation} <- Conversations.get_conversation_with_members(id, user_id),
            true <- user_is_member?(conversation, user_id) do
         json(conn, %{
           data: render_conversation_with_members(conversation)

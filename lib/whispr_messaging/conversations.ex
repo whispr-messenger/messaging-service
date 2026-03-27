@@ -564,10 +564,18 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Gets a conversation with members preloaded.
   """
-  def get_conversation_with_members(conversation_id) do
+  def get_conversation_with_members(conversation_id, user_id \\ nil) do
     case Repo.one(Conversation.with_members_query(conversation_id)) do
-      nil -> {:error, :not_found}
-      conversation -> {:ok, conversation}
+      nil ->
+        {:error, :not_found}
+
+      conversation ->
+        member_info =
+          if user_id do
+            get_conversation_member(conversation_id, user_id)
+          end
+
+        {:ok, Map.put(conversation, :member_info, member_info)}
     end
   end
 
