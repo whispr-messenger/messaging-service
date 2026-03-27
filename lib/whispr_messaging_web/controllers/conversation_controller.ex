@@ -589,7 +589,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     }
   end
 
-  defp render_conversation_with_members(conversation, member_info \\ nil) do
+  defp render_conversation_with_members(conversation, member_info) do
     base =
       conversation
       |> render_conversation()
