@@ -581,4 +581,125 @@ defmodule WhisprMessaging.MessagesTest do
       assert message.sender_id == "00000000-0000-0000-0000-000000000000"
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Ephemeral message tests (WHISPR-469)
+  # ---------------------------------------------------------------------------
+
+  describe "ephemeral messages" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "creates a message with expires_at", %{conversation: c, user_id: user_id} do
+      expires_at = DateTime.add(DateTime.utc_now(), 300, :second) |> DateTime.truncate(:second)
+
+      assert {:ok, message} =
+               Messages.create_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "ephemeral",
+                 client_random: 42,
+                 expires_at: expires_at
+               })
+
+      assert message.expires_at == expires_at
+      assert Message.expired?(message) == false
+    end
+
+    test "expired?/1 returns true for a message past its expiry" do
+      past = DateTime.add(DateTime.utc_now(), -10, :second)
+      message = %Message{expires_at: past}
+      assert Message.expired?(message) == true
+    end
+
+    test "expired?/1 returns false for non-ephemeral messages" do
+      message = %Message{expires_at: nil}
+      assert Message.expired?(message) == false
+    end
+
+    test "rejects expires_at in the past", %{conversation: c, user_id: user_id} do
+      past = DateTime.add(DateTime.utc_now(), -60, :second) |> DateTime.truncate(:second)
+
+      assert {:error, changeset} =
+               Messages.create_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "ephemeral",
+                 client_random: 43,
+                 expires_at: past
+               })
+
+      assert "must be in the future" in errors_on(changeset).expires_at
+    end
+
+    test "recent_messages_query excludes expired messages", %{
+      conversation: c,
+      user_id: user_id
+    } do
+      past = DateTime.add(DateTime.utc_now(), -5, :second) |> DateTime.truncate(:second)
+      future = DateTime.add(DateTime.utc_now(), 300, :second) |> DateTime.truncate(:second)
+
+      # Insert a non-ephemeral message
+      {:ok, normal_msg} =
+        Messages.create_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "normal",
+          client_random: 100
+        })
+
+      # Insert a valid ephemeral message (future expiry)
+      {:ok, live_ephemeral} =
+        Messages.create_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "live",
+          client_random: 101,
+          expires_at: future
+        })
+
+      # Directly insert an already-expired message (bypass validation)
+      expired_id = Ecto.UUID.generate()
+
+      WhisprMessaging.Repo.insert_all("messages", [
+        %{
+          id: Ecto.UUID.dump!(expired_id),
+          conversation_id: Ecto.UUID.dump!(c.id),
+          sender_id: Ecto.UUID.dump!(user_id),
+          message_type: "text",
+          content: "expired",
+          client_random: 102,
+          sent_at: DateTime.utc_now(),
+          is_deleted: false,
+          delete_for_everyone: false,
+          metadata: "{}",
+          expires_at: past,
+          inserted_at: DateTime.utc_now(),
+          updated_at: DateTime.utc_now()
+        }
+      ])
+
+      import Ecto.Query
+
+      messages =
+        Message.recent_messages_query(c.id, 50)
+        |> WhisprMessaging.Repo.all()
+
+      ids = Enum.map(messages, & &1.id)
+      assert normal_msg.id in ids
+      assert live_ephemeral.id in ids
+      refute expired_id in ids
+    end
+  end
 end

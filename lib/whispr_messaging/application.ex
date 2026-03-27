@@ -55,6 +55,9 @@ defmodule WhisprMessaging.Application do
       WhisprMessaging.ConversationSupervisor,
       {Task.Supervisor, name: WhisprMessaging.TaskSupervisor},
 
+      # Ephemeral message cleanup worker
+      WhisprMessaging.Workers.EphemeralMessageCleaner,
+
       # Presence tracking
       WhisprMessagingWeb.Presence,
 
