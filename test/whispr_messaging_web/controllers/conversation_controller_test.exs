@@ -323,6 +323,39 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["members"] != nil
       assert length(response["data"]["members"]) == 2
     end
+
+    test "returns the current member settings in the conversation detail", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _member1} = Conversations.add_conversation_member(conversation.id, user1_id)
+      {:ok, _member2} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+      {:ok, _updated_member} =
+        Conversations.update_conversation_member_settings(conversation.id, user1_id, %{
+          "is_muted" => true
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["is_muted"] == true
+      assert response["data"]["is_pinned"] == false
+      assert response["data"]["is_archived"] == false
+    end
   end
 
   describe "PUT /api/v1/conversations/:id" do
