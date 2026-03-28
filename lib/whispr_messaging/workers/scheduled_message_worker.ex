@@ -69,9 +69,7 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
               Logger.info("Dispatched scheduled message #{sm.id}")
 
             {:error, reason} ->
-              Logger.error(
-                "Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}"
-              )
+              Logger.error("Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}")
           end
         end)
 
@@ -113,7 +111,9 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
             Repo.rollback(reason)
         end
       else
-        Logger.warning("Skipping scheduled message #{sm.id} — unexpected status: #{current.status}")
+        Logger.warning(
+          "Skipping scheduled message #{sm.id} — unexpected status: #{current.status}"
+        )
       end
     end)
     |> case do
