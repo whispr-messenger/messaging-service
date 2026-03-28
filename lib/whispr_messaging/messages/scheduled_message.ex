@@ -18,7 +18,7 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
   @foreign_key_type :binary_id
 
   @message_types ~w(text media)
-  @statuses ~w(pending sent cancelled)
+  @statuses ~w(pending processing sent cancelled)
 
   schema "scheduled_messages" do
     field :sender_id, :binary_id
@@ -74,11 +74,36 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
   end
 
   @doc """
+  Changeset for marking a scheduled message as processing (claimed by a worker).
+  """
+  def mark_processing_changeset(scheduled_message) do
+    scheduled_message
+    |> cast(%{status: "processing"}, [:status])
+  end
+
+  @doc """
   Changeset for marking a scheduled message as sent.
   """
   def mark_sent_changeset(scheduled_message) do
     scheduled_message
     |> cast(%{status: "sent"}, [:status])
+  end
+
+  @doc """
+  Query for pending scheduled messages that are due for dispatch, using
+  SELECT FOR UPDATE SKIP LOCKED to allow safe concurrent workers.
+
+  Only call this inside a Repo.transaction/2 — the lock is released when
+  the transaction ends.
+  """
+  def claim_due_messages_query do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    from sm in __MODULE__,
+      where: sm.status == "pending",
+      where: sm.scheduled_at <= ^now,
+      order_by: [asc: sm.scheduled_at],
+      lock: "FOR UPDATE SKIP LOCKED"
   end
 
   @doc """
