@@ -49,32 +49,33 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
   # Each replica only processes the rows it could lock; rows already locked
   # by a concurrent worker are skipped, preventing duplicate dispatch.
   defp dispatch_due_messages do
-    Repo.transaction(fn ->
-      due_messages = Repo.all(ScheduledMessage.claim_due_messages_query())
+    case claim_due_messages() do
+      {:ok, claimed} -> Enum.each(claimed, &dispatch_one/1)
+      {:error, reason} -> Logger.error("Failed to claim scheduled messages: #{inspect(reason)}")
+    end
+  end
 
-      Enum.each(due_messages, fn sm ->
-        # Mark as processing inside the same transaction to hold the lock
+  defp claim_due_messages do
+    Repo.transaction(fn ->
+      due = Repo.all(ScheduledMessage.claim_due_messages_query())
+
+      Enum.each(due, fn sm ->
         sm
         |> ScheduledMessage.mark_processing_changeset()
         |> Repo.update!()
       end)
 
-      due_messages
+      due
     end)
-    |> case do
-      {:ok, claimed} ->
-        Enum.each(claimed, fn sm ->
-          case dispatch_scheduled_message(sm) do
-            :ok ->
-              Logger.info("Dispatched scheduled message #{sm.id}")
+  end
 
-            {:error, reason} ->
-              Logger.error("Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}")
-          end
-        end)
+  defp dispatch_one(%ScheduledMessage{} = sm) do
+    case dispatch_scheduled_message(sm) do
+      :ok ->
+        Logger.info("Dispatched scheduled message #{sm.id}")
 
       {:error, reason} ->
-        Logger.error("Failed to claim scheduled messages: #{inspect(reason)}")
+        Logger.error("Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}")
     end
   end
 
@@ -85,31 +86,7 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
       current = Repo.get!(ScheduledMessage, sm.id)
 
       if current.status == "processing" do
-        # Create the actual message
-        case Messages.create_message(%{
-               conversation_id: sm.conversation_id,
-               sender_id: sm.sender_id,
-               message_type: sm.message_type,
-               content: sm.content,
-               metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
-               client_random: sm.client_random
-             }) do
-          {:ok, message} ->
-            # Mark as sent only after successful message creation
-            current
-            |> ScheduledMessage.mark_sent_changeset()
-            |> Repo.update!()
-
-            # Broadcast to all conversation members via PubSub
-            Phoenix.PubSub.broadcast(
-              WhisprMessaging.PubSub,
-              "conversation:#{sm.conversation_id}",
-              {:new_message, message}
-            )
-
-          {:error, reason} ->
-            Repo.rollback(reason)
-        end
+        do_create_and_mark_sent(sm, current)
       else
         Logger.warning(
           "Skipping scheduled message #{sm.id} — unexpected status: #{current.status}"
@@ -119,6 +96,33 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
     |> case do
       {:ok, _} -> :ok
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp do_create_and_mark_sent(%ScheduledMessage{} = sm, current) do
+    attrs = %{
+      conversation_id: sm.conversation_id,
+      sender_id: sm.sender_id,
+      message_type: sm.message_type,
+      content: sm.content,
+      metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
+      client_random: sm.client_random
+    }
+
+    case Messages.create_message(attrs) do
+      {:ok, message} ->
+        current
+        |> ScheduledMessage.mark_sent_changeset()
+        |> Repo.update!()
+
+        Phoenix.PubSub.broadcast(
+          WhisprMessaging.PubSub,
+          "conversation:#{sm.conversation_id}",
+          {:new_message, message}
+        )
+
+      {:error, reason} ->
+        Repo.rollback(reason)
     end
   end
 end
