@@ -8,29 +8,44 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
     signed_data = content <> conversation_id_bytes <> <<client_random::big-32>>
 
   The client provides:
-    - `signature`        — Base64-encoded 64-byte Ed25519 signature
+    - `signature`         — Base64-encoded 64-byte Ed25519 signature
     - `sender_public_key` — Base64-encoded 32-byte Ed25519 public key
 
-  The server verifies the signature against the sender's public key.
-  It never decrypts the content.
+  The server verifies the signature against the **server-registered** key for
+  the authenticated sender, not the key supplied in the request body.  The
+  request-supplied key is only used as a hint for the first-use registration
+  (TOFU — Trust On First Use).  On subsequent messages the registered key must
+  match; mismatches are rejected with `{:error, :key_mismatch}`.
 
   ## Why the signed payload includes context fields
 
   Binding the conversation_id and client_random to the signature prevents
   replay attacks where a valid signature on one message could be replayed
   in a different conversation or as a different message.
+
+  ## Security properties
+
+  - An attacker cannot generate their own keypair and pass verification
+    because the server verifies against the stored key, not the request key.
+  - The `sender_id` used for key lookup comes from the verified JWT claim
+    set by the `Authenticate` plug — never from the request body.
   """
+
+  alias WhisprMessaging.Messages.DeviceKeyStore
 
   require Logger
 
   @doc """
   Verifies the Ed25519 signature on a message payload.
 
-  Returns `:ok` if the signature is valid or if signature verification is
-  not required (both fields absent — backward-compatible mode).
+  `sender_id` must be the value from the authenticated session
+  (i.e. `conn.assigns.user_id`), not from the request body.
 
-  Returns `{:error, :invalid_signature}` or `{:error, :invalid_key}` on
-  verification failure.
+  Returns `:ok` if the signature is valid, or if signature verification is
+  not required (both fields absent — backward-compatible mode for unsigned
+  message types).
+
+  Returns an error tuple on any verification failure.
   """
   @spec verify(map()) :: :ok | {:error, atom()}
   def verify(attrs) do
@@ -52,7 +67,12 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   end
 
   defp do_verify(attrs, signature_b64, public_key_b64) do
-    with {:ok, signature} <- decode_base64(signature_b64, :signature),
+    sender_id = attrs["sender_id"] || attrs[:sender_id]
+
+    with :ok <- validate_sender_id(sender_id),
+         # Bind the request key to the server-side identity before verifying
+         :ok <- DeviceKeyStore.register_or_verify(sender_id, public_key_b64),
+         {:ok, signature} <- decode_base64(signature_b64, :signature),
          {:ok, public_key} <- decode_base64(public_key_b64, :public_key),
          :ok <- validate_key_length(public_key),
          :ok <- validate_signature_length(signature),
@@ -60,10 +80,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
       if :crypto.verify(:eddsa, :none, signed_data, signature, [public_key, :ed25519]) do
         :ok
       else
-        Logger.warning(
-          "Message signature verification failed for sender #{attrs["sender_id"] || attrs[:sender_id]}"
-        )
-
+        Logger.warning("Message signature verification failed for sender #{sender_id}")
         {:error, :invalid_signature}
       end
     end
@@ -72,6 +89,9 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
       Logger.error("Signature verification error: #{inspect(e)}")
       {:error, :verification_error}
   end
+
+  defp validate_sender_id(nil), do: {:error, :missing_sender_id}
+  defp validate_sender_id(_), do: :ok
 
   @doc """
   Builds the canonical signed data from message attributes.
