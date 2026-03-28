@@ -210,7 +210,9 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
       {pub2, _} = generate_key_pair()
 
       DeviceKeyStore.register_or_verify(user_id, Base.encode64(pub1))
-      assert {:error, :key_mismatch} = DeviceKeyStore.register_or_verify(user_id, Base.encode64(pub2))
+
+      assert {:error, :key_mismatch} =
+               DeviceKeyStore.register_or_verify(user_id, Base.encode64(pub2))
     end
 
     test "rotate_key/2 replaces the stored key" do
