@@ -7,19 +7,23 @@ COPY ./docker/dev/requirements.txt .
 RUN apt-get update && apt-get install -y --no-install-recommends $(cat requirements.txt) \
     && rm -rf /var/lib/apt/lists/*
 
-# Install hex and rebar with cache
-RUN --mount=type=cache,target=/root/.hex \
-    --mount=type=cache,target=/root/.mix \
-    mix local.hex --force && \
+# Install hex and rebar in the image so later mix commands can reuse them reliably
+RUN mix local.hex --force && \
     mix local.rebar --force
 
 # Copy mix files first for better layer caching
 COPY mix.exs mix.lock ./
 
-# Get dependencies with cache
-RUN --mount=type=cache,target=/root/.hex \
-    --mount=type=cache,target=/root/.mix \
-    mix deps.get
+RUN MIX_ENV=dev mix deps.get
+
+# Pre-compile dependencies so the container starts immediately without compilation delay
+RUN MIX_ENV=dev mix deps.compile
+
+COPY config ./config
+COPY lib ./lib
+COPY priv ./priv
+
+RUN MIX_ENV=dev mix compile
 
 COPY ./docker/dev/entrypoint.sh /tmp/entrypoint.sh
 RUN chmod +x /tmp/entrypoint.sh

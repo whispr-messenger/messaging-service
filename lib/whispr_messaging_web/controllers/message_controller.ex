@@ -57,6 +57,7 @@ defmodule WhisprMessagingWeb.MessageController do
         messages =
           Messages.list_recent_messages(conversation_id, limit, before_timestamp)
           |> Messages.filter_user_deleted_messages(user_id)
+          |> WhisprMessaging.Repo.preload(:delivery_statuses)
 
         json(conn, %{
           data: render_messages(messages),
@@ -111,6 +112,7 @@ defmodule WhisprMessagingWeb.MessageController do
       message_params
       |> Map.put("conversation_id", conversation_id)
       |> Map.put_new("sender_id", user_id)
+      |> resolve_ttl_seconds()
 
     if is_nil(user_id) do
       conn
@@ -208,6 +210,8 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       case Messages.edit_message(id, user_id, content, metadata) do
         {:ok, message} ->
+          message = WhisprMessaging.Repo.preload(message, :delivery_statuses)
+
           json(conn, %{
             data: render_message(message),
             meta: %{
@@ -434,7 +438,9 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   defp render_message(message) do
-    %{
+    alias WhisprMessaging.Messages.DeliveryStatus
+
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -445,11 +451,39 @@ defmodule WhisprMessagingWeb.MessageController do
       is_edited: message.edited_at != nil,
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,
+      is_ephemeral: not is_nil(message.expires_at),
+      expires_at: message.expires_at,
       sent_at: message.sent_at,
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
+
+    # Add delivery_status if delivery_statuses are preloaded
+    case message do
+      %{delivery_statuses: statuses} when is_list(statuses) ->
+        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+
+      _ ->
+        Map.put(base, :delivery_status, "sent")
+    end
   end
+
+  # Convert ttl_seconds convenience param to an explicit expires_at timestamp.
+  # If both are provided, expires_at takes precedence.
+  defp resolve_ttl_seconds(%{"expires_at" => _} = params), do: params
+
+  defp resolve_ttl_seconds(%{"ttl_seconds" => ttl} = params) when is_integer(ttl) and ttl > 0 do
+    expires_at =
+      DateTime.utc_now()
+      |> DateTime.add(ttl, :second)
+      |> DateTime.truncate(:second)
+
+    params
+    |> Map.put("expires_at", expires_at)
+    |> Map.delete("ttl_seconds")
+  end
+
+  defp resolve_ttl_seconds(params), do: params
 
   # Swagger Schema Definitions
   def swagger_definitions do
@@ -504,6 +538,11 @@ defmodule WhisprMessagingWeb.MessageController do
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
+
+            delivery_status(:string, "Delivery status (pending, sent, delivered, read)",
+              enum: [:pending, :sent, :delivered, :read]
+            )
+
             sent_at(:string, "Sent timestamp")
             inserted_at(:string, "Creation timestamp")
             updated_at(:string, "Last update timestamp")

@@ -66,6 +66,10 @@ defmodule WhisprMessagingWeb.Router do
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
     patch "/conversations/:id/members/:user_id/role", ConversationMemberController, :update_role
 
+    # Per-user conversation settings (WHISPR-467)
+    get "/conversations/:id/settings", ConversationController, :get_member_settings
+    put "/conversations/:id/settings", ConversationController, :update_member_settings
+
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
     get "/conversations/:id/pins", PinController, :index

@@ -116,3 +116,14 @@ config :whispr_messaging, :messages,
 
 config :whispr_messaging,
   grpc_port: String.to_integer(System.get_env("GRPC_PORT", "40010"))
+
+# JWT / JWKS Configuration (WHISPR-386)
+# Dynamic public key loading from auth-service JWKS endpoint.
+# Replaces the static JWT_PUBLIC_KEY_PATH / PEM volume mount.
+config :whispr_messaging, :jwks,
+  url:
+    System.get_env(
+      "JWT_JWKS_URL",
+      "http://auth-service/auth/.well-known/jwks.json"
+    ),
+  refresh_ms: System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
