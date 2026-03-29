@@ -323,6 +323,67 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["members"] != nil
       assert length(response["data"]["members"]) == 2
     end
+
+    test "returns is_muted, is_pinned, is_archived for the authenticated user (default false)", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _member1} = Conversations.add_conversation_member(conversation.id, user1_id)
+      {:ok, _member2} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["is_muted"] == false
+      assert response["data"]["is_pinned"] == false
+      assert response["data"]["is_archived"] == false
+    end
+
+    test "returns is_muted true after muting the conversation", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _member1} = Conversations.add_conversation_member(conversation.id, user1_id)
+      {:ok, _member2} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+      # Mute the conversation for user1
+      member = Conversations.get_conversation_member(conversation.id, user1_id)
+      new_settings = Map.merge(member.settings || %{}, %{"is_muted" => true})
+      Conversations.update_member_settings(member, new_settings)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["is_muted"] == true
+      assert response["data"]["is_pinned"] == false
+      assert response["data"]["is_archived"] == false
+    end
   end
 
   describe "PUT /api/v1/conversations/:id" do

@@ -448,7 +448,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   defp serialize_message(%Message{} = message) do
-    %{
+    alias WhisprMessaging.Messages.DeliveryStatus
+
+    base = %{
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
@@ -464,6 +466,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       inserted_at: message.inserted_at,
       updated_at: message.updated_at
     }
+
+    # Add delivery_status if delivery_statuses are preloaded
+    case message do
+      %{delivery_statuses: statuses} when is_list(statuses) ->
+        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+
+      _ ->
+        Map.put(base, :delivery_status, "sent")
+    end
   end
 
   defp serialize_reaction(reaction) do

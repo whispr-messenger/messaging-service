@@ -247,6 +247,66 @@ defmodule WhisprMessaging.Conversations do
     |> Repo.update()
   end
 
+  # ---------------------------------------------------------------------------
+  # Per-user conversation settings (WHISPR-467)
+  # ---------------------------------------------------------------------------
+
+  # Keys that a member can read/write via the public settings endpoint.
+  # Internal keys (is_pinned, is_archived, role) are excluded from this API.
+  @member_settings_allowlist ~w(
+    notifications
+    sound_enabled
+    desktop_notifications
+    mobile_notifications
+    mention_notifications
+    is_muted
+    custom_name
+  )
+
+  @doc """
+  Gets the per-user settings for a conversation member.
+
+  Returns `{:ok, settings_map}` or `{:error, :not_member}`.
+  """
+  def get_conversation_member_settings(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true, settings: settings} ->
+        public_settings = Map.take(settings || %{}, @member_settings_allowlist)
+
+        base_defaults =
+          Map.take(ConversationMember.default_settings(), @member_settings_allowlist)
+
+        defaults = Map.merge(base_defaults, %{"is_muted" => false, "custom_name" => nil})
+
+        {:ok, Map.merge(defaults, public_settings)}
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Updates the per-user settings for a conversation member (partial update).
+
+  Only keys in the allowlist are accepted; unrecognised keys are ignored.
+  Returns `{:ok, member}` or `{:error, :not_member}`.
+  """
+  def update_conversation_member_settings(conversation_id, user_id, attrs) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        # Only merge allowed keys; preserve protected keys (role, is_pinned, etc.)
+        allowed_updates = Map.take(attrs, @member_settings_allowlist)
+        new_settings = Map.merge(member.settings || %{}, allowed_updates)
+
+        member
+        |> ConversationMember.update_settings_changeset(new_settings)
+        |> Repo.update()
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
   @doc """
   Marks a member's last read timestamp.
   """
@@ -534,10 +594,18 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Gets a conversation with members preloaded.
   """
-  def get_conversation_with_members(conversation_id) do
+  def get_conversation_with_members(conversation_id, user_id \\ nil) do
     case Repo.one(Conversation.with_members_query(conversation_id)) do
-      nil -> {:error, :not_found}
-      conversation -> {:ok, conversation}
+      nil ->
+        {:error, :not_found}
+
+      conversation ->
+        member_info =
+          if user_id do
+            get_conversation_member(conversation_id, user_id)
+          end
+
+        {:ok, Map.put(conversation, :member_info, member_info)}
     end
   end
 
