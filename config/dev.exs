@@ -2,15 +2,15 @@ import Config
 
 # Configure your database
 config :whispr_messaging, WhisprMessaging.Repo,
-  username: "postgres",
-  password: "password",
-  hostname: "localhost",
-  database: "whispr_messaging_dev",
-  port: 5432,
+  username: System.get_env("DB_USERNAME", "postgres"),
+  password: System.get_env("DB_PASSWORD", "postgres"),
+  hostname: System.get_env("DB_HOST", "localhost"),
+  database: System.get_env("DB_NAME", "whispr_messaging_dev"),
+  port: String.to_integer(System.get_env("DB_PORT", "5432")),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10,
-  log: :debug
+  log: :info
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -36,9 +36,9 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
 
 # Development Redis configuration
 config :whispr_messaging, :redis,
-  host: "localhost",
-  port: 6379,
-  database: 0,
+  host: System.get_env("REDIS_HOST", "localhost"),
+  port: String.to_integer(System.get_env("REDIS_PORT", "6379")),
+  database: String.to_integer(System.get_env("REDIS_DB", "0")),
   timeout: 5000
 
 # Enable dev routes for dashboard and mailbox
@@ -47,7 +47,7 @@ config :whispr_messaging, dev_routes: true
 # Do not include metadata nor timestamps in development logs
 config :logger, :console,
   format: "[$level] $message\n",
-  level: :debug
+  level: :info
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.

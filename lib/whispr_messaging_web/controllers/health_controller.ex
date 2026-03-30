@@ -286,6 +286,12 @@ defmodule WhisprMessagingWeb.HealthController do
     json(conn, response)
   end
 
+  def metrics(conn, _params) do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(200, "")
+  end
+
   swagger_path :ready do
     get("/health/ready")
     summary("Readiness probe")

@@ -28,6 +28,15 @@ defmodule WhisprMessagingWeb.Endpoint do
     ],
     longpoll: false
 
+  socket "/messaging/socket", WhisprMessagingWeb.UserSocket,
+    websocket: [
+      timeout: 45_000,
+      transport_log: false,
+      compress: true,
+      check_origin: false
+    ],
+    longpoll: false
+
   # Serve static files from the "priv/static" directory
   plug Plug.Static,
     at: "/",
