@@ -347,9 +347,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
-      assert response["data"]["is_muted"] == false
-      assert response["data"]["is_pinned"] == false
-      assert response["data"]["is_archived"] == false
+      assert response["data"]["isMuted"] == false
+      assert response["data"]["isPinned"] == false
+      assert response["data"]["isArchived"] == false
     end
 
     test "returns is_muted true after muting the conversation", %{
@@ -380,9 +380,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
-      assert response["data"]["is_muted"] == true
-      assert response["data"]["is_pinned"] == false
-      assert response["data"]["is_archived"] == false
+      assert response["data"]["isMuted"] == true
+      assert response["data"]["isPinned"] == false
+      assert response["data"]["isArchived"] == false
     end
   end
 
