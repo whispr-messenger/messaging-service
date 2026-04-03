@@ -54,11 +54,19 @@ RUN mix release
 #   1. priv/static/ is gitignored → not present during COPY priv priv
 #   2. _build/prod/lib/whispr_messaging/priv/ is a symlink → "same file" error
 #   3. _build/prod/rel/.../priv/ is a real directory created by mix release
-# Uses a glob instead of a hardcoded version so this survives bumps in mix.exs.
+# Uses find -print -quit instead of echo glob: the echo approach silently returns
+# the literal pattern string when no match is found (e.g. on a BuildKit cache hit),
+# causing cp to target a non-existent path without failing the build.
 RUN mix phx.swagger.generate priv/static/swagger.json && \
-    RELEASE_PRIV=$(echo _build/prod/rel/whispr_messaging/lib/whispr_messaging-*/priv) && \
+    RELEASE_APP_DIR=$(find _build/prod/rel/whispr_messaging/lib -maxdepth 1 -name "whispr_messaging-*" -type d -print -quit) && \
+    if [ -z "${RELEASE_APP_DIR}" ]; then \
+      echo "ERROR: release app dir not found under _build/prod/rel/whispr_messaging/lib (pattern: whispr_messaging-*)"; \
+      exit 1; \
+    fi && \
+    RELEASE_PRIV="${RELEASE_APP_DIR}/priv" && \
     mkdir -p "${RELEASE_PRIV}/static" && \
-    cp priv/static/swagger.json "${RELEASE_PRIV}/static/swagger.json"
+    cp priv/static/swagger.json "${RELEASE_PRIV}/static/swagger.json" && \
+    echo "OK: swagger.json copied to ${RELEASE_PRIV}/static/"
 
 # -----------------------------------------------------------------------------
 # STAGE 2: Runtime
