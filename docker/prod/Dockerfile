@@ -58,8 +58,12 @@ RUN mix release
 # the literal pattern string when no match is found (e.g. on a BuildKit cache hit),
 # causing cp to target a non-existent path without failing the build.
 RUN mix phx.swagger.generate priv/static/swagger.json && \
-    RELEASE_PRIV=$(find _build/prod/rel/whispr_messaging/lib -maxdepth 1 -name "whispr_messaging-*" -type d -print -quit)/priv && \
-    test -d "${RELEASE_PRIV}" || (echo "ERROR: release priv dir not found: ${RELEASE_PRIV}" && exit 1) && \
+    RELEASE_APP_DIR=$(find _build/prod/rel/whispr_messaging/lib -maxdepth 1 -name "whispr_messaging-*" -type d -print -quit) && \
+    if [ -z "${RELEASE_APP_DIR}" ]; then \
+      echo "ERROR: release app dir not found under _build/prod/rel/whispr_messaging/lib (pattern: whispr_messaging-*)"; \
+      exit 1; \
+    fi && \
+    RELEASE_PRIV="${RELEASE_APP_DIR}/priv" && \
     mkdir -p "${RELEASE_PRIV}/static" && \
     cp priv/static/swagger.json "${RELEASE_PRIV}/static/swagger.json" && \
     echo "OK: swagger.json copied to ${RELEASE_PRIV}/static/"
