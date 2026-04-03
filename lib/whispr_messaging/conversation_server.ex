@@ -389,9 +389,21 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_message(message, state) do
+    serialized = serialize_message(message)
+
+    # Broadcast to the conversation channel (for users with ChatScreen open)
     Endpoint.broadcast("conversation:#{state.conversation_id}", "new_message", %{
-      message: serialize_message(message)
+      message: serialized
     })
+
+    # Broadcast to each member's user channel (for ConversationsListScreen / background updates)
+    Enum.each(state.members, fn member ->
+      if member.user_id != message.sender_id do
+        Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
+          message: serialized
+        })
+      end
+    end)
   end
 
   defp notify_offline_members(message, state) do
