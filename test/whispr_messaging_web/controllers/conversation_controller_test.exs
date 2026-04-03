@@ -125,7 +125,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["data"]["id"] != nil
       assert response["data"]["type"] == "direct"
-      assert response["data"]["is_active"] == true
+      assert response["data"]["isActive"] == true
     end
 
     test "returns error when trying to create conversation with self", %{user1_id: user1_id} do
@@ -194,7 +194,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       # Usually name is top-level in response if rendered correctly
       # or in metadata
       assert response["data"]["metadata"]["name"] == "Test Group Chat"
-      assert response["data"]["is_active"] == true
+      assert response["data"]["isActive"] == true
     end
 
     test "returns 422 when group name is missing", %{user1_id: user1_id, user2_id: user2_id} do
@@ -260,7 +260,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["data"]["id"] == conversation.id
       assert response["data"]["type"] == "direct"
-      assert response["data"]["is_active"] == true
+      assert response["data"]["isActive"] == true
     end
 
     test "returns 404 for non-existent conversation", %{user1_id: user1_id} do
@@ -347,9 +347,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
-      assert response["data"]["is_muted"] == false
-      assert response["data"]["is_pinned"] == false
-      assert response["data"]["is_archived"] == false
+      assert response["data"]["isMuted"] == false
+      assert response["data"]["isPinned"] == false
+      assert response["data"]["isArchived"] == false
     end
 
     test "returns is_muted true after muting the conversation", %{
@@ -380,9 +380,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         get(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
-      assert response["data"]["is_muted"] == true
-      assert response["data"]["is_pinned"] == false
-      assert response["data"]["is_archived"] == false
+      assert response["data"]["isMuted"] == true
+      assert response["data"]["isPinned"] == false
+      assert response["data"]["isArchived"] == false
     end
   end
 
@@ -512,7 +512,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         delete(conn, ~p"/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
-      assert response["data"]["is_active"] == false
+      assert response["data"]["isActive"] == false
     end
 
     test "returns 404 for non-existent conversation", %{user1_id: user1_id} do
@@ -586,8 +586,8 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         )
         |> json_response(201)
 
-      assert response["data"]["user_id"] == user3_id
-      assert response["data"]["is_active"] == true
+      assert response["data"]["userId"] == user3_id
+      assert response["data"]["isActive"] == true
     end
 
     test "returns 403 for non-admin trying to add member", %{

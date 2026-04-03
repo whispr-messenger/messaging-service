@@ -18,6 +18,8 @@ defmodule WhisprMessaging.ConversationServer do
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   # @typep conversation_state :: %{
   #          conversation_id: binary(),
   #          conversation: Conversation.t(),
@@ -416,41 +418,61 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_member_added(member, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_added", %{
-      member: serialize_member(member),
-      conversation_id: state.conversation_id
-    })
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "member_added",
+      camelize_keys(%{
+        member: serialize_member(member),
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_member_removed(user_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "member_removed", %{
-      user_id: user_id,
-      conversation_id: state.conversation_id
-    })
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "member_removed",
+      camelize_keys(%{
+        user_id: user_id,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_typing_status(user_id, typing, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "user_typing", %{
-      user_id: user_id,
-      typing: typing,
-      conversation_id: state.conversation_id
-    })
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "user_typing",
+      camelize_keys(%{
+        user_id: user_id,
+        typing: typing,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp broadcast_read_receipt(user_id, message_id, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_read", %{
-      user_id: user_id,
-      message_id: message_id,
-      conversation_id: state.conversation_id,
-      timestamp: DateTime.utc_now()
-    })
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "message_read",
+      camelize_keys(%{
+        user_id: user_id,
+        message_id: message_id,
+        conversation_id: state.conversation_id,
+        timestamp: DateTime.utc_now()
+      })
+    )
   end
 
   defp broadcast_settings_updated(settings, state) do
-    Endpoint.broadcast("conversation:#{state.conversation_id}", "settings_updated", %{
-      settings: settings,
-      conversation_id: state.conversation_id
-    })
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "settings_updated",
+      camelize_keys(%{
+        settings: settings,
+        conversation_id: state.conversation_id
+      })
+    )
   end
 
   defp create_member_joined_message(user_id, state) do
@@ -491,18 +513,20 @@ defmodule WhisprMessaging.ConversationServer do
       delete_for_everyone: message.delete_for_everyone
     }
 
-    # Add delivery_status if delivery_statuses are preloaded
-    case message do
-      %{delivery_statuses: statuses} when is_list(statuses) ->
-        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+    result =
+      case message do
+        %{delivery_statuses: statuses} when is_list(statuses) ->
+          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
 
-      _ ->
-        Map.put(base, :delivery_status, "sent")
-    end
+        _ ->
+          Map.put(base, :delivery_status, "sent")
+      end
+
+    camelize_keys(result)
   end
 
   defp serialize_member(member) do
-    %{
+    camelize_keys(%{
       id: member.id,
       conversation_id: member.conversation_id,
       user_id: member.user_id,
@@ -510,7 +534,7 @@ defmodule WhisprMessaging.ConversationServer do
       joined_at: member.joined_at,
       last_read_at: member.last_read_at,
       is_active: member.is_active
-    }
+    })
   end
 
   defp init_metrics do

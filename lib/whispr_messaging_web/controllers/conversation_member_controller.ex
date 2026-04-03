@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   alias WhisprMessaging.Conversations
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :create do
@@ -158,11 +160,11 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   end
 
   defp render_member(member) do
-    %{
+    camelize_keys(%{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
       joined_at: member.joined_at,
       is_active: member.is_active
-    }
+    })
   end
 end
