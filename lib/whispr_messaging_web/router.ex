@@ -13,7 +13,7 @@ defmodule WhisprMessagingWeb.Router do
     plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
-  scope "/api/swagger" do
+  scope "/messaging/api/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
       swagger_file: "swagger.json"
@@ -25,21 +25,21 @@ defmodule WhisprMessagingWeb.Router do
     WhisprMessagingWeb.SwaggerInfo.swagger_info()
   end
 
-  scope "/", WhisprMessagingWeb do
+  scope "/messaging", WhisprMessagingWeb do
     pipe_through :api
 
     get "/", HealthController, :info
   end
 
   # Kubernetes-compatible health check routes (no /api/v1 prefix)
-  scope "/", WhisprMessagingWeb do
+  scope "/messaging", WhisprMessagingWeb do
     pipe_through :api
 
     get "/ready", HealthController, :ready
     get "/live", HealthController, :live
   end
 
-  scope "/api/v1", WhisprMessagingWeb do
+  scope "/messaging/api/v1", WhisprMessagingWeb do
     pipe_through :api
 
     # Health check endpoints
