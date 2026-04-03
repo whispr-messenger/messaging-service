@@ -58,6 +58,8 @@ defmodule WhisprMessagingWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
 
+  plug WhisprMessagingWeb.Plugs.Cors
+
   plug WhisprMessagingWeb.Plugs.ForwardedPrefix
   plug WhisprMessagingWeb.Router
 end
