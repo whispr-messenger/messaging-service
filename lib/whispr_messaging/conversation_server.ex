@@ -511,7 +511,7 @@ defmodule WhisprMessaging.ConversationServer do
       sender_id: message.sender_id,
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
-      content: message.content,
+      content: safe_binary_content(message.content),
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
