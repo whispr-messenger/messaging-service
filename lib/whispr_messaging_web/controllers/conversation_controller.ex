@@ -914,6 +914,44 @@ defmodule WhisprMessagingWeb.ConversationController do
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     })
+    |> Map.put("unreadCount", Map.get(conversation, :unread_count, 0))
+    |> Map.put("lastMessage", render_last_message(Map.get(conversation, :last_message)))
+    |> maybe_add_member_ids(conversation)
+  end
+
+  defp render_last_message(nil), do: nil
+
+  defp render_last_message(message) do
+    %{
+      id: message.id,
+      sender_id: message.sender_id,
+      content: safe_binary_content(message.content),
+      message_type: message.message_type,
+      sent_at: message.sent_at,
+      is_deleted: message.is_deleted
+    }
+  end
+
+  # Ensure binary content is safe for JSON encoding.
+  # Content stored as BYTEA may not always be valid UTF-8.
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
+
+  defp maybe_add_member_ids(rendered, conversation) do
+    if conversation.type == "direct" do
+      member_ids =
+        WhisprMessaging.Conversations.list_conversation_members(conversation.id)
+        |> Enum.map(& &1.user_id)
+
+      Map.put(rendered, "memberUserIds", member_ids)
+    else
+      rendered
+    end
   end
 
   defp render_conversation_with_members(conversation, member_info) do
