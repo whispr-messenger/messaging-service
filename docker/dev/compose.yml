@@ -76,7 +76,7 @@ services:
       - ../..:/app
       - deps:/app/deps
     ports:
-      - "8080:${HTTP_PORT}"  # HTTP/WebSocket
+      - "8081:${HTTP_PORT}"  # HTTP/WebSocket
       - "8443:${HTTPS_PORT}" # HTTPS
       - "50052:50052"  # gRPC
     networks:
