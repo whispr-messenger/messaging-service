@@ -40,7 +40,7 @@ defmodule WhisprMessagingWeb.DraftController do
   def create(conn, params) do
     user_id = conn.assigns[:user_id]
 
-    draft_params = params["draft"] || Map.drop(params, [])
+    draft_params = params["draft"] || params
     conversation_id = draft_params["conversation_id"]
     content = draft_params["content"]
     metadata = draft_params["metadata"] || %{}
@@ -96,14 +96,21 @@ defmodule WhisprMessagingWeb.DraftController do
       |> put_status(:unauthorized)
       |> json(%{error: "Unauthorized"})
     else
-      case Messages.get_draft(conversation_id, user_id) do
-        {:ok, draft} ->
-          json(conn, %{data: render_draft(draft)})
+      with true <- Conversations.conversation_member?(conversation_id, user_id) do
+        case Messages.get_draft(conversation_id, user_id) do
+          {:ok, draft} ->
+            json(conn, %{data: render_draft(draft)})
 
-        {:error, :not_found} ->
+          {:error, :not_found} ->
+            conn
+            |> put_status(:not_found)
+            |> json(%{error: "No draft found"})
+        end
+      else
+        false ->
           conn
-          |> put_status(:not_found)
-          |> json(%{error: "No draft found"})
+          |> put_status(:forbidden)
+          |> json(%{error: "Forbidden"})
       end
     end
   end
