@@ -601,38 +601,42 @@ defmodule WhisprMessaging.Conversations do
     Repo.transaction(fn ->
       Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-      case get_conversation_member(conversation_id, user_id) do
-        %ConversationMember{is_active: true} = member ->
-          cond do
-            Map.get(member.settings, "is_pinned", false) ->
-              Repo.rollback(:already_pinned)
-
-            count_pinned_conversations(user_id) >= @max_pinned_conversations ->
-              Repo.rollback(:pin_limit_reached)
-
-            true ->
-              new_settings = Map.put(member.settings || %{}, "is_pinned", true)
-
-              case member
-                   |> ConversationMember.update_settings_changeset(new_settings)
-                   |> Repo.update() do
-                {:ok, updated_member} -> updated_member
-                {:error, changeset} -> Repo.rollback({:changeset, changeset})
-              end
-          end
-
-        _ ->
-          Repo.rollback(:not_member)
-      end
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_pin_member(user_id)
     end)
-    |> case do
-      {:ok, updated_member} -> {:ok, updated_member}
-      {:error, :not_member} -> {:error, :not_member}
-      {:error, :already_pinned} -> {:error, :already_pinned}
-      {:error, :pin_limit_reached} -> {:error, :pin_limit_reached}
-      {:error, {:changeset, changeset}} -> {:error, changeset}
+    |> unwrap_transaction_result()
+  end
+
+  defp do_pin_member(%ConversationMember{is_active: true} = member, user_id) do
+    cond do
+      Map.get(member.settings, "is_pinned", false) ->
+        Repo.rollback(:already_pinned)
+
+      count_pinned_conversations(user_id) >= @max_pinned_conversations ->
+        Repo.rollback(:pin_limit_reached)
+
+      true ->
+        apply_pin_settings(member)
     end
   end
+
+  defp do_pin_member(_member, _user_id), do: Repo.rollback(:not_member)
+
+  defp apply_pin_settings(member) do
+    new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+
+    case member
+         |> ConversationMember.update_settings_changeset(new_settings)
+         |> Repo.update() do
+      {:ok, updated_member} -> updated_member
+      {:error, changeset} -> Repo.rollback({:changeset, changeset})
+    end
+  end
+
+  defp unwrap_transaction_result({:ok, result}), do: {:ok, result}
+  defp unwrap_transaction_result({:error, {:changeset, cs}}), do: {:error, cs}
+  defp unwrap_transaction_result({:error, reason}), do: {:error, reason}
 
   @doc """
   Unpins a conversation for a user.
