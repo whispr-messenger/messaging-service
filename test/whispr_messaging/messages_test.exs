@@ -718,14 +718,14 @@ defmodule WhisprMessaging.MessagesTest do
       %{conversation: conversation, user_id: user_id}
     end
 
-    test "upsert_draft/4 creates a draft", %{conversation: c, user_id: user_id} do
+    test "upsert_draft/3 creates a draft", %{conversation: c, user_id: user_id} do
       assert {:ok, draft} = Messages.upsert_draft(c.id, user_id, "draft content")
       assert draft.conversation_id == c.id
       assert draft.user_id == user_id
       assert draft.content == "draft content"
     end
 
-    test "upsert_draft/4 replaces existing draft", %{conversation: c, user_id: user_id} do
+    test "upsert_draft/3 replaces existing draft", %{conversation: c, user_id: user_id} do
       {:ok, _first} = Messages.upsert_draft(c.id, user_id, "first draft")
       {:ok, second} = Messages.upsert_draft(c.id, user_id, "updated draft")
       assert second.content == "updated draft"
