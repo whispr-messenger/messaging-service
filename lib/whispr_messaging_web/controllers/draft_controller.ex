@@ -96,21 +96,22 @@ defmodule WhisprMessagingWeb.DraftController do
       |> put_status(:unauthorized)
       |> json(%{error: "Unauthorized"})
     else
-      with true <- Conversations.conversation_member?(conversation_id, user_id) do
-        case Messages.get_draft(conversation_id, user_id) do
-          {:ok, draft} ->
-            json(conn, %{data: render_draft(draft)})
+      show_draft(conn, conversation_id, user_id)
+    end
+  end
 
-          {:error, :not_found} ->
-            conn
-            |> put_status(:not_found)
-            |> json(%{error: "No draft found"})
-        end
-      else
-        false ->
+  defp show_draft(conn, conversation_id, user_id) do
+    unless Conversations.conversation_member?(conversation_id, user_id) do
+      conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+    else
+      case Messages.get_draft(conversation_id, user_id) do
+        {:ok, draft} ->
+          json(conn, %{data: render_draft(draft)})
+
+        {:error, :not_found} ->
           conn
-          |> put_status(:forbidden)
-          |> json(%{error: "Forbidden"})
+          |> put_status(:not_found)
+          |> json(%{error: "No draft found"})
       end
     end
   end
