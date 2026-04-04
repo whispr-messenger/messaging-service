@@ -579,7 +579,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     security([%{Bearer: []}])
     response(200, "Success - conversation pinned")
     response(404, "Conversation not found or user not a member")
-    response(422, "Pin limit reached (max #{Conversations.max_pinned_conversations()}) or already pinned")
+    response(
+      422,
+      "Pin limit reached (max #{Conversations.max_pinned_conversations()}) or already pinned"
+    )
   end
 
   @doc """
@@ -614,7 +617,10 @@ defmodule WhisprMessagingWeb.ConversationController do
         {:error, :pin_limit_reached} ->
           conn
           |> put_status(:unprocessable_entity)
-          |> json(%{error: "Pin limit reached: you may pin at most #{Conversations.max_pinned_conversations()} conversations"})
+          |> json(%{
+            error:
+              "Pin limit reached: you may pin at most #{Conversations.max_pinned_conversations()} conversations"
+          })
       end
     end
   end
