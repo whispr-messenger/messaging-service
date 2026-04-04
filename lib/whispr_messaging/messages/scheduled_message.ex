@@ -109,7 +109,9 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
         changeset
 
       scheduled_at ->
-        if DateTime.compare(scheduled_at, DateTime.utc_now()) == :gt do
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        if DateTime.compare(scheduled_at, now) == :gt do
           changeset
         else
           add_error(changeset, :scheduled_at, "must be in the future")

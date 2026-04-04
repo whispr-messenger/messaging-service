@@ -32,5 +32,10 @@ defmodule WhisprMessaging.Repo.Migrations.CreateScheduledMessages do
     create index(:scheduled_messages, [:status, :scheduled_at],
              name: :scheduled_messages_status_scheduled_at_index
            )
+
+    # Index for listing a user's pending scheduled messages
+    create index(:scheduled_messages, [:sender_id, :status, :scheduled_at],
+             name: :scheduled_messages_sender_status_scheduled_at_index
+           )
   end
 end
