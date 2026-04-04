@@ -12,7 +12,7 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Messages
 
-  import WhisprMessagingWeb.Helpers.JsonHelpers, only: [camelize_keys: 1]
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
   action_fallback WhisprMessagingWeb.FallbackController
 
