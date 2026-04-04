@@ -62,9 +62,15 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
   defp dispatch_scheduled_message(%ScheduledMessage{} = sm) do
     Repo.transaction(fn ->
       # Mark as sent first to avoid double-dispatch
-      sm
-      |> ScheduledMessage.mark_sent_changeset()
-      |> Repo.update!()
+      case sm
+           |> ScheduledMessage.mark_sent_changeset()
+           |> Repo.update() do
+        {:ok, _updated} ->
+          :ok
+
+        {:error, changeset} ->
+          Repo.rollback({:mark_sent_failed, changeset})
+      end
 
       # Create the actual message
       case Messages.create_message(%{

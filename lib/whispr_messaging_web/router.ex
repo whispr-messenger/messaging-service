@@ -87,7 +87,7 @@ defmodule WhisprMessagingWeb.Router do
     # Draft retrieval scoped to conversation
     get "/conversations/:id/drafts", DraftController, :show
 
-    # Scheduled message routes — declared before /messages/:id pattern
+    # Scheduled message routes — literal paths before parameterized :id
     get "/messages/scheduled", ScheduledMessageController, :index
     post "/messages/scheduled", ScheduledMessageController, :create
     delete "/messages/scheduled/:id", ScheduledMessageController, :delete

@@ -12,6 +12,8 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Messages
 
+  import WhisprMessagingWeb.Helpers.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :create do
@@ -155,7 +157,7 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
   end
 
   defp render_scheduled_message(sm) do
-    %{
+    camelize_keys(%{
       id: sm.id,
       conversation_id: sm.conversation_id,
       sender_id: sm.sender_id,
@@ -166,7 +168,7 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
       status: sm.status,
       inserted_at: sm.inserted_at,
       updated_at: sm.updated_at
-    }
+    })
   end
 
   def swagger_definitions do
