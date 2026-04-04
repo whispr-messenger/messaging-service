@@ -495,7 +495,8 @@ defmodule WhisprMessaging.ConversationServer do
     end)
   end
 
-  defp serialize_message(message) do
+  @doc false
+  def serialize_message(message) do
     alias WhisprMessaging.Messages.DeliveryStatus
 
     base = %{
