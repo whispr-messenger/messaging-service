@@ -653,28 +653,34 @@ defmodule WhisprMessaging.Conversations do
     Repo.transaction(fn ->
       Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-      case get_conversation_member(conversation_id, user_id) do
-        %ConversationMember{is_active: true} = member ->
-          settings = member.settings || %{}
-
-          if Map.get(settings, "is_pinned", false) do
-            new_settings = Map.put(settings, "is_pinned", false)
-
-            case member
-                 |> ConversationMember.update_settings_changeset(new_settings)
-                 |> Repo.update() do
-              {:ok, updated_member} -> updated_member
-              {:error, changeset} -> Repo.rollback({:changeset, changeset})
-            end
-          else
-            Repo.rollback(:not_pinned)
-          end
-
-        _ ->
-          Repo.rollback(:not_member)
-      end
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_unpin_member()
     end)
     |> unwrap_transaction_result()
+  end
+
+  defp do_unpin_member(%ConversationMember{is_active: true} = member) do
+    settings = member.settings || %{}
+
+    if Map.get(settings, "is_pinned", false) do
+      apply_unpin_settings(member, settings)
+    else
+      Repo.rollback(:not_pinned)
+    end
+  end
+
+  defp do_unpin_member(_member), do: Repo.rollback(:not_member)
+
+  defp apply_unpin_settings(member, settings) do
+    new_settings = Map.put(settings, "is_pinned", false)
+
+    case member
+         |> ConversationMember.update_settings_changeset(new_settings)
+         |> Repo.update() do
+      {:ok, updated_member} -> updated_member
+      {:error, changeset} -> Repo.rollback({:changeset, changeset})
+    end
   end
 
   defp count_pinned_conversations(user_id) do
