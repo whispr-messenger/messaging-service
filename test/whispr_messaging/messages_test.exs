@@ -229,6 +229,118 @@ defmodule WhisprMessaging.MessagesTest do
     end
   end
 
+  describe "reply threading validation" do
+    setup do
+      {:ok, conversation1} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, conversation2} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user_id = Ecto.UUID.generate()
+
+      {:ok, parent_message} =
+        Messages.create_message(%{
+          conversation_id: conversation1.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "parent message",
+          client_random: 10_001
+        })
+
+      %{
+        conversation1: conversation1,
+        conversation2: conversation2,
+        user_id: user_id,
+        parent_message: parent_message
+      }
+    end
+
+    test "allows reply to message in same conversation", %{
+      conversation1: conversation1,
+      user_id: user_id,
+      parent_message: parent_message
+    } do
+      assert {:ok, reply} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "reply message",
+                 client_random: 10_002,
+                 reply_to_id: parent_message.id
+               })
+
+      assert reply.reply_to_id == parent_message.id
+      assert reply.reply_to.id == parent_message.id
+    end
+
+    test "rejects reply to message in different conversation", %{
+      conversation2: conversation2,
+      user_id: user_id,
+      parent_message: parent_message
+    } do
+      assert {:error, changeset} =
+               Messages.create_message(%{
+                 conversation_id: conversation2.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "cross-conversation reply",
+                 client_random: 10_003,
+                 reply_to_id: parent_message.id
+               })
+
+      assert %Ecto.Changeset{} = changeset
+      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
+      assert errors[:reply_to_id] != nil
+    end
+
+    test "rejects reply to non-existent message", %{
+      conversation1: conversation1,
+      user_id: user_id
+    } do
+      fake_id = Ecto.UUID.generate()
+
+      assert {:error, changeset} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "reply to nothing",
+                 client_random: 10_004,
+                 reply_to_id: fake_id
+               })
+
+      assert %Ecto.Changeset{} = changeset
+      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
+      assert errors[:reply_to_id] != nil
+    end
+
+    test "allows message without reply_to_id", %{
+      conversation1: conversation1,
+      user_id: user_id
+    } do
+      assert {:ok, message} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "no reply",
+                 client_random: 10_005
+               })
+
+      assert is_nil(message.reply_to_id)
+    end
+  end
+
   describe "delivery statuses" do
     setup do
       {:ok, conversation} =
