@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.DraftController do
   use WhisprMessagingWeb, :controller
   use PhoenixSwagger
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Messages
 
@@ -55,7 +57,7 @@ defmodule WhisprMessagingWeb.DraftController do
            {:ok, draft} <- Messages.upsert_draft(conversation_id, user_id, content, metadata) do
         conn
         |> put_status(:ok)
-        |> json(%{data: render_draft(draft)})
+        |> json(%{data: camelize_keys(render_draft(draft))})
       else
         {:error, :not_found} ->
           conn
@@ -101,10 +103,11 @@ defmodule WhisprMessagingWeb.DraftController do
   end
 
   defp show_draft(conn, conversation_id, user_id) do
-    if Conversations.conversation_member?(conversation_id, user_id) do
+    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
+         true <- Conversations.conversation_member?(conversation_id, user_id) do
       case Messages.get_draft(conversation_id, user_id) do
         {:ok, draft} ->
-          json(conn, %{data: render_draft(draft)})
+          json(conn, %{data: camelize_keys(render_draft(draft))})
 
         {:error, :not_found} ->
           conn
@@ -112,7 +115,11 @@ defmodule WhisprMessagingWeb.DraftController do
           |> json(%{error: "No draft found"})
       end
     else
-      conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+      false ->
+        conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
     end
   end
 
@@ -142,7 +149,7 @@ defmodule WhisprMessagingWeb.DraftController do
     else
       case Messages.delete_draft(draft_id, user_id) do
         {:ok, _draft} ->
-          json(conn, %{data: %{id: draft_id, deleted: true}})
+          json(conn, %{data: camelize_keys(%{id: draft_id, deleted: true})})
 
         {:error, :not_found} ->
           conn

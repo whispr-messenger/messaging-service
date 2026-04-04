@@ -514,7 +514,9 @@ defmodule WhisprMessaging.Messages do
     %MessageDraft{}
     |> MessageDraft.changeset(attrs)
     |> Repo.insert(
-      on_conflict: [set: [content: content, metadata: metadata, updated_at: DateTime.utc_now()]],
+      on_conflict: [
+        set: [content: content, metadata: metadata, updated_at: NaiveDateTime.utc_now()]
+      ],
       conflict_target: [:conversation_id, :user_id],
       returning: true
     )

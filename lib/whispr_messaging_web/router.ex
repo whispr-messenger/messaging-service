@@ -69,7 +69,7 @@ defmodule WhisprMessagingWeb.Router do
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
 
-    # Draft routes — must be declared before /messages/:id pattern
+    # Draft routes
     post "/messages/drafts", DraftController, :create
     delete "/messages/drafts/:id", DraftController, :delete
 
