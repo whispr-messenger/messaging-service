@@ -319,7 +319,7 @@ defmodule WhisprMessaging.ConversationServer do
 
       case Messages.get_message_by_sender_and_random(sender_id, client_random) do
         {:ok, existing_message} ->
-          {:error, {:duplicate, existing_message}}
+          {:error, {:duplicate, WhisprMessaging.Repo.preload(existing_message, :reply_to)}}
 
         _ ->
           {:error, changeset}
@@ -526,17 +526,13 @@ defmodule WhisprMessaging.ConversationServer do
     result =
       case message do
         %{reply_to: %Message{} = parent} ->
-          Map.put(
-            result,
-            :reply_to,
-            camelize_keys(%{
-              id: parent.id,
-              sender_id: parent.sender_id,
-              content: parent.content,
-              message_type: parent.message_type,
-              is_deleted: parent.is_deleted
-            })
-          )
+          Map.put(result, :reply_to, %{
+            id: parent.id,
+            sender_id: parent.sender_id,
+            content: parent.content,
+            message_type: parent.message_type,
+            is_deleted: parent.is_deleted
+          })
 
         _ ->
           result
