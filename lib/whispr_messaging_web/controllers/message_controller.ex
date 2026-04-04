@@ -336,13 +336,13 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   defp render_reply_context(parent_message) do
-    camelize_keys(%{
+    %{
       id: parent_message.id,
       sender_id: parent_message.sender_id,
       content: parent_message.content,
       message_type: parent_message.message_type,
       is_deleted: parent_message.is_deleted
-    })
+    }
   end
 
   # Convert ttl_seconds convenience param to an explicit expires_at timestamp.

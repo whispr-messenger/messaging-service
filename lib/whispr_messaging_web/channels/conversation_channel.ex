@@ -401,13 +401,13 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   end
 
   defp serialize_reply_context(%Message{} = parent) do
-    camelize_keys(%{
+    %{
       id: parent.id,
       sender_id: parent.sender_id,
       content: parent.content,
       message_type: parent.message_type,
       is_deleted: parent.is_deleted
-    })
+    }
   end
 
   defp serialize_reaction(reaction) do
