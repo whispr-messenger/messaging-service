@@ -12,6 +12,7 @@ defmodule WhisprMessaging.Messages do
     DeliveryStatus,
     Message,
     MessageAttachment,
+    MessageDraft,
     MessageReaction
   }
 
@@ -493,5 +494,58 @@ defmodule WhisprMessaging.Messages do
   def user_can_access_message?(conversation_id, user_id) do
     alias WhisprMessaging.Conversations
     Conversations.conversation_member?(conversation_id, user_id)
+  end
+
+  # Draft operations
+
+  @doc """
+  Upserts a draft for a user in a conversation.
+  Only one draft per user per conversation is allowed; calling this again
+  replaces the existing draft.
+  """
+  def upsert_draft(conversation_id, user_id, content, metadata \\ %{}) do
+    attrs = %{
+      conversation_id: conversation_id,
+      user_id: user_id,
+      content: content,
+      metadata: metadata
+    }
+
+    %MessageDraft{}
+    |> MessageDraft.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: [
+        set: [content: content, metadata: metadata, updated_at: NaiveDateTime.utc_now()]
+      ],
+      conflict_target: [:conversation_id, :user_id],
+      returning: true
+    )
+  end
+
+  @doc """
+  Gets the draft for a specific user in a conversation.
+  Returns {:ok, draft} or {:error, :not_found}.
+  """
+  def get_draft(conversation_id, user_id) do
+    case Repo.one(MessageDraft.by_conversation_and_user_query(conversation_id, user_id)) do
+      nil -> {:error, :not_found}
+      draft -> {:ok, draft}
+    end
+  end
+
+  @doc """
+  Deletes a draft by id, ensuring it belongs to the given user.
+  """
+  def delete_draft(draft_id, user_id) do
+    case Repo.get(MessageDraft, draft_id) do
+      nil ->
+        {:error, :not_found}
+
+      %MessageDraft{user_id: ^user_id} = draft ->
+        Repo.delete(draft)
+
+      %MessageDraft{} ->
+        {:error, :forbidden}
+    end
   end
 end
