@@ -49,7 +49,12 @@ defmodule WhisprMessagingWeb.ConversationController do
       |> put_status(:unauthorized)
       |> json(%{error: "Unauthorized"})
     else
-      limit = min(String.to_integer(params["limit"] || "50"), 100)
+      limit =
+        case Integer.parse(params["limit"] || "50") do
+          {n, ""} when n > 0 -> min(n, 100)
+          _ -> 50
+        end
+
       conversation_type = params["type"]
 
       conversations =
@@ -526,7 +531,12 @@ defmodule WhisprMessagingWeb.ConversationController do
     if is_nil(user_id) do
       conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
     else
-      limit = min(String.to_integer(params["limit"] || "50"), 100)
+      limit =
+        case Integer.parse(params["limit"] || "50") do
+          {n, ""} when n > 0 -> min(n, 100)
+          _ -> 50
+        end
+
       conversations = Conversations.list_archived_conversations(user_id, limit)
 
       json(conn, %{
