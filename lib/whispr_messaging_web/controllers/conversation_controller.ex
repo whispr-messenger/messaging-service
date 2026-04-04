@@ -578,6 +578,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     parameter(:id, :path, :string, "Conversation UUID", required: true)
     security([%{Bearer: []}])
     response(200, "Success - conversation pinned")
+    response(401, "Unauthorized")
     response(404, "Conversation not found or user not a member")
 
     response(
@@ -639,6 +640,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     parameter(:id, :path, :string, "Conversation UUID", required: true)
     security([%{Bearer: []}])
     response(200, "Success - conversation unpinned")
+    response(401, "Unauthorized")
     response(404, "Conversation not found or user not a member")
     response(422, "Conversation is not pinned")
   end
