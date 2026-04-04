@@ -585,6 +585,8 @@ defmodule WhisprMessaging.Conversations do
 
   @max_pinned_conversations 5
 
+  def max_pinned_conversations, do: @max_pinned_conversations
+
   @doc """
   Pins a conversation for a user.
 
@@ -594,26 +596,41 @@ defmodule WhisprMessaging.Conversations do
   #{@max_pinned_conversations} pinned conversations.
   """
   def pin_conversation(conversation_id, user_id) do
-    case get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member -> do_pin_conversation(member, user_id)
-      _ -> {:error, :not_member}
-    end
-  end
+    lock_key = :erlang.phash2(user_id)
 
-  defp do_pin_conversation(member, user_id) do
-    cond do
-      Map.get(member.settings, "is_pinned", false) ->
-        {:error, :already_pinned}
+    Repo.transaction(fn ->
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-      count_pinned_conversations(user_id) >= @max_pinned_conversations ->
-        {:error, :pin_limit_reached}
+      case get_conversation_member(conversation_id, user_id) do
+        %ConversationMember{is_active: true} = member ->
+          cond do
+            Map.get(member.settings, "is_pinned", false) ->
+              Repo.rollback(:already_pinned)
 
-      true ->
-        new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+            count_pinned_conversations(user_id) >= @max_pinned_conversations ->
+              Repo.rollback(:pin_limit_reached)
 
-        member
-        |> ConversationMember.update_settings_changeset(new_settings)
-        |> Repo.update()
+            true ->
+              new_settings = Map.put(member.settings || %{}, "is_pinned", true)
+
+              case member
+                   |> ConversationMember.update_settings_changeset(new_settings)
+                   |> Repo.update() do
+                {:ok, updated_member} -> updated_member
+                {:error, changeset} -> Repo.rollback({:changeset, changeset})
+              end
+          end
+
+        _ ->
+          Repo.rollback(:not_member)
+      end
+    end)
+    |> case do
+      {:ok, updated_member} -> {:ok, updated_member}
+      {:error, :not_member} -> {:error, :not_member}
+      {:error, :already_pinned} -> {:error, :already_pinned}
+      {:error, :pin_limit_reached} -> {:error, :pin_limit_reached}
+      {:error, {:changeset, changeset}} -> {:error, changeset}
     end
   end
 
@@ -642,10 +659,7 @@ defmodule WhisprMessaging.Conversations do
     end
   end
 
-  @doc """
-  Counts the number of pinned conversations for a user.
-  """
-  def count_pinned_conversations(user_id) do
+  defp count_pinned_conversations(user_id) do
     from(m in ConversationMember,
       where: m.user_id == ^user_id,
       where: m.is_active == true,

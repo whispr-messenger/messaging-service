@@ -15,6 +15,7 @@ defmodule WhisprMessaging.ConversationsTest do
       attrs = %{type: "group", metadata: %{"name" => "Test Group"}, is_active: true}
       assert {:ok, conversation} = Conversations.create_conversation(attrs)
       assert conversation.type == "group"
+      assert conversation.metadata["name"] == "Test Group"
     end
   end
 
@@ -38,7 +39,7 @@ defmodule WhisprMessaging.ConversationsTest do
         Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
 
       {:ok, conv2} =
-        Conversations.create_conversation(%{type: "group", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{type: "group", metadata: %{"name" => "Test Group"}, is_active: true})
 
       Conversations.add_conversation_member(conv1.id, user_id)
       Conversations.add_conversation_member(conv2.id, user_id)
@@ -78,7 +79,7 @@ defmodule WhisprMessaging.ConversationsTest do
       user_id = Ecto.UUID.generate()
 
       {:ok, conversation} =
-        Conversations.create_conversation(%{type: "group", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{type: "group", metadata: %{"name" => "Test Group"}, is_active: true})
 
       {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
       assert {:ok, removed} = Conversations.remove_conversation_member(conversation.id, user_id)
