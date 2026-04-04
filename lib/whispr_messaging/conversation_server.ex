@@ -526,13 +526,17 @@ defmodule WhisprMessaging.ConversationServer do
     result =
       case message do
         %{reply_to: %Message{} = parent} ->
-          Map.put(result, :reply_to, camelize_keys(%{
-            id: parent.id,
-            sender_id: parent.sender_id,
-            content: parent.content,
-            message_type: parent.message_type,
-            is_deleted: parent.is_deleted
-          }))
+          Map.put(
+            result,
+            :reply_to,
+            camelize_keys(%{
+              id: parent.id,
+              sender_id: parent.sender_id,
+              content: parent.content,
+              message_type: parent.message_type,
+              is_deleted: parent.is_deleted
+            })
+          )
 
         _ ->
           result
