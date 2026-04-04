@@ -579,6 +579,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     security([%{Bearer: []}])
     response(200, "Success - conversation pinned")
     response(404, "Conversation not found or user not a member")
+
     response(
       422,
       "Pin limit reached (max #{Conversations.max_pinned_conversations()}) or already pinned"
