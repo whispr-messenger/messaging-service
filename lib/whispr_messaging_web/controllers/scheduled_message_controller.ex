@@ -46,7 +46,7 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
   def create(conn, params) do
     user_id = conn.assigns[:user_id]
 
-    sm_params = params["scheduled_message"] || Map.drop(params, [])
+    sm_params = params["scheduled_message"] || params
     conversation_id = sm_params["conversation_id"]
 
     if is_nil(user_id) do
