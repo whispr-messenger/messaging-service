@@ -585,6 +585,7 @@ defmodule WhisprMessaging.Conversations do
 
   @max_pinned_conversations 5
 
+  @doc "Returns the maximum number of conversations a user can pin."
   def max_pinned_conversations, do: @max_pinned_conversations
 
   @doc """

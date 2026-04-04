@@ -45,8 +45,8 @@ defmodule WhisprMessaging.ConversationsTest do
           is_active: true
         })
 
-      Conversations.add_conversation_member(conv1.id, user_id)
-      Conversations.add_conversation_member(conv2.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv1.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user_id)
 
       conversations = Conversations.list_user_conversations(user_id, 50)
       assert length(conversations) == 2
