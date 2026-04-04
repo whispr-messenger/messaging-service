@@ -119,7 +119,12 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> json(%{error: "Missing required parameter: q"})
 
       true ->
-        limit = min(String.to_integer(params["limit"] || "20"), 50)
+        limit =
+          case Integer.parse(params["limit"] || "20") do
+            {n, ""} when n > 0 -> min(n, 50)
+            _ -> 20
+          end
+
         conversations = Conversations.search_user_conversations(user_id, query_term, limit: limit)
 
         json(conn, %{

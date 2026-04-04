@@ -573,16 +573,19 @@ defmodule WhisprMessaging.Conversations do
   controller can expose per-user flags like `is_pinned`, `is_archived`, etc.
   """
   def search_user_conversations(user_id, query_term, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 20)
+    limit = max(Keyword.get(opts, :limit, 20), 1)
     search_pattern = "%#{query_term}%"
 
-    # Conversations the user belongs to, filtered by name match
+    # Conversations the user belongs to, filtered by group name match
     by_name =
       from m in ConversationMember,
         where: m.user_id == ^user_id and m.is_active == true,
         join: c in Conversation,
         on: c.id == m.conversation_id and c.is_active == true,
+        where: c.type == "group",
         where: ilike(fragment("(?->>'name')", c.metadata), ^search_pattern),
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
         select: {m, c}
 
     # Conversations the user belongs to where another participant matches the query
@@ -596,6 +599,8 @@ defmodule WhisprMessaging.Conversations do
           other.conversation_id == c.id and other.user_id != ^user_id and
             other.is_active == true,
         where: other.user_id == ^query_term,
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
         select: {m, c}
 
     name_results = Repo.all(by_name)
@@ -611,7 +616,7 @@ defmodule WhisprMessaging.Conversations do
 
     (name_results ++ participant_results)
     |> Enum.uniq_by(fn {_m, c} -> c.id end)
-    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, DateTime})
+    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, NaiveDateTime})
     |> Enum.take(limit)
     |> Enum.map(fn {member, conversation} ->
       Map.put(conversation, :member_info, member)

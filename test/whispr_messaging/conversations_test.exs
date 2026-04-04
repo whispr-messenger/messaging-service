@@ -281,7 +281,7 @@ defmodule WhisprMessaging.ConversationsTest do
             is_active: true
           })
 
-        Conversations.add_conversation_member(c.id, user_id)
+        {:ok, _} = Conversations.add_conversation_member(c.id, user_id)
       end
 
       results = Conversations.search_user_conversations(user_id, "Team", limit: 3)
