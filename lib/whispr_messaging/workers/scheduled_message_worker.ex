@@ -4,7 +4,7 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
 
   Polls for pending scheduled messages whose `scheduled_at` timestamp is in
   the past, creates real messages from them, and broadcasts them via
-  Phoenix.PubSub so connected clients receive them in real time.
+  Phoenix Channels so connected clients receive them in real time.
 
   The poll interval defaults to 60 seconds and is configurable via
   `:whispr_messaging, :scheduled_message_worker, :poll_interval_ms`.
@@ -95,11 +95,11 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
              client_random: sm.client_random
            }) do
         {:ok, message} ->
-          # Broadcast to all conversation members via PubSub
-          Phoenix.PubSub.broadcast(
-            WhisprMessaging.PubSub,
+          # Broadcast to all conversation members via Phoenix Channels
+          WhisprMessagingWeb.Endpoint.broadcast(
             "conversation:#{sm.conversation_id}",
-            {:new_message, message}
+            "new_message",
+            %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
           )
 
         {:error, reason} ->
