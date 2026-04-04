@@ -148,6 +148,8 @@ defmodule WhisprMessagingWeb.MessageController do
                :missing_signature_fields,
                :invalid_key_length,
                :invalid_signature_length,
+               :invalid_signature_encoding,
+               :invalid_public_key_encoding,
                :verification_error
              ] ->
           conn
