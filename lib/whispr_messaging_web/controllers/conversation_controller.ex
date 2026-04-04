@@ -622,6 +622,11 @@ defmodule WhisprMessagingWeb.ConversationController do
             error:
               "Pin limit reached: you may pin at most #{Conversations.max_pinned_conversations()} conversations"
           })
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
       end
     end
   end
@@ -666,6 +671,11 @@ defmodule WhisprMessagingWeb.ConversationController do
           conn
           |> put_status(:unprocessable_entity)
           |> json(%{error: "Conversation is not pinned"})
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
       end
     end
   end
