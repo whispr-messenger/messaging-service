@@ -45,10 +45,21 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
     Process.send_after(self(), :poll, interval)
   end
 
-  defp dispatch_due_messages do
-    due_messages = Repo.all(ScheduledMessage.due_messages_query())
+  @batch_size 100
 
-    Enum.each(due_messages, fn sm ->
+  defp dispatch_due_messages do
+    dispatch_due_batch()
+  end
+
+  defp dispatch_due_batch do
+    import Ecto.Query, only: [limit: 2]
+
+    batch =
+      ScheduledMessage.due_messages_query()
+      |> limit(@batch_size)
+      |> Repo.all()
+
+    Enum.each(batch, fn sm ->
       case dispatch_scheduled_message(sm) do
         :ok ->
           Logger.info("Dispatched scheduled message #{sm.id}")
@@ -57,6 +68,8 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
           Logger.error("Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}")
       end
     end)
+
+    if length(batch) == @batch_size, do: dispatch_due_batch()
   end
 
   defp dispatch_scheduled_message(%ScheduledMessage{} = sm) do
