@@ -1,3 +1,4 @@
+defmodule WhisprMessaging.MessagesTest do
   use WhisprMessaging.DataCase, async: true
 
   alias WhisprMessaging.{Conversations, Messages}
