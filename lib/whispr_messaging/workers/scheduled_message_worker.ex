@@ -73,42 +73,69 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
   end
 
   defp dispatch_scheduled_message(%ScheduledMessage{} = sm) do
-    Repo.transaction(fn ->
-      # Mark as sent first to avoid double-dispatch
-      case sm
-           |> ScheduledMessage.mark_sent_changeset()
-           |> Repo.update() do
-        {:ok, _updated} ->
-          :ok
+    result =
+      Repo.transaction(fn ->
+        # Mark as sent first to avoid double-dispatch
+        case sm
+             |> ScheduledMessage.mark_sent_changeset()
+             |> Repo.update() do
+          {:ok, _updated} ->
+            :ok
 
-        {:error, changeset} ->
-          Repo.rollback({:mark_sent_failed, changeset})
-      end
+          {:error, changeset} ->
+            Repo.rollback({:mark_sent_failed, changeset})
+        end
 
-      # Create the actual message
-      case Messages.create_message(%{
-             conversation_id: sm.conversation_id,
-             sender_id: sm.sender_id,
-             message_type: sm.message_type,
-             content: sm.content,
-             metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
-             client_random: sm.client_random
-           }) do
-        {:ok, message} ->
-          # Broadcast to all conversation members via Phoenix Channels
-          WhisprMessagingWeb.Endpoint.broadcast(
-            "conversation:#{sm.conversation_id}",
-            "new_message",
-            %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
+        # Create the actual message
+        case Messages.create_message(%{
+               conversation_id: sm.conversation_id,
+               sender_id: sm.sender_id,
+               message_type: sm.message_type,
+               content: sm.content,
+               metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
+               client_random: sm.client_random
+             }) do
+          {:ok, message} ->
+            # Broadcast to all conversation members via Phoenix Channels
+            WhisprMessagingWeb.Endpoint.broadcast(
+              "conversation:#{sm.conversation_id}",
+              "new_message",
+              %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
+            )
+
+          {:error, reason} ->
+            Repo.rollback(reason)
+        end
+      end)
+
+    case result do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        if permanent_failure?(reason) do
+          Logger.warning(
+            "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
           )
 
-        {:error, reason} ->
-          Repo.rollback(reason)
-      end
-    end)
-    |> case do
-      {:ok, _} -> :ok
-      {:error, reason} -> {:error, reason}
+          sm |> ScheduledMessage.mark_failed_changeset() |> Repo.update()
+        end
+
+        {:error, reason}
     end
   end
+
+  # Detect permanent failures that should not be retried.
+  # Uniqueness constraint violations (e.g. duplicate client_random) will never
+  # succeed on retry and would otherwise cause infinite retry loops.
+  defp permanent_failure?(%Ecto.Changeset{} = changeset) do
+    Enum.any?(changeset.errors, fn
+      {_field, {_msg, opts}} -> opts[:constraint] == :unique
+      _ -> false
+    end)
+  end
+
+  defp permanent_failure?({:mark_sent_failed, _}), do: false
+
+  defp permanent_failure?(_reason), do: false
 end
