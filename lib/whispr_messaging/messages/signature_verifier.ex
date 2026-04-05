@@ -60,8 +60,10 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
       if :crypto.verify(:eddsa, :none, signed_data, signature, [public_key, :ed25519]) do
         :ok
       else
-        Logger.warning(
-          "Message signature verification failed for sender #{attrs["sender_id"] || attrs[:sender_id]}"
+        sender_id = attrs["sender_id"] || attrs[:sender_id]
+
+        Logger.warning("Message signature verification failed",
+          sender_id: inspect(sender_id)
         )
 
         {:error, :invalid_signature}
