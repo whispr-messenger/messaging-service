@@ -206,7 +206,7 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
             content(:string, "Encrypted content")
             metadata(:object, "Additional metadata")
             scheduled_at(:string, "Dispatch timestamp")
-            status(:string, "Status: pending | sent | cancelled")
+            status(:string, "Status: pending | sent | cancelled | failed")
             inserted_at(:string, "Creation timestamp")
             updated_at(:string, "Last update timestamp")
           end
