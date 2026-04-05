@@ -51,6 +51,10 @@ defmodule WhisprMessagingWeb.Router do
     # Conversation routes
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
+
+    # Literal paths must come before parameterized :id routes
+    get "/conversations/archived", ConversationController, :archived
+
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
@@ -66,6 +70,10 @@ defmodule WhisprMessagingWeb.Router do
     # Conversation pin / unpin (WHISPR-465)
     post "/conversations/:id/pin", ConversationController, :pin
     delete "/conversations/:id/pin", ConversationController, :unpin
+
+    # Conversation archive / unarchive (WHISPR-466)
+    post "/conversations/:id/archive", ConversationController, :archive
+    delete "/conversations/:id/archive", ConversationController, :unarchive
 
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
