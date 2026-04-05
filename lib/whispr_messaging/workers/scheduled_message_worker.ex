@@ -81,42 +81,49 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
       |> Repo.update_all(set: [status: "sent", updated_at: DateTime.utc_now()])
 
     if claimed == 0 do
-      # Already claimed by another worker — skip silently
       :ok
     else
-      case Messages.create_message(%{
-             conversation_id: sm.conversation_id,
-             sender_id: sm.sender_id,
-             message_type: sm.message_type,
-             content: sm.content,
-             metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
-             client_random: sm.client_random
-           }) do
-        {:ok, message} ->
-          WhisprMessagingWeb.Endpoint.broadcast(
-            "conversation:#{sm.conversation_id}",
-            "new_message",
-            %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
-          )
+      create_and_broadcast(sm)
+    end
+  end
 
-          :ok
+  defp create_and_broadcast(%ScheduledMessage{} = sm) do
+    case Messages.create_message(%{
+           conversation_id: sm.conversation_id,
+           sender_id: sm.sender_id,
+           message_type: sm.message_type,
+           content: sm.content,
+           metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
+           client_random: sm.client_random
+         }) do
+      {:ok, message} ->
+        WhisprMessagingWeb.Endpoint.broadcast(
+          "conversation:#{sm.conversation_id}",
+          "new_message",
+          %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
+        )
 
-        {:error, reason} ->
-          if permanent_failure?(reason) do
-            Logger.warning(
-              "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
-            )
+        :ok
 
-            from(s in ScheduledMessage, where: s.id == ^sm.id)
-            |> Repo.update_all(set: [status: "failed", updated_at: DateTime.utc_now()])
-          else
-            # Revert to pending for retry on next poll
-            from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "sent")
-            |> Repo.update_all(set: [status: "pending", updated_at: DateTime.utc_now()])
-          end
+      {:error, reason} ->
+        handle_dispatch_failure(sm, reason)
+        {:error, reason}
+    end
+  end
 
-          {:error, reason}
-      end
+  defp handle_dispatch_failure(%ScheduledMessage{} = sm, reason) do
+    import Ecto.Query
+
+    if permanent_failure?(reason) do
+      Logger.warning(
+        "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
+      )
+
+      from(s in ScheduledMessage, where: s.id == ^sm.id)
+      |> Repo.update_all(set: [status: "failed", updated_at: DateTime.utc_now()])
+    else
+      from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "sent")
+      |> Repo.update_all(set: [status: "pending", updated_at: DateTime.utc_now()])
     end
   end
 
