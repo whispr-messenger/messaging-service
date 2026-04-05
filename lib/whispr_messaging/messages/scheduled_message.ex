@@ -5,7 +5,7 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
   A scheduled message is queued to be sent at a future `scheduled_at` timestamp.
   A background worker polls for pending messages and dispatches them.
 
-  Status lifecycle: pending -> sent | cancelled
+  Status lifecycle: pending -> sent | cancelled | failed
   """
 
   use Ecto.Schema
@@ -18,7 +18,7 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
   @foreign_key_type :binary_id
 
   @message_types ~w(text media)
-  @statuses ~w(pending sent cancelled)
+  @statuses ~w(pending sent cancelled failed)
 
   schema "scheduled_messages" do
     field :sender_id, :binary_id
@@ -79,6 +79,14 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
   def mark_sent_changeset(scheduled_message) do
     scheduled_message
     |> cast(%{status: "sent"}, [:status])
+  end
+
+  @doc """
+  Changeset for marking a scheduled message as permanently failed.
+  """
+  def mark_failed_changeset(scheduled_message) do
+    scheduled_message
+    |> cast(%{status: "failed"}, [:status])
   end
 
   @doc """
