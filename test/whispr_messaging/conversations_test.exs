@@ -362,4 +362,101 @@ defmodule WhisprMessaging.ConversationsTest do
       assert {:error, :not_member} = Conversations.unpin_conversation(c.id, stranger)
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Conversation search tests (WHISPR-468)
+  # ---------------------------------------------------------------------------
+
+  describe "search_user_conversations/3" do
+    setup do
+      user_id = Ecto.UUID.generate()
+      other_user_id = Ecto.UUID.generate()
+      stranger_id = Ecto.UUID.generate()
+
+      {:ok, group_conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Project Alpha"},
+          is_active: true
+        })
+
+      {:ok, direct_conv} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(group_conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(direct_conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(direct_conv.id, other_user_id)
+
+      %{
+        user_id: user_id,
+        other_user_id: other_user_id,
+        stranger_id: stranger_id,
+        group_conv: group_conv,
+        direct_conv: direct_conv
+      }
+    end
+
+    test "finds conversation by group name (partial match)", %{
+      user_id: user_id,
+      group_conv: group_conv
+    } do
+      results = Conversations.search_user_conversations(user_id, "Alpha")
+      ids = Enum.map(results, & &1.id)
+      assert group_conv.id in ids
+    end
+
+    test "finds conversation by participant user_id (exact match)", %{
+      user_id: user_id,
+      other_user_id: other_user_id,
+      direct_conv: direct_conv
+    } do
+      results = Conversations.search_user_conversations(user_id, other_user_id)
+      ids = Enum.map(results, & &1.id)
+      assert direct_conv.id in ids
+    end
+
+    test "does not return conversations the user is not a member of", %{
+      stranger_id: stranger_id
+    } do
+      other_id = Ecto.UUID.generate()
+
+      {:ok, other_conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Secret Chat"},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(other_conv.id, stranger_id)
+
+      results = Conversations.search_user_conversations(other_id, "Secret")
+      assert results == []
+    end
+
+    test "returns empty list when no matches", %{user_id: user_id} do
+      results = Conversations.search_user_conversations(user_id, "xyznonexistent")
+      assert results == []
+    end
+
+    test "respects limit option", %{user_id: user_id} do
+      # Create extra matching conversations
+      for i <- 1..5 do
+        {:ok, c} =
+          Conversations.create_conversation(%{
+            type: "group",
+            metadata: %{"name" => "Team #{i}"},
+            is_active: true
+          })
+
+        {:ok, _} = Conversations.add_conversation_member(c.id, user_id)
+      end
+
+      results = Conversations.search_user_conversations(user_id, "Team", limit: 3)
+      assert length(results) <= 3
+    end
+  end
 end
