@@ -562,6 +562,126 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Pin / Unpin (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :pin do
+    post("/conversations/{id}/pin")
+    summary("Pin a conversation")
+
+    description(
+      "Pins a conversation for the authenticated user. Maximum #{Conversations.max_pinned_conversations()} pinned conversations."
+    )
+
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation pinned")
+    response(401, "Unauthorized")
+    response(404, "Conversation not found or user not a member")
+
+    response(
+      422,
+      "Pin limit reached (max #{Conversations.max_pinned_conversations()}) or already pinned"
+    )
+  end
+
+  @doc """
+  Pins a conversation for the authenticated user.
+  POST /api/v1/conversations/:id/pin
+  """
+  def pin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.pin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: true, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: true}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :already_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is already pinned"})
+
+        {:error, :pin_limit_reached} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{
+            error:
+              "Pin limit reached: you may pin at most #{Conversations.max_pinned_conversations()} conversations"
+          })
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
+      end
+    end
+  end
+
+  swagger_path :unpin do
+    PhoenixSwagger.Path.delete("/conversations/{id}/pin")
+    summary("Unpin a conversation")
+    description("Removes the pin from a conversation for the authenticated user.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation unpinned")
+    response(401, "Unauthorized")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Conversation is not pinned")
+  end
+
+  @doc """
+  Unpins a conversation for the authenticated user.
+  DELETE /api/v1/conversations/:id/pin
+  """
+  def unpin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unpin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: false, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: false}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :not_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is not pinned"})
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
+      end
+    end
+  end
+
   # Private rendering functions
 
   defp render_conversations(conversations) do
