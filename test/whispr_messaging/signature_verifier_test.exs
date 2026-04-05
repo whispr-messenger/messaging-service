@@ -102,11 +102,12 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
       {_pub, priv} = generate_key_pair()
       # Use a 16-byte key instead of 32
       short_key = :crypto.strong_rand_bytes(16)
+      conversation_id = Ecto.UUID.generate()
 
       data =
         SignatureVerifier.build_signed_data(%{
           "content" => "x",
-          "conversation_id" => Ecto.UUID.generate(),
+          "conversation_id" => conversation_id,
           "client_random" => 1
         })
 
@@ -114,7 +115,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
 
       attrs = %{
         "content" => "x",
-        "conversation_id" => Ecto.UUID.generate(),
+        "conversation_id" => conversation_id,
         "client_random" => 1,
         "signature" => Base.encode64(sig),
         "sender_public_key" => Base.encode64(short_key)

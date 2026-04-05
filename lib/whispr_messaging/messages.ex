@@ -28,8 +28,18 @@ defmodule WhisprMessaging.Messages do
   Creates a new message in a conversation.
 
   Verifies the Ed25519 signature when `signature` and `sender_public_key`
-  are present in attrs. Returns `{:error, :invalid_signature}` if the
-  signature check fails without touching the database.
+  are present in attrs. Signature verification happens before persistence,
+  and any error returned by `SignatureVerifier.verify/1` is passed through.
+
+  Possible signature error reasons:
+
+    * `:missing_signature_fields` — only one of signature/public_key provided
+    * `:invalid_signature` — signature does not match the payload
+    * `:invalid_signature_encoding` — signature is not valid Base64
+    * `:invalid_public_key_encoding` — public key is not valid Base64
+    * `:invalid_key_length` — public key is not 32 bytes
+    * `:invalid_signature_length` — signature is not 64 bytes
+    * `:verification_error` — unexpected error during crypto verification
   """
   def create_message(attrs \\ %{}) do
     # Verify signature before persisting (no DB write on failure)
