@@ -935,10 +935,6 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  defp render_members(members) do
-    Enum.map(members, &render_member/1)
-  end
-
   defp maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings) do
     if Map.has_key?(attrs, "is_muted") do
       WhisprMessagingWeb.Endpoint.broadcast(
