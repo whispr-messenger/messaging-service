@@ -61,6 +61,10 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
     |> validate_content_size()
     |> validate_metadata()
     |> foreign_key_constraint(:conversation_id, name: :scheduled_messages_conversation_id_fkey)
+    |> unique_constraint([:sender_id, :client_random],
+      name: :scheduled_messages_sender_client_random_unique,
+      message: "a scheduled message with this client_random already exists"
+    )
   end
 
   @doc """
