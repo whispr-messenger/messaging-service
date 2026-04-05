@@ -61,10 +61,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
         :ok
       else
         sender_id = attrs["sender_id"] || attrs[:sender_id]
-
-        Logger.warning("Message signature verification failed",
-          sender_id: inspect(sender_id)
-        )
+        Logger.warning("Message signature verification failed for sender=#{inspect(sender_id)}")
 
         {:error, :invalid_signature}
       end
