@@ -78,7 +78,7 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
     # Atomically claim: only one worker can transition pending -> sent
     {claimed, _} =
       from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "pending")
-      |> Repo.update_all(set: [status: "sent", updated_at: DateTime.utc_now()])
+      |> Repo.update_all(set: [status: "sent", updated_at: NaiveDateTime.utc_now()])
 
     if claimed == 0 do
       :ok
@@ -120,10 +120,10 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
       )
 
       from(s in ScheduledMessage, where: s.id == ^sm.id)
-      |> Repo.update_all(set: [status: "failed", updated_at: DateTime.utc_now()])
+      |> Repo.update_all(set: [status: "failed", updated_at: NaiveDateTime.utc_now()])
     else
       from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "sent")
-      |> Repo.update_all(set: [status: "pending", updated_at: DateTime.utc_now()])
+      |> Repo.update_all(set: [status: "pending", updated_at: NaiveDateTime.utc_now()])
     end
   end
 

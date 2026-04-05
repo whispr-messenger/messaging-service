@@ -17,7 +17,7 @@ defmodule WhisprMessaging.Repo.Migrations.CreateScheduledMessages do
       add :client_random, :integer, null: false
       # When the message should be sent
       add :scheduled_at, :utc_datetime, null: false
-      # Status: pending | sent | cancelled
+      # Status: pending | sent | cancelled | failed
       add :status, :string, null: false, default: "pending"
 
       timestamps()
