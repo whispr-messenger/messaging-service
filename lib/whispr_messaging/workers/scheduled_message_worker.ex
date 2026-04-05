@@ -73,55 +73,50 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
   end
 
   defp dispatch_scheduled_message(%ScheduledMessage{} = sm) do
-    result =
-      Repo.transaction(fn ->
-        # Mark as sent first to avoid double-dispatch
-        case sm
-             |> ScheduledMessage.mark_sent_changeset()
-             |> Repo.update() do
-          {:ok, _updated} ->
-            :ok
+    import Ecto.Query
 
-          {:error, changeset} ->
-            Repo.rollback({:mark_sent_failed, changeset})
-        end
+    # Atomically claim: only one worker can transition pending -> sent
+    {claimed, _} =
+      from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "pending")
+      |> Repo.update_all(set: [status: "sent", updated_at: DateTime.utc_now()])
 
-        # Create the actual message
-        case Messages.create_message(%{
-               conversation_id: sm.conversation_id,
-               sender_id: sm.sender_id,
-               message_type: sm.message_type,
-               content: sm.content,
-               metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
-               client_random: sm.client_random
-             }) do
-          {:ok, message} ->
-            # Broadcast to all conversation members via Phoenix Channels
-            WhisprMessagingWeb.Endpoint.broadcast(
-              "conversation:#{sm.conversation_id}",
-              "new_message",
-              %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
-            )
-
-          {:error, reason} ->
-            Repo.rollback(reason)
-        end
-      end)
-
-    case result do
-      {:ok, _} ->
-        :ok
-
-      {:error, reason} ->
-        if permanent_failure?(reason) do
-          Logger.warning(
-            "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
+    if claimed == 0 do
+      # Already claimed by another worker — skip silently
+      :ok
+    else
+      case Messages.create_message(%{
+             conversation_id: sm.conversation_id,
+             sender_id: sm.sender_id,
+             message_type: sm.message_type,
+             content: sm.content,
+             metadata: Map.put(sm.metadata, "scheduled_message_id", sm.id),
+             client_random: sm.client_random
+           }) do
+        {:ok, message} ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "conversation:#{sm.conversation_id}",
+            "new_message",
+            %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
           )
 
-          sm |> ScheduledMessage.mark_failed_changeset() |> Repo.update()
-        end
+          :ok
 
-        {:error, reason}
+        {:error, reason} ->
+          if permanent_failure?(reason) do
+            Logger.warning(
+              "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
+            )
+
+            from(s in ScheduledMessage, where: s.id == ^sm.id)
+            |> Repo.update_all(set: [status: "failed", updated_at: DateTime.utc_now()])
+          else
+            # Revert to pending for retry on next poll
+            from(s in ScheduledMessage, where: s.id == ^sm.id and s.status == "sent")
+            |> Repo.update_all(set: [status: "pending", updated_at: DateTime.utc_now()])
+          end
+
+          {:error, reason}
+      end
     end
   end
 
