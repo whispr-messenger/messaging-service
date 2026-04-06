@@ -7,19 +7,22 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
 
     signed_data = content <> conversation_id_bytes <> <<client_random::big-32>>
 
-  The client provides:
-    - `signature`        — Base64-encoded 64-byte Ed25519 signature
-    - `sender_public_key` — Base64-encoded 32-byte Ed25519 public key
+  ## Trust On First Use (TOFU)
 
-  The server verifies the signature against the sender's public key.
-  It never decrypts the content.
+  The server maintains a store of trusted public keys per sender. On the
+  first signed message from a user, the provided key is registered. On
+  subsequent messages, the server verifies against the stored key and
+  rejects any key that has not been previously registered.
 
-  ## Why the signed payload includes context fields
-
-  Binding the conversation_id and client_random to the signature prevents
-  replay attacks where a valid signature on one message could be replayed
-  in a different conversation or as a different message.
+  This prevents an attacker from substituting both the signature and key
+  to forge a valid-looking message — the server will only accept keys it
+  has seen before for a given sender.
   """
+
+  import Ecto.Query, warn: false
+
+  alias WhisprMessaging.Messages.SenderPublicKey
+  alias WhisprMessaging.Repo
 
   require Logger
 
@@ -29,8 +32,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   Returns `:ok` if the signature is valid or if signature verification is
   not required (both fields absent — backward-compatible mode).
 
-  Returns `{:error, :invalid_signature}` or `{:error, :invalid_key}` on
-  verification failure.
+  Returns `{:error, reason}` on verification failure.
   """
   @spec verify(map()) :: :ok | {:error, atom()}
   def verify(attrs) do
@@ -47,22 +49,22 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
         {:error, :missing_signature_fields}
 
       true ->
-        do_verify(attrs, signature_b64, public_key_b64)
+        sender_id = attrs["sender_id"] || attrs[:sender_id]
+        do_verify(attrs, signature_b64, public_key_b64, sender_id)
     end
   end
 
-  defp do_verify(attrs, signature_b64, public_key_b64) do
+  defp do_verify(attrs, signature_b64, public_key_b64, sender_id) do
     with {:ok, signature} <- decode_base64(signature_b64, :signature),
          {:ok, public_key} <- decode_base64(public_key_b64, :public_key),
          :ok <- validate_key_length(public_key),
          :ok <- validate_signature_length(signature),
+         :ok <- verify_trusted_key(sender_id, public_key_b64),
          signed_data <- build_signed_data(attrs) do
       if :crypto.verify(:eddsa, :none, signed_data, signature, [public_key, :ed25519]) do
         :ok
       else
-        sender_id = attrs["sender_id"] || attrs[:sender_id]
         Logger.warning("Message signature verification failed for sender=#{inspect(sender_id)}")
-
         {:error, :invalid_signature}
       end
     end
@@ -70,6 +72,48 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
     e ->
       Logger.error("Signature verification error: #{inspect(e)}")
       {:error, :verification_error}
+  end
+
+  @doc false
+  def verify_trusted_key(nil, _public_key_b64), do: :ok
+
+  def verify_trusted_key(sender_id, public_key_b64) do
+    known_keys =
+      from(k in SenderPublicKey, where: k.user_id == ^sender_id, select: k.public_key)
+      |> Repo.all()
+
+    cond do
+      # No keys registered yet — TOFU: register this key
+      known_keys == [] ->
+        register_key(sender_id, public_key_b64)
+
+      # Provided key is already trusted
+      public_key_b64 in known_keys ->
+        :ok
+
+      # Provided key is unknown — reject
+      true ->
+        Logger.warning(
+          "Untrusted public key for sender=#{inspect(sender_id)}, " <>
+            "known_keys=#{length(known_keys)}"
+        )
+
+        {:error, :untrusted_public_key}
+    end
+  end
+
+  defp register_key(sender_id, public_key_b64) do
+    case %SenderPublicKey{}
+         |> SenderPublicKey.changeset(%{user_id: sender_id, public_key: public_key_b64})
+         |> Repo.insert(on_conflict: :nothing) do
+      {:ok, _} ->
+        Logger.info("Registered new public key for sender=#{inspect(sender_id)} (TOFU)")
+        :ok
+
+      {:error, _} ->
+        # Race condition: key was registered by another request
+        :ok
+    end
   end
 
   @doc """

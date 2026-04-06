@@ -121,6 +121,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
              :invalid_signature_length,
              :invalid_signature_encoding,
              :invalid_public_key_encoding,
+             :untrusted_public_key,
              :verification_error
            ] ->
         {:reply, {:error, %{reason: "invalid_signature"}}, socket}

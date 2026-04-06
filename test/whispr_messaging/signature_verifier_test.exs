@@ -1,7 +1,9 @@
 defmodule WhisprMessaging.Messages.SignatureVerifierTest do
-  use ExUnit.Case, async: true
+  use WhisprMessaging.DataCase, async: false
 
   alias WhisprMessaging.Messages.SignatureVerifier
+  alias WhisprMessaging.Messages.SenderPublicKey
+  alias WhisprMessaging.Repo
 
   # Generates a fresh Ed25519 key pair for testing
   defp generate_key_pair do
@@ -40,10 +42,41 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
       assert :ok = SignatureVerifier.verify(attrs)
     end
 
-    test "returns :ok for a valid Ed25519 signature" do
+    test "returns :ok for a valid Ed25519 signature (TOFU registration)" do
       {public_key, private_key} = generate_key_pair()
       attrs = build_attrs(public_key, private_key)
       assert :ok = SignatureVerifier.verify(attrs)
+
+      # Key should now be registered
+      sender_id = attrs["sender_id"]
+      assert Repo.exists?(from k in SenderPublicKey, where: k.user_id == ^sender_id)
+    end
+
+    test "returns :ok when using a previously registered key" do
+      {public_key, private_key} = generate_key_pair()
+      sender_id = Ecto.UUID.generate()
+      attrs = build_attrs(public_key, private_key, %{"sender_id" => sender_id})
+
+      # First message registers the key
+      assert :ok = SignatureVerifier.verify(attrs)
+
+      # Second message with same key should also pass
+      attrs2 = build_attrs(public_key, private_key, %{"sender_id" => sender_id})
+      assert :ok = SignatureVerifier.verify(attrs2)
+    end
+
+    test "rejects an untrusted key when a different key is already registered" do
+      {pub1, priv1} = generate_key_pair()
+      {pub2, priv2} = generate_key_pair()
+      sender_id = Ecto.UUID.generate()
+
+      # Register first key
+      attrs1 = build_attrs(pub1, priv1, %{"sender_id" => sender_id})
+      assert :ok = SignatureVerifier.verify(attrs1)
+
+      # Try with a different key — should be rejected
+      attrs2 = build_attrs(pub2, priv2, %{"sender_id" => sender_id})
+      assert {:error, :untrusted_public_key} = SignatureVerifier.verify(attrs2)
     end
 
     test "returns {:error, :invalid_signature} for a tampered content" do
