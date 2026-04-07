@@ -36,7 +36,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Lists messages for a conversation.
-  GET /api/v1/conversations/:id/messages
+  GET /api/conversations/:id/messages
 
   Query params:
   - limit: number of messages to return (default: 50, max: 100)
@@ -101,7 +101,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Creates a new message in a conversation.
-  POST /api/v1/conversations/:id/messages
+  POST /api/conversations/:id/messages
   """
   def create(conn, %{"id" => conversation_id} = params) do
     # Handle different parameter structures (nested under "message" or flat)
@@ -177,7 +177,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Gets a single message by ID.
-  GET /api/v1/messages/:id
+  GET /api/messages/:id
   """
   def show(conn, %{"id" => id}) do
     with {:ok, message} <- Messages.get_message_with_relations(id) do
@@ -207,7 +207,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Updates a message (edit content).
-  PUT /api/v1/messages/:id
+  PUT /api/messages/:id
   """
   def update(conn, %{"id" => id} = params) do
     # Extract params whether they are nested or flat
@@ -275,7 +275,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Deletes a message (soft delete).
-  DELETE /api/v1/messages/:id
+  DELETE /api/messages/:id
   """
   def delete(conn, %{"id" => id} = params) do
     # Get user_id from conn.assigns
