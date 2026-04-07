@@ -245,6 +245,64 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["error"] == "Unauthorized"
     end
 
+    test "returns 422 when signature verification fails", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      {pub, _priv} = :crypto.generate_key(:eddsa, :ed25519)
+
+      message_attrs = %{
+        "content" => "test",
+        "message_type" => "text",
+        "client_random" => 77_777,
+        "sender_id" => user1_id,
+        "signature" => Base.encode64(:crypto.strong_rand_bytes(64)),
+        "sender_public_key" => Base.encode64(pub)
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          message_attrs
+        )
+        |> json_response(422)
+
+      assert response["error"] == "Invalid message signature"
+    end
+
+    test "creates a message without signature (backward compat)", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      message_attrs = %{
+        "content" => "no_sig_content",
+        "message_type" => "text",
+        "client_random" => 88_888,
+        "sender_id" => user1_id
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          message_attrs
+        )
+        |> json_response(201)
+
+      assert response["data"]["id"] != nil
+    end
+
     test "prevents duplicate client_random", %{
       conversation: conversation,
       user1_id: user1_id

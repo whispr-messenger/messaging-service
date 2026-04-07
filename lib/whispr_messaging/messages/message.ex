@@ -30,6 +30,9 @@ defmodule WhisprMessaging.Messages.Message do
     field :expires_at, :utc_datetime
     field :is_deleted, :boolean, default: false
     field :delete_for_everyone, :boolean, default: false
+    # E2E signature fields — optional, stored for audit/replay protection
+    field :signature, :string
+    field :sender_public_key, :string
 
     belongs_to :conversation, Conversation, foreign_key: :conversation_id
     belongs_to :reply_to, __MODULE__, foreign_key: :reply_to_id
@@ -55,7 +58,9 @@ defmodule WhisprMessaging.Messages.Message do
       :metadata,
       :client_random,
       :sent_at,
-      :expires_at
+      :expires_at,
+      :signature,
+      :sender_public_key
     ])
     |> validate_required([:conversation_id, :sender_id, :message_type, :content, :client_random])
     |> validate_expires_at()

@@ -14,7 +14,8 @@ defmodule WhisprMessaging.Messages do
     MessageAttachment,
     MessageDraft,
     MessageReaction,
-    ScheduledMessage
+    ScheduledMessage,
+    SignatureVerifier
   }
 
   alias WhisprMessaging.Repo
@@ -25,21 +26,38 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Creates a new message in a conversation.
+
+  Verifies the Ed25519 signature when `signature` and `sender_public_key`
+  are present in attrs. Signature verification happens before persistence,
+  and any error returned by `SignatureVerifier.verify/1` is passed through.
+
+  Possible signature error reasons:
+
+    * `:missing_signature_fields` — only one of signature/public_key provided
+    * `:invalid_signature` — signature does not match the payload
+    * `:invalid_signature_encoding` — signature is not valid Base64
+    * `:invalid_public_key_encoding` — public key is not valid Base64
+    * `:invalid_key_length` — public key is not 32 bytes
+    * `:invalid_signature_length` — signature is not 64 bytes
+    * `:verification_error` — unexpected error during crypto verification
   """
   def create_message(attrs \\ %{}) do
-    changeset = Message.changeset(%Message{}, attrs)
+    # Verify signature before persisting (no DB write on failure)
+    with :ok <- SignatureVerifier.verify(attrs) do
+      changeset = Message.changeset(%Message{}, attrs)
 
-    with :ok <- validate_reply_to(changeset) do
-      changeset
-      |> Repo.insert()
-      |> case do
-        {:ok, message} ->
-          # Preload associations for channels
-          message = Repo.preload(message, [:conversation, :reply_to])
-          {:ok, message}
+      with :ok <- validate_reply_to(changeset) do
+        changeset
+        |> Repo.insert()
+        |> case do
+          {:ok, message} ->
+            # Preload associations for channels
+            message = Repo.preload(message, [:conversation, :reply_to])
+            {:ok, message}
 
-        error ->
-          error
+          error ->
+            error
+        end
       end
     end
   end
