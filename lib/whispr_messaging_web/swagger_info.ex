@@ -36,7 +36,7 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
           email: "gabriel.lopez@epitech.eu"
         }
       },
-      basePath: "/api/v1",
+      basePath: "/api",
       consumes: ["application/json"],
       produces: ["application/json"],
       securityDefinitions: %{
