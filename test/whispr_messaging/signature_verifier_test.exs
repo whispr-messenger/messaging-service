@@ -1,8 +1,8 @@
 defmodule WhisprMessaging.Messages.SignatureVerifierTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias WhisprMessaging.Messages.SignatureVerifier
   alias WhisprMessaging.Messages.SenderPublicKey
+  alias WhisprMessaging.Messages.SignatureVerifier
   alias WhisprMessaging.Repo
 
   # Generates a fresh Ed25519 key pair for testing
