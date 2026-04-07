@@ -307,8 +307,13 @@ defmodule WhisprMessaging.ConversationServer do
 
         {:ok, message, new_state}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         handle_message_creation_error(changeset, message_attrs)
+
+      {:error, reason} when is_atom(reason) ->
+        # Signature verification errors (e.g. :invalid_signature,
+        # :missing_signature_fields, :invalid_key_length, etc.)
+        {:error, reason}
     end
   end
 

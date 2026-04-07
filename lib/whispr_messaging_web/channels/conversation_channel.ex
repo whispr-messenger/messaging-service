@@ -99,6 +99,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         metadata: metadata
       }
       |> maybe_put(:reply_to_id, reply_to_id)
+      |> maybe_put("signature", Map.get(payload, "signature"))
+      |> maybe_put("sender_public_key", Map.get(payload, "sender_public_key"))
 
     case ConversationServer.send_message(conversation_id, message_attrs) do
       {:ok, message} ->
@@ -110,6 +112,19 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, {:duplicate, message}} ->
         # Return existing message as success, but don't re-notify or re-broadcast
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+
+      {:error, reason}
+      when reason in [
+             :invalid_signature,
+             :missing_signature_fields,
+             :invalid_key_length,
+             :invalid_signature_length,
+             :invalid_signature_encoding,
+             :invalid_public_key_encoding,
+             :untrusted_public_key,
+             :verification_error
+           ] ->
+        {:reply, {:error, %{reason: "invalid_signature"}}, socket}
 
       {:error, changeset} ->
         {:reply, {:error, %{errors: format_changeset_errors(changeset)}}, socket}
@@ -430,4 +445,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       end)
     end)
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

@@ -96,6 +96,7 @@ defmodule WhisprMessagingWeb.MessageController do
     security([%{Bearer: []}])
     response(201, "Created", Schema.ref(:MessageResponse))
     response(404, "Conversation Not Found")
+    response(422, "Invalid message signature")
   end
 
   @doc """
@@ -141,6 +142,21 @@ defmodule WhisprMessagingWeb.MessageController do
           conn
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
+
+        {:error, reason}
+        when reason in [
+               :invalid_signature,
+               :missing_signature_fields,
+               :invalid_key_length,
+               :invalid_signature_length,
+               :invalid_signature_encoding,
+               :invalid_public_key_encoding,
+               :untrusted_public_key,
+               :verification_error
+             ] ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Invalid message signature"})
 
         {:error, changeset} ->
           {:error, changeset}
@@ -378,6 +394,12 @@ defmodule WhisprMessagingWeb.MessageController do
                 message_type(:string, "Message type")
                 metadata(:object, "Additional metadata")
                 reply_to_id(:string, "UUID of message being replied to")
+                signature(:string, "Base64-encoded Ed25519 signature (64 bytes)")
+
+                sender_public_key(
+                  :string,
+                  "Base64-encoded Ed25519 public key (32 bytes)"
+                )
               end
             end,
             "Message parameters"
