@@ -25,6 +25,6 @@ defmodule WhisprMessaging.Messages.SenderPublicKey do
     struct
     |> cast(attrs, [:user_id, :public_key])
     |> validate_required([:user_id, :public_key])
-    |> unique_constraint([:user_id, :public_key])
+    |> unique_constraint(:user_id)
   end
 end

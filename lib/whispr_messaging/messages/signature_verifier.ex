@@ -78,26 +78,22 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   def verify_trusted_key(nil, _public_key_b64), do: :ok
 
   def verify_trusted_key(sender_id, public_key_b64) do
-    known_keys =
+    stored_key =
       from(k in SenderPublicKey, where: k.user_id == ^sender_id, select: k.public_key)
-      |> Repo.all()
+      |> Repo.one()
 
-    cond do
-      # No keys registered yet — TOFU: register this key
-      known_keys == [] ->
+    case stored_key do
+      # No key registered yet — TOFU: register this key
+      nil ->
         register_key(sender_id, public_key_b64)
 
-      # Provided key is already trusted
-      public_key_b64 in known_keys ->
+      # Provided key matches the trusted key
+      ^public_key_b64 ->
         :ok
 
-      # Provided key is unknown — reject
-      true ->
-        Logger.warning(
-          "Untrusted public key for sender=#{inspect(sender_id)}, " <>
-            "known_keys=#{length(known_keys)}"
-        )
-
+      # Provided key differs from the trusted key — reject
+      _ ->
+        Logger.warning("Untrusted public key for sender=#{inspect(sender_id)}")
         {:error, :untrusted_public_key}
     end
   end
@@ -105,14 +101,18 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   defp register_key(sender_id, public_key_b64) do
     case %SenderPublicKey{}
          |> SenderPublicKey.changeset(%{user_id: sender_id, public_key: public_key_b64})
-         |> Repo.insert(on_conflict: :nothing) do
+         |> Repo.insert() do
       {:ok, _} ->
         Logger.info("Registered new public key for sender=#{inspect(sender_id)} (TOFU)")
         :ok
 
-      {:error, _} ->
-        # Race condition: key was registered by another request
-        :ok
+      {:error, _changeset} ->
+        # Race condition: another request registered a key first — verify it matches
+        stored =
+          from(k in SenderPublicKey, where: k.user_id == ^sender_id, select: k.public_key)
+          |> Repo.one()
+
+        if stored == public_key_b64, do: :ok, else: {:error, :untrusted_public_key}
     end
   end
 
