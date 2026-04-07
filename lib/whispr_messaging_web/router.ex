@@ -102,4 +102,61 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
   end
+
+  scope "/messaging", WhisprMessagingWeb do
+    pipe_through :api
+
+    get "/", HealthController, :info
+    get "/ready", HealthController, :ready
+    get "/live", HealthController, :live
+  end
+
+  scope "/messaging/api/v1", WhisprMessagingWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :check
+    get "/health/detailed", HealthController, :detailed
+    get "/health/live", HealthController, :live
+    get "/health/ready", HealthController, :ready
+
+    get "/conversations", ConversationController, :index
+    post "/conversations", ConversationController, :create
+    get "/conversations/archived", ConversationController, :archived
+    get "/conversations/search", ConversationController, :search
+    get "/conversations/:id", ConversationController, :show
+    put "/conversations/:id", ConversationController, :update
+    delete "/conversations/:id", ConversationController, :delete
+
+    post "/conversations/:id/members", ConversationMemberController, :create
+    delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
+
+    get "/conversations/:id/settings", ConversationController, :get_member_settings
+    put "/conversations/:id/settings", ConversationController, :update_member_settings
+
+    post "/conversations/:id/pin", ConversationController, :pin
+    delete "/conversations/:id/pin", ConversationController, :unpin
+
+    post "/conversations/:id/archive", ConversationController, :archive
+    delete "/conversations/:id/archive", ConversationController, :unarchive
+
+    get "/conversations/:id/messages", MessageController, :index
+    post "/conversations/:id/messages", MessageController, :create
+
+    post "/messages/drafts", DraftController, :create
+    delete "/messages/drafts/:id", DraftController, :delete
+    get "/conversations/:id/drafts", DraftController, :show
+
+    get "/messages/scheduled", ScheduledMessageController, :index
+    post "/messages/scheduled", ScheduledMessageController, :create
+    delete "/messages/scheduled/:id", ScheduledMessageController, :delete
+
+    get "/messages/:id", MessageController, :show
+    put "/messages/:id", MessageController, :update
+    delete "/messages/:id", MessageController, :delete
+
+    post "/attachments/upload", AttachmentController, :upload
+    get "/attachments/:id", AttachmentController, :show
+    get "/attachments/:id/download", AttachmentController, :download
+    delete "/attachments/:id", AttachmentController, :delete
+  end
 end
