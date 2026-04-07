@@ -10,7 +10,6 @@ defmodule WhisprMessaging.Repo.Migrations.CreateSenderPublicKeys do
       timestamps()
     end
 
-    create unique_index(:sender_public_keys, [:user_id, :public_key])
-    create index(:sender_public_keys, [:user_id])
+    create unique_index(:sender_public_keys, [:user_id])
   end
 end
