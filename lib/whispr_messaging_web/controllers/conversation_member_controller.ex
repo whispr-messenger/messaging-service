@@ -37,7 +37,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   @doc """
   Ajoute un membre à une conversation.
-  POST /api/v1/conversations/:id/members
+  POST /api/conversations/:id/members
   """
   def create(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
@@ -75,7 +75,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   @doc """
   Supprime un membre d'une conversation.
-  DELETE /api/v1/conversations/:id/members/:user_id
+  DELETE /api/conversations/:id/members/:user_id
   """
   def delete(conn, %{"id" => id, "user_id" => member_id}) do
     current_user_id = conn.assigns[:user_id]

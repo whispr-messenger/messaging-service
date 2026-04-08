@@ -31,7 +31,7 @@ defmodule WhisprMessagingWeb.Router do
     get "/", HealthController, :info
   end
 
-  # Kubernetes-compatible health check routes (no /api/v1 prefix)
+  # Kubernetes-compatible health check routes (no /api prefix)
   scope "/", WhisprMessagingWeb do
     pipe_through :api
 
@@ -39,7 +39,7 @@ defmodule WhisprMessagingWeb.Router do
     get "/live", HealthController, :live
   end
 
-  scope "/api/v1", WhisprMessagingWeb do
+  scope "/api", WhisprMessagingWeb do
     pipe_through :api
 
     # Health check endpoints
