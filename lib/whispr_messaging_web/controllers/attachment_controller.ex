@@ -105,7 +105,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Upload a file attachment.
-  POST /api/v1/attachments/upload
+  POST /api/attachments/upload
 
   Multipart form data:
   - file: the file to upload
@@ -176,7 +176,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Download a file attachment.
-  GET /api/v1/attachments/:id/download
+  GET /api/attachments/:id/download
   """
   def download(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]
@@ -239,7 +239,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Get attachment metadata.
-  GET /api/v1/attachments/:id
+  GET /api/attachments/:id
   """
   def show(conn, %{"id" => attachment_id}) do
     with {:ok, attachment} <- Messages.get_attachment(attachment_id) do
@@ -263,7 +263,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   @doc """
   Delete an attachment.
-  DELETE /api/v1/attachments/:id
+  DELETE /api/attachments/:id
   """
   def delete(conn, %{"id" => attachment_id}) do
     user_id = conn.assigns[:user_id]
