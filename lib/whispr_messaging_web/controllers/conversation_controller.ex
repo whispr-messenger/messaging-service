@@ -35,7 +35,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Lists conversations for the authenticated user.
-  GET /api/conversations
+  GET /api/v1/conversations
 
   Query params:
   - limit: number of conversations (default: 50, max: 100)
@@ -164,7 +164,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Creates a new conversation.
-  POST /api/conversations
+  POST /api/v1/conversations
 
   Body for direct conversation:
   {
@@ -324,7 +324,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Gets a single conversation.
-  GET /api/conversations/:id
+  GET /api/v1/conversations/:id
   """
   def show(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
@@ -382,7 +382,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Updates a conversation.
-  PUT /api/conversations/:id
+  PUT /api/v1/conversations/:id
 
   Body:
   {
@@ -452,7 +452,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Deletes (deactivates) a conversation.
-  DELETE /api/conversations/:id
+  DELETE /api/v1/conversations/:id
   """
   def delete(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
@@ -506,7 +506,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Returns the current user's per-conversation settings.
-  GET /api/conversations/:id/settings
+  GET /api/v1/conversations/:id/settings
   """
   def get_member_settings(conn, %{"id" => conversation_id}) do
     user_id = conn.assigns[:user_id]
@@ -544,7 +544,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Partially updates the current user's per-conversation settings.
-  PUT /api/conversations/:id/settings
+  PUT /api/v1/conversations/:id/settings
   """
   def update_member_settings(conn, %{"id" => conversation_id} = params) do
     user_id = conn.assigns[:user_id]
@@ -703,7 +703,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Adds a member to a conversation.
-  POST /api/conversations/:id/members
+  POST /api/v1/conversations/:id/members
   """
   def add_member(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
@@ -728,7 +728,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Removes a member from a conversation.
-  DELETE /api/conversations/:id/members/:user_id
+  DELETE /api/v1/conversations/:id/members/:user_id
   """
   def remove_member(conn, %{"id" => id, "user_id" => member_id}) do
     current_user_id = conn.assigns[:user_id]
@@ -914,44 +914,6 @@ defmodule WhisprMessagingWeb.ConversationController do
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
     })
-    |> Map.put("unreadCount", Map.get(conversation, :unread_count, 0))
-    |> Map.put("lastMessage", render_last_message(Map.get(conversation, :last_message)))
-    |> maybe_add_member_ids(conversation)
-  end
-
-  defp render_last_message(nil), do: nil
-
-  defp render_last_message(message) do
-    %{
-      id: message.id,
-      sender_id: message.sender_id,
-      content: safe_binary_content(message.content),
-      message_type: message.message_type,
-      sent_at: message.sent_at,
-      is_deleted: message.is_deleted
-    }
-  end
-
-  # Ensure binary content is safe for JSON encoding.
-  # Content stored as BYTEA may not always be valid UTF-8.
-  defp safe_binary_content(nil), do: nil
-
-  defp safe_binary_content(content) when is_binary(content) do
-    if String.valid?(content), do: content, else: Base.encode64(content)
-  end
-
-  defp safe_binary_content(content), do: to_string(content)
-
-  defp maybe_add_member_ids(rendered, conversation) do
-    if conversation.type == "direct" do
-      member_ids =
-        WhisprMessaging.Conversations.list_conversation_members(conversation.id)
-        |> Enum.map(& &1.user_id)
-
-      Map.put(rendered, "memberUserIds", member_ids)
-    else
-      rendered
-    end
   end
 
   defp render_conversation_with_members(conversation, member_info) do

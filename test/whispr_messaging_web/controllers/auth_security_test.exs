@@ -23,7 +23,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     }
   end
 
-  test "GET /api/conversations fails if no auth header provided, even with user_id in params",
+  test "GET /api/v1/conversations fails if no auth header provided, even with user_id in params",
        %{user1_id: user1_id} do
     conn =
       build_conn()
@@ -31,46 +31,46 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
 
     # Attempt to impersonate user1 using params
     response =
-      get(conn, ~p"/api/conversations", user_id: user1_id)
+      get(conn, ~p"/api/v1/conversations", user_id: user1_id)
       |> json_response(401)
 
     assert response["error"] == "Unauthorized"
   end
 
-  test "GET /api/conversations fails with invalid Bearer token", %{user1_id: user1_id} do
+  test "GET /api/v1/conversations fails with invalid Bearer token", %{user1_id: user1_id} do
     conn =
       build_conn()
       |> put_req_header("authorization", "Bearer invalid_token")
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/conversations", user_id: user1_id)
+      get(conn, ~p"/api/v1/conversations", user_id: user1_id)
       |> json_response(401)
 
     assert response["error"] == "Unauthorized"
   end
 
-  test "GET /api/conversations succeeds with X-User-Id header", %{user1_id: user1_id} do
+  test "GET /api/v1/conversations succeeds with X-User-Id header", %{user1_id: user1_id} do
     conn =
       build_conn()
       |> put_req_header("x-user-id", user1_id)
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/conversations")
+      get(conn, ~p"/api/v1/conversations")
       |> json_response(200)
 
     assert response["data"] != nil
   end
 
-  test "GET /api/conversations succeeds with valid test token", %{user1_id: user1_id} do
+  test "GET /api/v1/conversations succeeds with valid test token", %{user1_id: user1_id} do
     conn =
       build_conn()
       |> put_req_header("authorization", "Bearer test_token_#{user1_id}")
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/conversations")
+      get(conn, ~p"/api/v1/conversations")
       |> json_response(200)
 
     assert response["data"] != nil

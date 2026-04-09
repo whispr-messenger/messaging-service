@@ -374,14 +374,6 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
-  defp safe_binary_content(nil), do: nil
-
-  defp safe_binary_content(content) when is_binary(content) do
-    if String.valid?(content), do: content, else: Base.encode64(content)
-  end
-
-  defp safe_binary_content(content), do: to_string(content)
-
   defp serialize_message(%Message{} = message) do
     alias WhisprMessaging.Messages.DeliveryStatus
 
@@ -391,7 +383,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       sender_id: message.sender_id,
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
-      content: safe_binary_content(message.content),
+      content: message.content,
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
