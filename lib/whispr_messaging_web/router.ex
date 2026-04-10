@@ -13,7 +13,7 @@ defmodule WhisprMessagingWeb.Router do
     plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
-  scope "/api/swagger" do
+  scope "/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
       swagger_file: "swagger.json"
