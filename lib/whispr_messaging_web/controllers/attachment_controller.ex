@@ -391,7 +391,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
       message_id: message_id,
       filename: params["filename"] || params["metadata"]["filename"] || "file",
       file_type: params["media_type"] || "image",
-      mime_type: params["metadata"]["mime_type"] || params["mime_type"] || "application/octet-stream",
+      mime_type:
+        params["metadata"]["mime_type"] || params["mime_type"] || "application/octet-stream",
       file_size: params["metadata"]["size"] || params["size"] || 0,
       storage_url: params["metadata"]["media_url"] || params["media_url"] || "",
       thumbnail_url: params["metadata"]["thumbnail_url"] || params["thumbnail_url"],
@@ -406,6 +407,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
       {:error, changeset} ->
         Logger.error("create_from_metadata failed: #{inspect(changeset.errors)}")
+
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: "Failed to create attachment"})
