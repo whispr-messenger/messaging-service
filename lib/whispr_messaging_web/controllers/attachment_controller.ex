@@ -394,15 +394,16 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   defp build_attachment_attrs(params, message_id) do
     meta = params["metadata"] || %{}
+    merged = Map.merge(meta, params)
 
     %{
       message_id: message_id,
-      filename: params["filename"] || meta["filename"] || "file",
-      file_type: params["media_type"] || "image",
-      mime_type: meta["mime_type"] || params["mime_type"] || "application/octet-stream",
-      file_size: meta["size"] || params["size"] || 0,
-      storage_url: meta["media_url"] || params["media_url"] || "",
-      thumbnail_url: meta["thumbnail_url"] || params["thumbnail_url"],
+      filename: merged["filename"] || "file",
+      file_type: merged["media_type"] || "image",
+      mime_type: merged["mime_type"] || "application/octet-stream",
+      file_size: merged["size"] || 0,
+      storage_url: merged["media_url"] || "",
+      thumbnail_url: merged["thumbnail_url"],
       metadata: meta
     }
   end
