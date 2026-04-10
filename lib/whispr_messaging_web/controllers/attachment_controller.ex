@@ -387,9 +387,15 @@ defmodule WhisprMessagingWeb.AttachmentController do
   POST /api/messages/:message_id/attachments
   """
   def create_from_metadata(conn, %{"message_id" => message_id} = params) do
+    params
+    |> build_attachment_attrs(message_id)
+    |> then(&save_attachment(conn, &1))
+  end
+
+  defp build_attachment_attrs(params, message_id) do
     meta = params["metadata"] || %{}
 
-    attrs = %{
+    %{
       message_id: message_id,
       filename: params["filename"] || meta["filename"] || "file",
       file_type: params["media_type"] || "image",
@@ -399,8 +405,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
       thumbnail_url: meta["thumbnail_url"] || params["thumbnail_url"],
       metadata: meta
     }
-
-    save_attachment(conn, attrs)
   end
 
   defp save_attachment(conn, attrs) do
