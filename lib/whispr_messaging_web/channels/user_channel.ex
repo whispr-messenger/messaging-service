@@ -220,15 +220,29 @@ defmodule WhisprMessagingWeb.UserChannel do
     end
   end
 
-  defp serialize_conversation_summary(conversation) do
+  defp serialize_conversation_summary(%WhisprMessaging.Conversations.Conversation{} = conv) do
     %{
-      id: conversation.id,
-      type: conversation.type,
-      metadata: conversation.metadata,
-      is_active: conversation.is_active,
-      unread_count: Map.get(conversation, :unread_count, 0),
-      last_message: Map.get(conversation, :last_message),
-      updated_at: conversation.updated_at
+      id: conv.id,
+      type: conv.type,
+      metadata: conv.metadata,
+      is_active: conv.is_active,
+      unread_count: 0,
+      last_message: nil,
+      updated_at: conv.updated_at
+    }
+  end
+
+  defp serialize_conversation_summary(summary) when is_map(summary) do
+    %{
+      id: summary.id,
+      type: summary.type,
+      metadata: summary.metadata,
+      is_active: Map.get(summary, :is_active, true),
+      unread_count: Map.get(summary, :unread_count, 0),
+      last_message: Map.get(summary, :last_message),
+      last_activity: Map.get(summary, :last_activity),
+      member_count: Map.get(summary, :member_count),
+      updated_at: Map.get(summary, :updated_at)
     }
   end
 

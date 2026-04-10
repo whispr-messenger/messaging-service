@@ -33,7 +33,16 @@ defmodule WhisprMessagingWeb.ConversationChannel do
             send(self(), :after_join)
 
             socket = assign(socket, :conversation_id, conversation_id)
-            {:ok, %{conversation: conversation}, socket}
+
+            {:ok,
+             %{
+               conversation: %{
+                 id: conversation.id,
+                 type: conversation.type,
+                 metadata: conversation.metadata,
+                 is_active: conversation.is_active
+               }
+             }, socket}
 
           {:error, reason} ->
             Logger.error("Failed to start conversation server: #{inspect(reason)}")
