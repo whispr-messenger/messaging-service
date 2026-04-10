@@ -387,18 +387,23 @@ defmodule WhisprMessagingWeb.AttachmentController do
   POST /api/messages/:message_id/attachments
   """
   def create_from_metadata(conn, %{"message_id" => message_id} = params) do
+    meta = params["metadata"] || %{}
+
     attrs = %{
       message_id: message_id,
-      filename: params["filename"] || params["metadata"]["filename"] || "file",
+      filename: params["filename"] || meta["filename"] || "file",
       file_type: params["media_type"] || "image",
-      mime_type:
-        params["metadata"]["mime_type"] || params["mime_type"] || "application/octet-stream",
-      file_size: params["metadata"]["size"] || params["size"] || 0,
-      storage_url: params["metadata"]["media_url"] || params["media_url"] || "",
-      thumbnail_url: params["metadata"]["thumbnail_url"] || params["thumbnail_url"],
-      metadata: params["metadata"] || %{}
+      mime_type: meta["mime_type"] || params["mime_type"] || "application/octet-stream",
+      file_size: meta["size"] || params["size"] || 0,
+      storage_url: meta["media_url"] || params["media_url"] || "",
+      thumbnail_url: meta["thumbnail_url"] || params["thumbnail_url"],
+      metadata: meta
     }
 
+    save_attachment(conn, attrs)
+  end
+
+  defp save_attachment(conn, attrs) do
     case Messages.create_attachment(attrs) do
       {:ok, attachment} ->
         conn
