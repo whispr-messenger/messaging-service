@@ -92,9 +92,15 @@ defmodule WhisprMessagingWeb.Router do
     post "/messages/scheduled", ScheduledMessageController, :create
     delete "/messages/scheduled/:id", ScheduledMessageController, :delete
 
+    # Message search — must come before /messages/:id
+    get "/messages/search", MessageController, :search
+
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+
+    # Message-scoped attachment creation (JSON metadata, file already on media-service)
+    post "/messages/:message_id/attachments", AttachmentController, :create_from_metadata
 
     # Attachment routes
     post "/attachments/upload", AttachmentController, :upload

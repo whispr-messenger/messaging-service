@@ -176,6 +176,24 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   @doc """
+  Searches messages by content across all conversations the user participates in.
+  GET /api/messages/search?query=...&limit=50&offset=0
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:current_user_id]
+    query = Map.get(params, "query", "")
+    limit = params |> Map.get("limit", "50") |> to_string() |> String.to_integer() |> min(100)
+    offset = params |> Map.get("offset", "0") |> to_string() |> String.to_integer()
+
+    if String.trim(query) == "" do
+      json(conn, [])
+    else
+      messages = Messages.search_messages_global(user_id, query, limit, offset)
+      json(conn, Enum.map(messages, &render_message/1))
+    end
+  end
+
+  @doc """
   Gets a single message by ID.
   GET /api/v1/messages/:id
   """
