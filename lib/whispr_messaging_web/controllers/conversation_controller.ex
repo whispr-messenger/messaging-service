@@ -35,7 +35,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Lists conversations for the authenticated user.
-  GET /api/conversations
+  GET /api/v1/conversations
 
   Query params:
   - limit: number of conversations (default: 50, max: 100)
@@ -164,7 +164,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Creates a new conversation.
-  POST /api/conversations
+  POST /api/v1/conversations
 
   Body for direct conversation:
   {
@@ -324,7 +324,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Gets a single conversation.
-  GET /api/conversations/:id
+  GET /api/v1/conversations/:id
   """
   def show(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
@@ -382,7 +382,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Updates a conversation.
-  PUT /api/conversations/:id
+  PUT /api/v1/conversations/:id
 
   Body:
   {
@@ -452,7 +452,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Deletes (deactivates) a conversation.
-  DELETE /api/conversations/:id
+  DELETE /api/v1/conversations/:id
   """
   def delete(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
@@ -506,7 +506,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Returns the current user's per-conversation settings.
-  GET /api/conversations/:id/settings
+  GET /api/v1/conversations/:id/settings
   """
   def get_member_settings(conn, %{"id" => conversation_id}) do
     user_id = conn.assigns[:user_id]
@@ -544,7 +544,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Partially updates the current user's per-conversation settings.
-  PUT /api/conversations/:id/settings
+  PUT /api/v1/conversations/:id/settings
   """
   def update_member_settings(conn, %{"id" => conversation_id} = params) do
     user_id = conn.assigns[:user_id]
@@ -703,7 +703,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Adds a member to a conversation.
-  POST /api/conversations/:id/members
+  POST /api/v1/conversations/:id/members
   """
   def add_member(conn, %{"id" => id} = params) do
     member_id = params["user_id"] || params["member_id"]
@@ -728,7 +728,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   @doc """
   Removes a member from a conversation.
-  DELETE /api/conversations/:id/members/:user_id
+  DELETE /api/v1/conversations/:id/members/:user_id
   """
   def remove_member(conn, %{"id" => id, "user_id" => member_id}) do
     current_user_id = conn.assigns[:user_id]
