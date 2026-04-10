@@ -83,6 +83,24 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
+  Searches messages by content across conversations the user participates in.
+  """
+  def search_messages_global(user_id, query, limit \\ 50, offset \\ 0) do
+    like_query = "%#{query}%"
+
+    from(m in Message,
+      join: cm in WhisprMessaging.Conversations.ConversationMember,
+      on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+      where: ilike(m.content, ^like_query) and m.is_deleted == false,
+      order_by: [desc: m.inserted_at],
+      limit: ^limit,
+      offset: ^offset,
+      preload: [:reply_to, :attachments, :reactions, :delivery_statuses]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Gets the sender ID of a message.
   """
   def get_message_sender(message_id) do

@@ -381,4 +381,34 @@ defmodule WhisprMessagingWeb.AttachmentController do
       uploaded_at: attachment.inserted_at
     })
   end
+
+  @doc """
+  Creates an attachment record from JSON metadata (file already uploaded to media-service).
+  POST /api/messages/:message_id/attachments
+  """
+  def create_from_metadata(conn, %{"message_id" => message_id} = params) do
+    attrs = %{
+      message_id: message_id,
+      filename: params["filename"] || params["metadata"]["filename"] || "file",
+      file_type: params["media_type"] || "image",
+      mime_type: params["metadata"]["mime_type"] || params["mime_type"] || "application/octet-stream",
+      file_size: params["metadata"]["size"] || params["size"] || 0,
+      storage_url: params["metadata"]["media_url"] || params["media_url"] || "",
+      thumbnail_url: params["metadata"]["thumbnail_url"] || params["thumbnail_url"],
+      metadata: params["metadata"] || %{}
+    }
+
+    case Messages.create_attachment(attrs) do
+      {:ok, attachment} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: render_attachment(attachment)})
+
+      {:error, changeset} ->
+        Logger.error("create_from_metadata failed: #{inspect(changeset.errors)}")
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Failed to create attachment"})
+    end
+  end
 end
