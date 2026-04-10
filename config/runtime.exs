@@ -61,8 +61,7 @@ config :whispr_messaging, :services,
   notification_service:
     System.get_env("NOTIFICATION_SERVICE_URL", "grpc://notification-service:50053"),
   moderation_service: System.get_env("MODERATION_SERVICE_URL", "grpc://moderation-service:50057"),
-  scheduling_service:
-    System.get_env("SCHEDULING_SERVICE_GRPC_URL", "scheduling-service:50013")
+  scheduling_service: System.get_env("SCHEDULING_SERVICE_GRPC_URL", "scheduling-service:50013")
 
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
