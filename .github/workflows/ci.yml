@@ -37,7 +37,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ github.ref }}
-      should_deploy: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      should_deploy: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/preprod') && github.event_name == 'push' }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -51,7 +51,7 @@ jobs:
     uses: ./.github/workflows/trivy.yml
     with:
       ref: ${{ github.ref }}
-      should_deploy: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      should_deploy: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/preprod') && github.event_name == 'push' }}
 
   # ================================
   # Docker Build
@@ -63,4 +63,4 @@ jobs:
     uses: ./.github/workflows/docker.yml
     with:
       ref: ${{ github.ref }}
-      should_deploy: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      should_deploy: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/preprod') && github.event_name == 'push' }}
