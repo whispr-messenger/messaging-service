@@ -312,7 +312,7 @@ defmodule WhisprMessagingWeb.MessageController do
           data:
             camelize_keys(%{
               id: message.id,
-              is_deleted: delete_for_everyone || message.is_deleted,
+              is_deleted: true,
               delete_for_everyone: delete_for_everyone,
               deleted_at: message.updated_at
             })
