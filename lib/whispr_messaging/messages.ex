@@ -88,7 +88,8 @@ defmodule WhisprMessaging.Messages do
   Searches messages by content across conversations the user participates in.
   """
   def search_messages_global(user_id, query, limit \\ 50, offset \\ 0) do
-    like_query = "%#{query}%"
+    escaped = query |> to_string() |> String.replace(~r/[\\%_]/, "\\\\\\0")
+    like_query = "%#{escaped}%"
 
     from(m in Message,
       join: cm in WhisprMessaging.Conversations.ConversationMember,

@@ -33,6 +33,10 @@ defmodule WhisprMessagingWeb.UserSocket do
   def id(socket), do: "user_socket:#{socket.assigns.user_id}"
 
   # JWT verification — same logic as WhisprMessagingWeb.Plugs.Authenticate
+  if Mix.env() == :test do
+    defp verify_jwt("test_token_" <> user_id) when user_id != "", do: {:ok, user_id}
+  end
+
   defp verify_jwt(token) do
     kid = peek_kid(token)
 

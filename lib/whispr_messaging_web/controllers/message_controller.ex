@@ -182,8 +182,8 @@ defmodule WhisprMessagingWeb.MessageController do
   def search(conn, params) do
     user_id = conn.assigns[:user_id]
     query = Map.get(params, "query", "")
-    limit = params |> Map.get("limit", "50") |> to_string() |> String.to_integer() |> min(100)
-    offset = params |> Map.get("offset", "0") |> to_string() |> String.to_integer()
+    limit = params |> Map.get("limit", 50) |> parse_int(50) |> min(100) |> max(1)
+    offset = params |> Map.get("offset", 0) |> parse_int(0) |> max(0)
 
     if String.trim(query) == "" do
       json(conn, [])
@@ -192,6 +192,17 @@ defmodule WhisprMessagingWeb.MessageController do
       json(conn, Enum.map(messages, &render_message/1))
     end
   end
+
+  defp parse_int(value, _default) when is_integer(value), do: value
+
+  defp parse_int(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, _} -> int
+      :error -> default
+    end
+  end
+
+  defp parse_int(_, default), do: default
 
   @doc """
   Gets a single message by ID.
