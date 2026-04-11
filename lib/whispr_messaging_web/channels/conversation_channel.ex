@@ -436,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     %{
       id: parent.id,
       sender_id: parent.sender_id,
-      content: parent.content,
+      content: safe_binary_content(parent.content),
       message_type: parent.message_type,
       is_deleted: parent.is_deleted
     }
