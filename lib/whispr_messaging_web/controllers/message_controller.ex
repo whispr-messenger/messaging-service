@@ -180,7 +180,7 @@ defmodule WhisprMessagingWeb.MessageController do
   GET /api/messages/search?query=...&limit=50&offset=0
   """
   def search(conn, params) do
-    user_id = conn.assigns[:current_user_id]
+    user_id = conn.assigns[:user_id]
     query = Map.get(params, "query", "")
     limit = params |> Map.get("limit", "50") |> to_string() |> String.to_integer() |> min(100)
     offset = params |> Map.get("offset", "0") |> to_string() |> String.to_integer()
