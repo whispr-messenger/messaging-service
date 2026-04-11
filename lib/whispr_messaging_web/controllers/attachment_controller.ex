@@ -191,7 +191,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
       |> put_resp_content_type(attachment.mime_type)
       |> put_resp_header(
         "content-disposition",
-        "attachment; filename=\"#{attachment.file_name}\""
+        "attachment; filename=\"#{attachment.filename}\""
       )
       |> put_resp_header("content-length", "#{attachment.file_size}")
       |> send_resp(200, file_content)
@@ -345,9 +345,9 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
     Messages.create_attachment(%{
       message_id: message_id,
-      file_name: upload.filename,
-      file_path: file_path,
-      file_url: file_url,
+      filename: upload.filename,
+      file_type: upload.content_type |> String.split("/") |> List.first() |> normalize_file_type(),
+      storage_url: file_url,
       file_size: file_size,
       mime_type: upload.content_type
     })
@@ -370,12 +370,17 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
+  defp normalize_file_type(type) when type in ["image", "video", "audio"], do: type
+  defp normalize_file_type("application"), do: "document"
+  defp normalize_file_type("text"), do: "document"
+  defp normalize_file_type(_), do: "document"
+
   defp render_attachment(attachment) do
     camelize_keys(%{
       id: attachment.id,
       message_id: attachment.message_id,
-      file_name: attachment.file_name,
-      file_url: attachment.file_url,
+      file_name: attachment.filename,
+      file_url: attachment.storage_url,
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
       uploaded_at: attachment.inserted_at
