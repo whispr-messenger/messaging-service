@@ -62,6 +62,7 @@ defmodule WhisprMessagingWeb.Router do
     delete "/conversations/:id", ConversationController, :delete
 
     # Conversation members
+    get "/conversations/:id/members", ConversationMemberController, :index
     post "/conversations/:id/members", ConversationMemberController, :create
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
@@ -77,6 +78,9 @@ defmodule WhisprMessagingWeb.Router do
     post "/conversations/:id/archive", ConversationController, :archive
     delete "/conversations/:id/archive", ConversationController, :unarchive
 
+    # Pinned messages in a conversation
+    get "/conversations/:id/pins", PinController, :index
+
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
 
@@ -90,6 +94,7 @@ defmodule WhisprMessagingWeb.Router do
     # Scheduled message routes — literal paths before parameterized :id
     get "/messages/scheduled", ScheduledMessageController, :index
     post "/messages/scheduled", ScheduledMessageController, :create
+    patch "/messages/scheduled/:id", ScheduledMessageController, :update
     delete "/messages/scheduled/:id", ScheduledMessageController, :delete
 
     # Message search — must come before /messages/:id
@@ -98,6 +103,18 @@ defmodule WhisprMessagingWeb.Router do
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+
+    # Message reactions
+    get "/messages/:id/reactions", ReactionController, :index
+    post "/messages/:id/reactions", ReactionController, :create
+    delete "/messages/:id/reactions/:reaction", ReactionController, :delete
+
+    # Message pin / unpin
+    post "/messages/:id/pin", PinController, :create
+    delete "/messages/:id/pin", PinController, :delete
+
+    # Message attachments
+    get "/messages/:id/attachments", AttachmentController, :list_by_message
 
     # Message-scoped attachment creation (JSON metadata, file already on media-service)
     post "/messages/:message_id/attachments", AttachmentController, :create_from_metadata

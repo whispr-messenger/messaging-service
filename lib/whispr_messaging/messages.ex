@@ -14,6 +14,7 @@ defmodule WhisprMessaging.Messages do
     MessageAttachment,
     MessageDraft,
     MessageReaction,
+    PinnedMessage,
     ScheduledMessage,
     SignatureVerifier
   }
@@ -669,5 +670,77 @@ defmodule WhisprMessaging.Messages do
       %ScheduledMessage{} ->
         {:error, :forbidden}
     end
+  end
+
+  @doc """
+  Updates a pending scheduled message (content, scheduled_at). Only the sender can update.
+  """
+  def update_scheduled_message(id, user_id, attrs) do
+    case Repo.get(ScheduledMessage, id) do
+      nil ->
+        {:error, :not_found}
+
+      %ScheduledMessage{sender_id: ^user_id, status: "pending"} = sm ->
+        sm
+        |> ScheduledMessage.changeset(attrs)
+        |> Repo.update()
+
+      %ScheduledMessage{status: status} when status != "pending" ->
+        {:error, :not_pending}
+
+      %ScheduledMessage{} ->
+        {:error, :forbidden}
+    end
+  end
+
+  # Attachment listing
+
+  @doc """
+  Lists attachments for a specific message.
+  """
+  def list_message_attachments(message_id) do
+    MessageAttachment.by_message_query(message_id)
+    |> Repo.all()
+  end
+
+  # Pinned messages
+
+  @doc """
+  Pins a message in its conversation.
+  """
+  def pin_message(message_id, user_id) do
+    case get_message(message_id) do
+      {:ok, message} ->
+        %PinnedMessage{}
+        |> PinnedMessage.changeset(%{
+          message_id: message_id,
+          conversation_id: message.conversation_id,
+          pinned_by: user_id
+        })
+        |> Repo.insert()
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Unpins a message.
+  """
+  def unpin_message(message_id) do
+    query = from p in PinnedMessage, where: p.message_id == ^message_id
+
+    case Repo.delete_all(query) do
+      {0, _} -> {:error, :not_found}
+      {_count, _} -> {:ok, :unpinned}
+    end
+  end
+
+  @doc """
+  Lists pinned messages for a conversation.
+  """
+  def list_pinned_messages(conversation_id) do
+    PinnedMessage.by_conversation_query(conversation_id)
+    |> Repo.all()
   end
 end
