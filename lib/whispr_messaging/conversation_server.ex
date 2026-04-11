@@ -232,6 +232,17 @@ defmodule WhisprMessaging.ConversationServer do
       else
         Messages.mark_conversation_read(state.conversation_id, user_id)
       end
+
+      # Always update last_read_at on the conversation member so that
+      # the unread_count query (messages WHERE sent_at > last_read_at)
+      # returns the correct count on subsequent fetches.
+      case Conversations.get_conversation_member(state.conversation_id, user_id) do
+        %{is_active: true} = member ->
+          Conversations.mark_member_read(member)
+
+        _ ->
+          :ok
+      end
     end)
 
     # Broadcast read receipt
