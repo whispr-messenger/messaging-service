@@ -92,7 +92,7 @@ defmodule WhisprMessaging.Messages do
     from(m in Message,
       join: cm in WhisprMessaging.Conversations.ConversationMember,
       on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
-      where: ilike(m.content, ^like_query) and m.is_deleted == false,
+      where: ilike(fragment("encode(?, 'escape')", m.content), ^like_query) and m.is_deleted == false,
       order_by: [desc: m.inserted_at],
       limit: ^limit,
       offset: ^offset,
