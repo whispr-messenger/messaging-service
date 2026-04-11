@@ -10,6 +10,7 @@ defmodule WhisprMessaging.Repo.Migrations.CreatePinnedMessages do
         null: false
 
       add :pinned_by, :binary_id, null: false
+      add :pinned_at, :naive_datetime, null: false, default: fragment("now()")
 
       timestamps()
     end

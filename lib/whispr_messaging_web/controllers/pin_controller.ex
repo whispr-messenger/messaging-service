@@ -91,6 +91,7 @@ defmodule WhisprMessagingWeb.PinController do
       message_id: pinned_message.message_id,
       conversation_id: pinned_message.conversation_id,
       pinned_by: pinned_message.pinned_by,
+      pinned_at: pinned_message.pinned_at,
       inserted_at: pinned_message.inserted_at
     }
 
