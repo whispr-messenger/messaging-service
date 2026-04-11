@@ -506,7 +506,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["error"] in ["Message not found", "Resource not found"]
     end
 
-    test "returns 403 when trying to delete another user's message", %{
+    test "allows another user to delete for me (per-user deletion)", %{
       message: message,
       user2_id: user2_id
     } do
@@ -520,6 +520,27 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
           conn,
           ~p"/api/v1/messages/#{message.id}",
           delete_for_everyone: false
+        )
+        |> json_response(200)
+
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == false
+    end
+
+    test "returns 403 when non-sender tries to delete for everyone", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        delete(
+          conn,
+          ~p"/api/v1/messages/#{message.id}",
+          delete_for_everyone: true
         )
         |> json_response(403)
 
