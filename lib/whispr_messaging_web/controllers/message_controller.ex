@@ -373,7 +373,7 @@ defmodule WhisprMessagingWeb.MessageController do
     %{
       id: parent_message.id,
       sender_id: parent_message.sender_id,
-      content: parent_message.content,
+      content: safe_binary_content(parent_message.content),
       message_type: parent_message.message_type,
       is_deleted: parent_message.is_deleted
     }
