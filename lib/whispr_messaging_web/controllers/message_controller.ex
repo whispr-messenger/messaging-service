@@ -55,7 +55,7 @@ defmodule WhisprMessagingWeb.MessageController do
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
-          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
           |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
         json(conn, %{
