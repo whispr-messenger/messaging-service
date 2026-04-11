@@ -52,7 +52,9 @@ defmodule WhisprMessaging.Messages.PinnedMessage do
   """
   def by_conversation_query(conversation_id) do
     from p in __MODULE__,
+      join: m in assoc(p, :message),
       where: p.conversation_id == ^conversation_id,
+      where: m.is_deleted == false,
       order_by: [desc: p.inserted_at],
       preload: [:message]
   end
