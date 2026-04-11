@@ -578,14 +578,6 @@ defmodule WhisprMessaging.ConversationServer do
     camelize_keys(result)
   end
 
-  defp safe_binary_content(nil), do: nil
-
-  defp safe_binary_content(content) when is_binary(content) do
-    if String.valid?(content), do: content, else: Base.encode64(content)
-  end
-
-  defp safe_binary_content(content), do: to_string(content)
-
   defp serialize_member(member) do
     camelize_keys(%{
       id: member.id,

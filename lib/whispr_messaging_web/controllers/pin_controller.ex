@@ -101,7 +101,7 @@ defmodule WhisprMessagingWeb.PinController do
           Map.put(base, :message, %{
             id: message.id,
             sender_id: message.sender_id,
-            content: message.content,
+            content: safe_binary_content(message.content),
             message_type: message.message_type,
             inserted_at: message.inserted_at
           })
@@ -112,4 +112,12 @@ defmodule WhisprMessagingWeb.PinController do
 
     camelize_keys(base)
   end
+
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
 end

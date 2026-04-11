@@ -994,4 +994,218 @@ defmodule WhisprMessaging.MessagesTest do
                Messages.cancel_scheduled_message(Ecto.UUID.generate(), user_id)
     end
   end
+
+  describe "pinned messages" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "pin me",
+          client_random: 9001
+        })
+
+      %{conversation: conversation, user_id: user_id, message: message}
+    end
+
+    test "pin_message/2 pins a message", %{message: message, user_id: user_id} do
+      assert {:ok, pinned} = Messages.pin_message(message.id, user_id)
+      assert pinned.message_id == message.id
+      assert pinned.pinned_by == user_id
+    end
+
+    test "pin_message/2 prevents pinning the same message twice", %{
+      message: message,
+      user_id: user_id
+    } do
+      assert {:ok, _} = Messages.pin_message(message.id, user_id)
+      assert {:error, changeset} = Messages.pin_message(message.id, user_id)
+      refute changeset.valid?
+    end
+
+    test "unpin_message/1 removes the pin", %{message: message, user_id: user_id} do
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      assert {:ok, :unpinned} = Messages.unpin_message(message.id)
+      assert {:error, :not_found} = Messages.unpin_message(message.id)
+    end
+
+    test "list_pinned_messages/1 returns only pinned, non-deleted messages", %{
+      conversation: conversation,
+      user_id: user_id,
+      message: message
+    } do
+      {:ok, other} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "not pinned",
+          client_random: 9002
+        })
+
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      {:ok, _} = Messages.pin_message(other.id, user_id)
+
+      # Global delete should remove the pin from the listing
+      {:ok, _} = Messages.delete_message(other.id, user_id, true)
+
+      pins = Messages.list_pinned_messages(conversation.id)
+      assert length(pins) == 1
+      assert hd(pins).message_id == message.id
+    end
+
+    test "delete_message/3 with delete_for_everyone auto-unpins", %{
+      message: message,
+      user_id: user_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      {:ok, _} = Messages.delete_message(message.id, user_id, true)
+      assert Messages.list_pinned_messages(conversation.id) == []
+    end
+  end
+
+  describe "per-user message deletion" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user1_id = Ecto.UUID.generate()
+      user2_id = Ecto.UUID.generate()
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "visible or not",
+          client_random: 9100
+        })
+
+      %{
+        conversation: conversation,
+        user1_id: user1_id,
+        user2_id: user2_id,
+        message: message
+      }
+    end
+
+    test "delete for me hides message only for that user", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id,
+      message: message
+    } do
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+
+      user1_list = Messages.list_recent_messages(conversation.id, 50, nil, user1_id)
+      user2_list = Messages.list_recent_messages(conversation.id, 50, nil, user2_id)
+
+      assert Enum.any?(user1_list, &(&1.id == message.id))
+      refute Enum.any?(user2_list, &(&1.id == message.id))
+    end
+
+    test "delete for me is idempotent", %{message: message, user2_id: user2_id} do
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+    end
+
+    test "delete for everyone requires the sender", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      assert {:error, :forbidden} = Messages.delete_message(message.id, user2_id, true)
+    end
+  end
+
+  describe "search_messages_global/4" do
+    setup do
+      user_id = Ecto.UUID.generate()
+      other_user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      {:ok, foreign_conv} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(foreign_conv.id, other_user_id)
+
+      {:ok, hello} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "hello world",
+          client_random: 9200
+        })
+
+      {:ok, _unrelated} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "goodbye world",
+          client_random: 9201
+        })
+
+      {:ok, _foreign} =
+        Messages.create_message(%{
+          conversation_id: foreign_conv.id,
+          sender_id: other_user_id,
+          message_type: "text",
+          content: "hello stranger",
+          client_random: 9202
+        })
+
+      %{user_id: user_id, hello: hello}
+    end
+
+    test "returns matches only from user's own conversations", %{user_id: user_id, hello: hello} do
+      results = Messages.search_messages_global(user_id, "hello")
+      assert length(results) == 1
+      assert hd(results).id == hello.id
+    end
+
+    test "escapes LIKE wildcards to prevent injection", %{user_id: user_id} do
+      # `%` should match literally, not as a wildcard — there is no message
+      # whose content literally contains `%`, so the result must be empty.
+      assert Messages.search_messages_global(user_id, "%") == []
+    end
+
+    test "excludes messages the user has deleted for themselves", %{
+      user_id: user_id,
+      hello: hello
+    } do
+      {:ok, _} = Messages.delete_message(hello.id, user_id, false)
+      assert Messages.search_messages_global(user_id, "hello") == []
+    end
+  end
 end
