@@ -377,13 +377,19 @@ defmodule WhisprMessagingWeb.AttachmentController do
   defp normalize_file_type(_), do: "document"
 
   defp render_attachment(attachment) do
+    meta = attachment.metadata || %{}
+
     camelize_keys(%{
       id: attachment.id,
       message_id: attachment.message_id,
+      media_id: meta["media_id"],
       file_name: attachment.filename,
+      file_type: attachment.file_type,
       file_url: attachment.storage_url,
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
+      thumbnail_url: attachment.thumbnail_url,
+      metadata: meta,
       uploaded_at: attachment.inserted_at
     })
   end
