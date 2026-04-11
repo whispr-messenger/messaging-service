@@ -346,7 +346,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
     Messages.create_attachment(%{
       message_id: message_id,
       filename: upload.filename,
-      file_type: upload.content_type |> String.split("/") |> List.first() |> normalize_file_type(),
+      file_type:
+        upload.content_type |> String.split("/") |> List.first() |> normalize_file_type(),
       storage_url: file_url,
       file_size: file_size,
       mime_type: upload.content_type

@@ -35,8 +35,15 @@ defmodule WhisprMessaging.Messages.PinnedMessage do
 
   defp put_pinned_at(changeset) do
     case get_field(changeset, :pinned_at) do
-      nil -> put_change(changeset, :pinned_at, NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second))
-      _ -> changeset
+      nil ->
+        put_change(
+          changeset,
+          :pinned_at,
+          NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+        )
+
+      _ ->
+        changeset
     end
   end
 
