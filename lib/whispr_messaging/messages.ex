@@ -192,6 +192,9 @@ defmodule WhisprMessaging.Messages do
          :ok <- validate_delete_permissions(message, user_id, delete_for_everyone),
          true <- Message.deletable?(message) do
       if delete_for_everyone do
+        # Auto-unpin the message if it was pinned
+        unpin_message(message_id)
+
         message
         |> Message.delete_changeset(true)
         |> Repo.update()
