@@ -383,6 +383,25 @@ defmodule WhisprMessagingWeb.AttachmentController do
   end
 
   @doc """
+  Lists attachments for a specific message.
+  GET /api/v1/messages/:id/attachments
+  """
+  def list_by_message(conn, %{"id" => message_id}) do
+    with {:ok, _message} <- Messages.get_message(message_id) do
+      attachments = Messages.list_message_attachments(message_id)
+
+      json(conn, %{
+        data: Enum.map(attachments, &render_attachment/1),
+        meta:
+          camelize_keys(%{
+            message_id: message_id,
+            count: length(attachments)
+          })
+      })
+    end
+  end
+
+  @doc """
   Creates an attachment record from JSON metadata (file already uploaded to media-service).
   POST /api/messages/:message_id/attachments
   """
