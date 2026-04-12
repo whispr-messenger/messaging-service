@@ -23,7 +23,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     }
   end
 
-  test "GET /api/v1/conversations fails if no auth header provided, even with user_id in params",
+  test "GET /messaging/api/v1/conversations fails if no auth header provided, even with user_id in params",
        %{user1_id: user1_id} do
     conn =
       build_conn()
@@ -37,7 +37,9 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     assert response["error"] == "Unauthorized"
   end
 
-  test "GET /api/v1/conversations fails with invalid Bearer token", %{user1_id: user1_id} do
+  test "GET /messaging/api/v1/conversations fails with invalid Bearer token", %{
+    user1_id: user1_id
+  } do
     conn =
       build_conn()
       |> put_req_header("authorization", "Bearer invalid_token")
@@ -50,7 +52,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     assert response["error"] == "Unauthorized"
   end
 
-  test "GET /api/v1/conversations succeeds with X-User-Id header", %{user1_id: user1_id} do
+  test "GET /messaging/api/v1/conversations succeeds with X-User-Id header", %{user1_id: user1_id} do
     conn =
       build_conn()
       |> put_req_header("x-user-id", user1_id)
@@ -63,7 +65,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
     assert response["data"] != nil
   end
 
-  test "GET /api/v1/conversations succeeds with valid test token", %{user1_id: user1_id} do
+  test "GET /messaging/api/v1/conversations succeeds with valid test token", %{user1_id: user1_id} do
     conn =
       build_conn()
       |> put_req_header("authorization", "Bearer test_token_#{user1_id}")

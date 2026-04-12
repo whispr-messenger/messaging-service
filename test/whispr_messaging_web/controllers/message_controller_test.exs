@@ -28,7 +28,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     }
   end
 
-  describe "GET /api/v1/conversations/:id/messages" do
+  describe "GET /messaging/api/v1/conversations/:id/messages" do
     test "lists messages for a conversation", %{
       conversation: conversation,
       user1_id: user1_id
@@ -131,7 +131,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     end
   end
 
-  describe "POST /api/v1/conversations/:id/messages" do
+  describe "POST /messaging/api/v1/conversations/:id/messages" do
     test "creates a new message", %{
       conversation: conversation,
       user1_id: user1_id
@@ -341,7 +341,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     end
   end
 
-  describe "PUT /api/v1/messages/:id" do
+  describe "PUT /messaging/api/v1/messages/:id" do
     setup %{conversation: conversation, user1_id: user1_id} do
       {:ok, message} =
         Messages.create_message(%{
@@ -455,7 +455,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
     end
   end
 
-  describe "DELETE /api/v1/messages/:id" do
+  describe "DELETE /messaging/api/v1/messages/:id" do
     setup %{conversation: conversation, user1_id: user1_id} do
       {:ok, message} =
         Messages.create_message(%{
