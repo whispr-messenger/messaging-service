@@ -13,6 +13,25 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   action_fallback WhisprMessagingWeb.FallbackController
 
+  @doc """
+  Lists members of a conversation.
+  GET /api/v1/conversations/:id/members
+  """
+  def index(conn, %{"id" => conversation_id}) do
+    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id) do
+      members = Conversations.list_conversation_members(conversation_id)
+
+      json(conn, %{
+        data: Enum.map(members, &render_member/1),
+        meta:
+          camelize_keys(%{
+            conversation_id: conversation_id,
+            count: length(members)
+          })
+      })
+    end
+  end
+
   swagger_path :create do
     post("/conversations/{id}/members")
     summary("Add a member to a conversation")
