@@ -1,14 +1,14 @@
 defmodule WhisprMessagingWeb.HealthControllerTest do
   use WhisprMessagingWeb.ConnCase, async: true
 
-  describe "GET /api/v1/health" do
+  describe "GET /messaging/api/v1/health" do
     test "returns 200 OK with health status" do
       conn =
         build_conn()
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health")
+        get(conn, ~p"/messaging/api/v1/health")
         |> json_response(200)
 
       assert response["status"] == "ok"
@@ -22,21 +22,21 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health")
+        get(conn, ~p"/messaging/api/v1/health")
         |> json_response(200)
 
       assert response["version"] != nil
     end
   end
 
-  describe "GET /api/v1/health/live" do
+  describe "GET /messaging/api/v1/health/live" do
     test "liveness probe returns 200 when service is alive" do
       conn =
         build_conn()
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/live")
+        get(conn, ~p"/messaging/api/v1/health/live")
         |> json_response(200)
 
       assert response["status"] == "alive"
@@ -49,7 +49,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/live")
+        get(conn, ~p"/messaging/api/v1/health/live")
         |> json_response(200)
 
       # Should only contain minimal information
@@ -60,13 +60,13 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
     end
   end
 
-  describe "GET /api/v1/health/ready" do
+  describe "GET /messaging/api/v1/health/ready" do
     test "readiness probe returns 200 when service is ready" do
       conn =
         build_conn()
         |> json_conn()
 
-      resp = get(conn, ~p"/api/v1/health/ready")
+      resp = get(conn, ~p"/messaging/api/v1/health/ready")
 
       case resp.status do
         200 ->
@@ -89,7 +89,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         build_conn()
         |> json_conn()
 
-      resp = get(conn, ~p"/api/v1/health/ready")
+      resp = get(conn, ~p"/messaging/api/v1/health/ready")
       response = Jason.decode!(resp.resp_body)
       assert response["checks"] != nil
       assert response["checks"]["database"] != nil
@@ -100,7 +100,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         build_conn()
         |> json_conn()
 
-      resp = get(conn, ~p"/api/v1/health/ready")
+      resp = get(conn, ~p"/messaging/api/v1/health/ready")
       response = Jason.decode!(resp.resp_body)
       assert response["checks"] != nil
       # Message queue check might be optional
@@ -116,7 +116,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         build_conn()
         |> json_conn()
 
-      resp = get(conn, ~p"/api/v1/health/ready")
+      resp = get(conn, ~p"/messaging/api/v1/health/ready")
       # Should return 200 if database is available, 503 if not
       response = {resp.status, Jason.decode!(resp.resp_body)}
 
@@ -133,14 +133,14 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
     end
   end
 
-  describe "GET /api/v1/health/detailed" do
+  describe "GET /messaging/api/v1/health/detailed" do
     test "returns detailed health information" do
       conn =
         build_conn()
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/detailed")
+        get(conn, ~p"/messaging/api/v1/health/detailed")
         |> json_response(200)
 
       assert response["status"] != nil
@@ -155,7 +155,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/detailed")
+        get(conn, ~p"/messaging/api/v1/health/detailed")
         |> json_response(200)
 
       checks = response["checks"]
@@ -179,7 +179,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/detailed")
+        get(conn, ~p"/messaging/api/v1/health/detailed")
         |> json_response(200)
 
       assert response["memory"] != nil
@@ -197,7 +197,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health/detailed")
+        get(conn, ~p"/messaging/api/v1/health/detailed")
         |> json_response(200)
 
       assert response["metrics"] != nil
@@ -247,9 +247,9 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       endpoints = [
-        ~p"/api/v1/health",
-        ~p"/api/v1/health/live",
-        ~p"/api/v1/health/ready"
+        ~p"/messaging/api/v1/health",
+        ~p"/messaging/api/v1/health/live",
+        ~p"/messaging/api/v1/health/ready"
       ]
 
       Enum.each(endpoints, fn endpoint ->
@@ -268,7 +268,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/health")
+        get(conn, ~p"/messaging/api/v1/health")
         |> json_response(200)
 
       timestamp = response["timestamp"]
@@ -286,7 +286,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
 
       start_time = System.monotonic_time(:millisecond)
 
-      get(conn, ~p"/api/v1/health/live")
+      get(conn, ~p"/messaging/api/v1/health/live")
       |> json_response(200)
 
       elapsed = System.monotonic_time(:millisecond) - start_time
@@ -302,7 +302,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
 
       start_time = System.monotonic_time(:millisecond)
 
-      resp = get(conn, ~p"/api/v1/health/ready")
+      resp = get(conn, ~p"/messaging/api/v1/health/ready")
       assert resp.status in [200, 503]
 
       elapsed = System.monotonic_time(:millisecond) - start_time
@@ -318,7 +318,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
 
       start_time = System.monotonic_time(:millisecond)
 
-      get(conn, ~p"/api/v1/health/detailed")
+      get(conn, ~p"/messaging/api/v1/health/detailed")
       |> json_response(200)
 
       elapsed = System.monotonic_time(:millisecond) - start_time
