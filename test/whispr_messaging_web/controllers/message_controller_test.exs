@@ -50,7 +50,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}/messages")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/messages")
         |> json_response(200)
 
       assert response["data"] != nil
@@ -67,7 +67,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}/messages")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/messages")
         |> json_response(200)
 
       assert response["data"] == []
@@ -82,7 +82,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{fake_id}/messages")
+        get(conn, ~p"/messaging/api/v1/conversations/#{fake_id}/messages")
         |> json_response(404)
 
       assert response["error"] in ["Conversation not found", "Resource not found"]
@@ -97,7 +97,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}/messages")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/messages")
         |> json_response(403)
 
       assert response["error"] == "Unauthorized"
@@ -124,7 +124,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}/messages?limit=5")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/messages?limit=5")
         |> json_response(200)
 
       assert length(response["data"]) <= 5
@@ -152,7 +152,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           message_attrs
         )
         |> json_response(201)
@@ -184,7 +184,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           invalid_attrs
         )
         |> json_response(422)
@@ -211,7 +211,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{fake_id}/messages",
+          ~p"/messaging/api/v1/conversations/#{fake_id}/messages",
           message_attrs
         )
         |> json_response(404)
@@ -237,7 +237,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           message_attrs
         )
         |> json_response(403)
@@ -322,7 +322,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       # First message should succeed
       post(
         conn,
-        ~p"/api/v1/conversations/#{conversation.id}/messages",
+        ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
         message_attrs
       )
       |> json_response(201)
@@ -331,7 +331,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           message_attrs
         )
         |> json_response(422)
@@ -369,7 +369,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         put(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           update_attrs
         )
         |> json_response(200)
@@ -395,7 +395,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         put(
           conn,
-          ~p"/api/v1/messages/#{fake_id}",
+          ~p"/messaging/api/v1/messages/#{fake_id}",
           update_attrs
         )
         |> json_response(404)
@@ -422,7 +422,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         put(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           update_attrs
         )
         # FallbackController might be rendering 403 correctly now
@@ -446,7 +446,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         put(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           update_attrs
         )
         |> json_response(422)
@@ -478,7 +478,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           delete_for_everyone: true
         )
         |> json_response(200)
@@ -498,7 +498,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{fake_id}",
+          ~p"/messaging/api/v1/messages/#{fake_id}",
           delete_for_everyone: false
         )
         |> json_response(404)
@@ -518,7 +518,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           delete_for_everyone: false
         )
         |> json_response(403)
@@ -538,7 +538,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/messages/#{message.id}",
+          ~p"/messaging/api/v1/messages/#{message.id}",
           delete_for_everyone: false
         )
         |> json_response(200)

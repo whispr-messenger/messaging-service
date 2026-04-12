@@ -25,14 +25,14 @@ defmodule WhisprMessagingWeb.Router do
     WhisprMessagingWeb.SwaggerInfo.swagger_info()
   end
 
-  scope "/messaging", WhisprMessagingWeb do
+  scope "/", WhisprMessagingWeb do
     pipe_through :api
 
     get "/", HealthController, :info
   end
 
-  # Kubernetes-compatible health check routes (no /api/v1 prefix)
-  scope "/messaging", WhisprMessagingWeb do
+  # Kubernetes-compatible health check routes (no prefix)
+  scope "/", WhisprMessagingWeb do
     pipe_through :api
 
     get "/ready", HealthController, :ready

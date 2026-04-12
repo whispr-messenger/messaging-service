@@ -42,7 +42,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations")
+        get(conn, ~p"/messaging/api/v1/conversations")
         |> json_response(200)
 
       assert response["data"] != nil
@@ -56,7 +56,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations")
+        get(conn, ~p"/messaging/api/v1/conversations")
         |> json_response(200)
 
       assert response["data"] == []
@@ -87,7 +87,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations", type: "group")
+        get(conn, ~p"/messaging/api/v1/conversations", type: "group")
         |> json_response(200)
 
       assert Enum.all?(response["data"], fn c -> c["type"] == "group" end)
@@ -99,7 +99,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations")
+        get(conn, ~p"/messaging/api/v1/conversations")
         |> json_response(401)
 
       assert response["error"] != nil
@@ -120,7 +120,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(201)
 
       assert response["data"]["id"] != nil
@@ -141,7 +141,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -159,7 +159,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(400)
 
       assert response["error"] != nil
@@ -185,7 +185,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(201)
 
       assert response["data"]["id"] != nil
@@ -210,7 +210,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -230,7 +230,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        post(conn, ~p"/api/v1/conversations", attrs)
+        post(conn, ~p"/messaging/api/v1/conversations", attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -255,7 +255,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["id"] == conversation.id
@@ -272,7 +272,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{fake_id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{fake_id}")
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -294,7 +294,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(403)
 
       assert response["error"] == "User is not a member of this conversation"
@@ -317,7 +317,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["members"] != nil
@@ -344,7 +344,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["isMuted"] == false
@@ -377,7 +377,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        get(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["isMuted"] == true
@@ -408,7 +408,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
+        put(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(200)
 
       # Name is typically in metadata for groups
@@ -430,7 +430,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, ~p"/api/v1/conversations/#{fake_id}", update_attrs)
+        put(conn, ~p"/messaging/api/v1/conversations/#{fake_id}", update_attrs)
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -457,7 +457,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
+        put(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(403)
 
       assert response["error"] == "Unauthorized"
@@ -485,7 +485,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        put(conn, ~p"/api/v1/conversations/#{conversation.id}", update_attrs)
+        put(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}", update_attrs)
         |> json_response(422)
 
       assert response["errors"] != nil
@@ -509,7 +509,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(200)
 
       assert response["data"]["isActive"] == false
@@ -524,7 +524,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, ~p"/api/v1/conversations/#{fake_id}")
+        delete(conn, ~p"/messaging/api/v1/conversations/#{fake_id}")
         |> json_response(404)
 
       assert response["error"] == "Conversation not found"
@@ -546,7 +546,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_conn()
 
       response =
-        delete(conn, ~p"/api/v1/conversations/#{conversation.id}")
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
         |> json_response(403)
 
       assert response["error"] == "Unauthorized"
@@ -581,7 +581,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/members",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members",
           add_attrs
         )
         |> json_response(201)
@@ -617,7 +617,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/members",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members",
           add_attrs
         )
         |> json_response(403)
@@ -647,7 +647,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response(
         delete(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/members/#{user2_id}"
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members/#{user2_id}"
         ),
         204
       )
@@ -673,7 +673,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       response =
         delete(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/members/#{fake_user_id}"
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members/#{fake_user_id}"
         )
         |> json_response(404)
 

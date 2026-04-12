@@ -31,7 +31,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
 
     # Attempt to impersonate user1 using params
     response =
-      get(conn, ~p"/api/v1/conversations", user_id: user1_id)
+      get(conn, ~p"/messaging/api/v1/conversations", user_id: user1_id)
       |> json_response(401)
 
     assert response["error"] == "Unauthorized"
@@ -44,7 +44,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/v1/conversations", user_id: user1_id)
+      get(conn, ~p"/messaging/api/v1/conversations", user_id: user1_id)
       |> json_response(401)
 
     assert response["error"] == "Unauthorized"
@@ -57,7 +57,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/v1/conversations")
+      get(conn, ~p"/messaging/api/v1/conversations")
       |> json_response(200)
 
     assert response["data"] != nil
@@ -70,7 +70,7 @@ defmodule WhisprMessagingWeb.AuthSecurityTest do
       |> json_conn()
 
     response =
-      get(conn, ~p"/api/v1/conversations")
+      get(conn, ~p"/messaging/api/v1/conversations")
       |> json_response(200)
 
     assert response["data"] != nil
