@@ -15,7 +15,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     }
   end
 
-  describe "GET /api/v1/conversations" do
+  describe "GET /messaging/api/v1/conversations" do
     test "lists all conversations for a user", %{user1_id: user1_id, user2_id: _user2_id} do
       # Create conversations
       {:ok, conversation1} =
@@ -106,7 +106,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "POST /api/v1/conversations (direct)" do
+  describe "POST /messaging/api/v1/conversations (direct)" do
     test "creates a direct conversation with two users", %{user1_id: user1_id, user2_id: user2_id} do
       attrs = %{
         "type" => "direct",
@@ -166,7 +166,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "POST /api/v1/conversations (group)" do
+  describe "POST /messaging/api/v1/conversations (group)" do
     test "creates a group conversation with multiple users", %{
       user1_id: user1_id,
       user2_id: user2_id,
@@ -237,7 +237,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "GET /api/v1/conversations/:id" do
+  describe "GET /messaging/api/v1/conversations/:id" do
     test "retrieves a conversation by ID", %{user1_id: user1_id, user2_id: user2_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
@@ -386,7 +386,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "PUT /api/v1/conversations/:id" do
+  describe "PUT /messaging/api/v1/conversations/:id" do
     test "updates a group conversation name", %{user1_id: user1_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
@@ -492,7 +492,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "DELETE /api/v1/conversations/:id" do
+  describe "DELETE /messaging/api/v1/conversations/:id" do
     test "deactivates a conversation", %{user1_id: user1_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
@@ -553,7 +553,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "POST /api/v1/conversations/:id/members" do
+  describe "POST /messaging/api/v1/conversations/:id/members" do
     test "adds a member to a group conversation", %{
       user1_id: user1_id,
       user2_id: user2_id,
@@ -626,7 +626,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
     end
   end
 
-  describe "DELETE /api/v1/conversations/:id/members/:user_id" do
+  describe "DELETE /messaging/api/v1/conversations/:id/members/:user_id" do
     test "removes a member from conversation", %{user1_id: user1_id, user2_id: user2_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
