@@ -12,7 +12,10 @@ defmodule WhisprMessaging.Messages do
     DeliveryStatus,
     Message,
     MessageAttachment,
-    MessageReaction
+    MessageDraft,
+    MessageReaction,
+    ScheduledMessage,
+    SignatureVerifier
   }
 
   alias WhisprMessaging.Repo
@@ -23,19 +26,39 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Creates a new message in a conversation.
+
+  Verifies the Ed25519 signature when `signature` and `sender_public_key`
+  are present in attrs. Signature verification happens before persistence,
+  and any error returned by `SignatureVerifier.verify/1` is passed through.
+
+  Possible signature error reasons:
+
+    * `:missing_signature_fields` — only one of signature/public_key provided
+    * `:invalid_signature` — signature does not match the payload
+    * `:invalid_signature_encoding` — signature is not valid Base64
+    * `:invalid_public_key_encoding` — public key is not valid Base64
+    * `:invalid_key_length` — public key is not 32 bytes
+    * `:invalid_signature_length` — signature is not 64 bytes
+    * `:verification_error` — unexpected error during crypto verification
   """
   def create_message(attrs \\ %{}) do
-    %Message{}
-    |> Message.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, message} ->
-        # Preload associations for channels
-        message = Repo.preload(message, [:conversation, :reply_to])
-        {:ok, message}
+    # Verify signature before persisting (no DB write on failure)
+    with :ok <- SignatureVerifier.verify(attrs) do
+      changeset = Message.changeset(%Message{}, attrs)
 
-      error ->
-        error
+      with :ok <- validate_reply_to(changeset) do
+        changeset
+        |> Repo.insert()
+        |> case do
+          {:ok, message} ->
+            # Preload associations for channels
+            message = Repo.preload(message, [:conversation, :reply_to])
+            {:ok, message}
+
+          error ->
+            error
+        end
+      end
     end
   end
 
@@ -394,6 +417,41 @@ defmodule WhisprMessaging.Messages do
     end
   end
 
+  defp validate_reply_to(changeset) do
+    reply_to_id = Ecto.Changeset.get_field(changeset, :reply_to_id)
+    conversation_id = Ecto.Changeset.get_field(changeset, :conversation_id)
+
+    cond do
+      is_nil(reply_to_id) ->
+        :ok
+
+      is_nil(conversation_id) ->
+        :ok
+
+      true ->
+        case Repo.one(from(m in Message, where: m.id == ^reply_to_id, select: m.conversation_id)) do
+          nil ->
+            {:error,
+             Ecto.Changeset.add_error(
+               changeset,
+               :reply_to_id,
+               "referenced message does not exist"
+             )}
+
+          ^conversation_id ->
+            :ok
+
+          _other ->
+            {:error,
+             Ecto.Changeset.add_error(
+               changeset,
+               :reply_to_id,
+               "must reference a message in the same conversation"
+             )}
+        end
+    end
+  end
+
   defp validate_edit_permissions(%Message{sender_id: sender_id}, user_id)
        when sender_id == user_id,
        do: :ok
@@ -493,5 +551,105 @@ defmodule WhisprMessaging.Messages do
   def user_can_access_message?(conversation_id, user_id) do
     alias WhisprMessaging.Conversations
     Conversations.conversation_member?(conversation_id, user_id)
+  end
+
+  # Draft operations
+
+  @doc """
+  Upserts a draft for a user in a conversation.
+  Only one draft per user per conversation is allowed; calling this again
+  replaces the existing draft.
+  """
+  def upsert_draft(conversation_id, user_id, content, metadata \\ %{}) do
+    attrs = %{
+      conversation_id: conversation_id,
+      user_id: user_id,
+      content: content,
+      metadata: metadata
+    }
+
+    %MessageDraft{}
+    |> MessageDraft.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: [
+        set: [content: content, metadata: metadata, updated_at: NaiveDateTime.utc_now()]
+      ],
+      conflict_target: [:conversation_id, :user_id],
+      returning: true
+    )
+  end
+
+  @doc """
+  Gets the draft for a specific user in a conversation.
+  Returns {:ok, draft} or {:error, :not_found}.
+  """
+  def get_draft(conversation_id, user_id) do
+    case Repo.one(MessageDraft.by_conversation_and_user_query(conversation_id, user_id)) do
+      nil -> {:error, :not_found}
+      draft -> {:ok, draft}
+    end
+  end
+
+  @doc """
+  Deletes a draft by id, ensuring it belongs to the given user.
+  """
+  def delete_draft(draft_id, user_id) do
+    case Repo.get(MessageDraft, draft_id) do
+      nil ->
+        {:error, :not_found}
+
+      %MessageDraft{user_id: ^user_id} = draft ->
+        Repo.delete(draft)
+
+      %MessageDraft{} ->
+        {:error, :forbidden}
+    end
+  end
+
+  # Scheduled message operations
+
+  @doc """
+  Schedules a message to be sent at a future time.
+  """
+  def schedule_message(attrs \\ %{}) do
+    %ScheduledMessage{}
+    |> ScheduledMessage.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Lists pending scheduled messages for a sender.
+  """
+  def list_scheduled_messages(sender_id) do
+    ScheduledMessage.pending_by_sender_query(sender_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a single scheduled message by id.
+  """
+  def get_scheduled_message(id) do
+    case Repo.get(ScheduledMessage, id) do
+      nil -> {:error, :not_found}
+      sm -> {:ok, sm}
+    end
+  end
+
+  @doc """
+  Cancels a pending scheduled message. Only the sender can cancel.
+  """
+  def cancel_scheduled_message(id, user_id) do
+    case Repo.get(ScheduledMessage, id) do
+      nil ->
+        {:error, :not_found}
+
+      %ScheduledMessage{sender_id: ^user_id} = sm ->
+        sm
+        |> ScheduledMessage.cancel_changeset()
+        |> Repo.update()
+
+      %ScheduledMessage{} ->
+        {:error, :forbidden}
+    end
   end
 end

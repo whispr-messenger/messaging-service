@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   alias WhisprMessaging.Messages
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   require Logger
 
   @upload_dir "priv/static/uploads"
@@ -369,7 +371,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
   end
 
   defp render_attachment(attachment) do
-    %{
+    camelize_keys(%{
       id: attachment.id,
       message_id: attachment.message_id,
       file_name: attachment.file_name,
@@ -377,6 +379,6 @@ defmodule WhisprMessagingWeb.AttachmentController do
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
       uploaded_at: attachment.inserted_at
-    }
+    })
   end
 end

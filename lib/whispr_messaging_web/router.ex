@@ -51,6 +51,12 @@ defmodule WhisprMessagingWeb.Router do
     # Conversation routes
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
+
+    # Literal paths must come before parameterized :id routes
+    get "/conversations/archived", ConversationController, :archived
+    # Search must be declared before /:id to avoid Phoenix treating "search" as an ID
+    get "/conversations/search", ConversationController, :search
+
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
@@ -63,8 +69,29 @@ defmodule WhisprMessagingWeb.Router do
     get "/conversations/:id/settings", ConversationController, :get_member_settings
     put "/conversations/:id/settings", ConversationController, :update_member_settings
 
+    # Conversation pin / unpin (WHISPR-465)
+    post "/conversations/:id/pin", ConversationController, :pin
+    delete "/conversations/:id/pin", ConversationController, :unpin
+
+    # Conversation archive / unarchive (WHISPR-466)
+    post "/conversations/:id/archive", ConversationController, :archive
+    delete "/conversations/:id/archive", ConversationController, :unarchive
+
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
+
+    # Draft routes — literal paths must come before /messages/:id
+    post "/messages/drafts", DraftController, :create
+    delete "/messages/drafts/:id", DraftController, :delete
+
+    # Draft retrieval scoped to conversation
+    get "/conversations/:id/drafts", DraftController, :show
+
+    # Scheduled message routes — literal paths before parameterized :id
+    get "/messages/scheduled", ScheduledMessageController, :index
+    post "/messages/scheduled", ScheduledMessageController, :create
+    delete "/messages/scheduled/:id", ScheduledMessageController, :delete
+
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
