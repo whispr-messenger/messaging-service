@@ -14,8 +14,10 @@ defmodule WhisprMessaging.Messages do
     MessageAttachment,
     MessageDraft,
     MessageReaction,
+    PinnedMessage,
     ScheduledMessage,
-    SignatureVerifier
+    SignatureVerifier,
+    UserMessageDeletion
   }
 
   alias WhisprMessaging.Repo
@@ -83,6 +85,29 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
+  Searches messages by content across conversations the user participates in.
+  """
+  def search_messages_global(user_id, query, limit \\ 50, offset \\ 0) do
+    escaped = query |> to_string() |> String.replace(~r/[\\%_]/, "\\\\\\0")
+    like_query = "%#{escaped}%"
+
+    from(m in Message,
+      join: cm in WhisprMessaging.Conversations.ConversationMember,
+      on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+      left_join: umd in UserMessageDeletion,
+      on: umd.message_id == m.id and umd.user_id == ^user_id,
+      where:
+        ilike(fragment("encode(?, 'escape')", m.content), ^like_query) and m.is_deleted == false,
+      where: is_nil(umd.id),
+      order_by: [desc: m.inserted_at],
+      limit: ^limit,
+      offset: ^offset,
+      preload: [:reply_to, :attachments, :reactions, :delivery_statuses]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Gets the sender ID of a message.
   """
   def get_message_sender(message_id) do
@@ -106,26 +131,32 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
-  Lists recent messages from a conversation.
+  Lists recent messages from a conversation, excluding messages the user
+  has individually deleted.
   """
-  def list_recent_messages(conversation_id, limit \\ 50, before_timestamp \\ nil) do
+  def list_recent_messages(conversation_id, limit \\ 50, before_timestamp \\ nil, user_id \\ nil) do
     Message.recent_messages_query(conversation_id, limit, before_timestamp)
+    |> exclude_user_deletions(user_id)
     |> Repo.all()
   end
 
   @doc """
-  Lists messages after a specific timestamp.
+  Lists messages after a specific timestamp, excluding messages the user
+  has individually deleted.
   """
-  def list_messages_after(conversation_id, timestamp) do
+  def list_messages_after(conversation_id, timestamp, user_id \\ nil) do
     Message.messages_after_query(conversation_id, timestamp)
+    |> exclude_user_deletions(user_id)
     |> Repo.all()
   end
 
   @doc """
-  Lists undelivered messages for a user.
+  Lists undelivered messages for a user, excluding messages the user
+  has individually deleted.
   """
   def list_undelivered_messages(user_id) do
     Message.undelivered_messages_query(user_id)
+    |> exclude_user_deletions(user_id)
     |> Repo.all()
   end
 
@@ -148,28 +179,51 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
-  Soft deletes a message.
+  Deletes a message.
+
+  When `delete_for_everyone` is `true`, the message is soft-deleted globally
+  (sets `is_deleted = true`). Only the original sender may do this.
+
+  When `delete_for_everyone` is `false` (default), the message is hidden only
+  for the requesting user by inserting a row into `user_message_deletions`.
+  Any conversation member may do this.
   """
   def delete_message(message_id, user_id, delete_for_everyone \\ false) do
     with {:ok, message} <- get_message(message_id),
-         :ok <- validate_delete_permissions(message, user_id),
+         :ok <- validate_delete_permissions(message, user_id, delete_for_everyone),
          true <- Message.deletable?(message) do
-      message
-      |> Message.delete_changeset(delete_for_everyone)
-      |> Repo.update()
+      if delete_for_everyone do
+        # Auto-unpin the message if it was pinned
+        unpin_message(message_id)
+
+        message
+        |> Message.delete_changeset(true)
+        |> Repo.update()
+      else
+        %UserMessageDeletion{}
+        |> UserMessageDeletion.changeset(%{user_id: user_id, message_id: message_id})
+        |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id, :message_id])
+        |> case do
+          {:ok, _deletion} -> {:ok, message}
+          {:error, changeset} -> {:error, changeset}
+        end
+      end
     else
       {:error, :not_found} -> {:error, :not_found}
       {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :forbidden} -> {:error, :forbidden}
       false -> {:error, :not_deletable}
       error -> error
     end
   end
 
   @doc """
-  Searches messages by metadata content.
+  Searches messages by metadata content, excluding messages the user
+  has individually deleted.
   """
-  def search_messages(conversation_id, search_term) do
+  def search_messages(conversation_id, search_term, user_id \\ nil) do
     Message.search_messages_query(conversation_id, search_term)
+    |> exclude_user_deletions(user_id)
     |> Repo.all()
   end
 
@@ -452,17 +506,35 @@ defmodule WhisprMessaging.Messages do
     end
   end
 
+  # Appends a LEFT JOIN + WHERE IS NULL filter against user_message_deletions
+  # so that messages the given user has individually deleted are excluded.
+  # When user_id is nil the query is returned unchanged (backwards-compatible).
+  defp exclude_user_deletions(query, nil), do: query
+
+  defp exclude_user_deletions(query, user_id) do
+    from m in query,
+      left_join: umd in UserMessageDeletion,
+      on: umd.message_id == m.id and umd.user_id == ^user_id,
+      where: is_nil(umd.id)
+  end
+
   defp validate_edit_permissions(%Message{sender_id: sender_id}, user_id)
        when sender_id == user_id,
        do: :ok
 
   defp validate_edit_permissions(_message, _user_id), do: {:error, :forbidden}
 
-  defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id)
+  # "Delete for everyone" — only the sender is allowed.
+  defp validate_delete_permissions(%Message{sender_id: sender_id}, user_id, true)
        when sender_id == user_id,
        do: :ok
 
-  defp validate_delete_permissions(_message, _user_id), do: {:error, :forbidden}
+  defp validate_delete_permissions(_message, _user_id, true), do: {:error, :forbidden}
+
+  # "Delete for me" — any conversation member is allowed.
+  # Membership is already verified at the channel/controller layer before this
+  # function is reached, so we simply permit the operation.
+  defp validate_delete_permissions(_message, _user_id, false), do: :ok
 
   # Text message helpers
 
@@ -651,5 +723,77 @@ defmodule WhisprMessaging.Messages do
       %ScheduledMessage{} ->
         {:error, :forbidden}
     end
+  end
+
+  @doc """
+  Updates a pending scheduled message (content, scheduled_at). Only the sender can update.
+  """
+  def update_scheduled_message(id, user_id, attrs) do
+    case Repo.get(ScheduledMessage, id) do
+      nil ->
+        {:error, :not_found}
+
+      %ScheduledMessage{sender_id: ^user_id, status: "pending"} = sm ->
+        sm
+        |> ScheduledMessage.changeset(attrs)
+        |> Repo.update()
+
+      %ScheduledMessage{status: status} when status != "pending" ->
+        {:error, :not_pending}
+
+      %ScheduledMessage{} ->
+        {:error, :forbidden}
+    end
+  end
+
+  # Attachment listing
+
+  @doc """
+  Lists attachments for a specific message.
+  """
+  def list_message_attachments(message_id) do
+    MessageAttachment.by_message_query(message_id)
+    |> Repo.all()
+  end
+
+  # Pinned messages
+
+  @doc """
+  Pins a message in its conversation.
+  """
+  def pin_message(message_id, user_id) do
+    case get_message(message_id) do
+      {:ok, message} ->
+        %PinnedMessage{}
+        |> PinnedMessage.changeset(%{
+          message_id: message_id,
+          conversation_id: message.conversation_id,
+          pinned_by: user_id
+        })
+        |> Repo.insert()
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Unpins a message.
+  """
+  def unpin_message(message_id) do
+    query = from p in PinnedMessage, where: p.message_id == ^message_id
+
+    case Repo.delete_all(query) do
+      {0, _} -> {:error, :not_found}
+      {_count, _} -> {:ok, :unpinned}
+    end
+  end
+
+  @doc """
+  Lists pinned messages for a conversation.
+  """
+  def list_pinned_messages(conversation_id) do
+    PinnedMessage.by_conversation_query(conversation_id)
+    |> Repo.all()
   end
 end

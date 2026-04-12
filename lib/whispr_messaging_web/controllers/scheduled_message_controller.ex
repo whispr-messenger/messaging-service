@@ -156,6 +156,45 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
     end
   end
 
+  @doc """
+  Updates a pending scheduled message.
+  PATCH /api/v1/messages/scheduled/:id
+  """
+  def update(conn, %{"id" => id} = params) do
+    user_id = conn.assigns[:user_id]
+
+    update_params = params["scheduled_message"] || Map.drop(params, ["id"])
+
+    if is_nil(user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Unauthorized"})
+    else
+      case Messages.update_scheduled_message(id, user_id, update_params) do
+        {:ok, sm} ->
+          json(conn, %{data: render_scheduled_message(sm)})
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "Scheduled message not found"})
+
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "Forbidden"})
+
+        {:error, :not_pending} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Can only update pending scheduled messages"})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error, changeset}
+      end
+    end
+  end
+
   defp render_scheduled_message(sm) do
     camelize_keys(%{
       id: sm.id,

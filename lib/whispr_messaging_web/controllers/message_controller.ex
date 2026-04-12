@@ -55,7 +55,7 @@ defmodule WhisprMessagingWeb.MessageController do
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
-          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
           |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
         json(conn, %{
@@ -176,6 +176,35 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   @doc """
+  Searches messages by content across all conversations the user participates in.
+  GET /api/messages/search?query=...&limit=50&offset=0
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:user_id]
+    query = Map.get(params, "query", "")
+    limit = params |> Map.get("limit", 50) |> parse_int(50) |> min(100) |> max(1)
+    offset = params |> Map.get("offset", 0) |> parse_int(0) |> max(0)
+
+    if String.trim(query) == "" do
+      json(conn, [])
+    else
+      messages = Messages.search_messages_global(user_id, query, limit, offset)
+      json(conn, Enum.map(messages, &render_message/1))
+    end
+  end
+
+  defp parse_int(value, _default) when is_integer(value), do: value
+
+  defp parse_int(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, _} -> int
+      :error -> default
+    end
+  end
+
+  defp parse_int(_, default), do: default
+
+  @doc """
   Gets a single message by ID.
   GET /api/v1/messages/:id
   """
@@ -294,8 +323,8 @@ defmodule WhisprMessagingWeb.MessageController do
           data:
             camelize_keys(%{
               id: message.id,
-              is_deleted: message.is_deleted,
-              delete_for_everyone: message.delete_for_everyone,
+              is_deleted: true,
+              delete_for_everyone: delete_for_everyone,
               deleted_at: message.updated_at
             })
         })
@@ -316,7 +345,7 @@ defmodule WhisprMessagingWeb.MessageController do
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
-      content: message.content,
+      content: safe_binary_content(message.content),
       message_type: message.message_type,
       metadata: message.metadata,
       reply_to_id: message.reply_to_id,
@@ -355,7 +384,7 @@ defmodule WhisprMessagingWeb.MessageController do
     %{
       id: parent_message.id,
       sender_id: parent_message.sender_id,
-      content: parent_message.content,
+      content: safe_binary_content(parent_message.content),
       message_type: parent_message.message_type,
       is_deleted: parent_message.is_deleted
     }
@@ -555,6 +584,16 @@ defmodule WhisprMessagingWeb.MessageController do
         end
     }
   end
+
+  # Ensure binary content is safe for JSON encoding.
+  # Content stored as BYTEA may not always be valid UTF-8.
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
 
   # Helper to translate Ecto changeset errors
   defp translate_errors(changeset) do
