@@ -562,6 +562,77 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Searches the authenticated user's conversations by name or participant user_id.
+
+  The `q` parameter is matched case-insensitively against:
+  - the group conversation name stored in `metadata->>'name'`
+  - the `user_id` of any other member in the conversation (exact match)
+
+  Returns a list of conversations enriched with `:member_info` (the calling
+  user's `ConversationMember` record) so that `render_conversation/1` in the
+  controller can expose per-user flags like `is_pinned`, `is_archived`, etc.
+  """
+  def search_user_conversations(user_id, query_term, opts \\ []) do
+    limit = max(Keyword.get(opts, :limit, 20), 1)
+    search_pattern = "%#{query_term}%"
+
+    # Conversations the user belongs to, filtered by group name match
+    by_name =
+      from m in ConversationMember,
+        where: m.user_id == ^user_id and m.is_active == true,
+        join: c in Conversation,
+        on: c.id == m.conversation_id and c.is_active == true,
+        where: c.type == "group",
+        where: ilike(fragment("(?->>'name')", c.metadata), ^search_pattern),
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
+        select: {m, c}
+
+    # Conversations the user belongs to where another participant matches the query
+    by_participant =
+      from m in ConversationMember,
+        where: m.user_id == ^user_id and m.is_active == true,
+        join: c in Conversation,
+        on: c.id == m.conversation_id and c.is_active == true,
+        join: other in ConversationMember,
+        on:
+          other.conversation_id == c.id and other.user_id != ^user_id and
+            other.is_active == true,
+        where: other.user_id == ^query_term,
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
+        select: {m, c}
+
+    name_results = Repo.all(by_name)
+
+    # Only query by participant when the term is a valid UUID — the user_id
+    # field is a binary_id and Ecto raises a CastError otherwise.
+    participant_results =
+      if valid_uuid?(query_term) do
+        Repo.all(by_participant)
+      else
+        []
+      end
+
+    (name_results ++ participant_results)
+    |> Enum.uniq_by(fn {_m, c} -> c.id end)
+    |> Enum.sort_by(fn {_m, c} -> c.updated_at end, {:desc, NaiveDateTime})
+    |> Enum.take(limit)
+    |> Enum.map(fn {member, conversation} ->
+      Map.put(conversation, :member_info, member)
+    end)
+  end
+
+  defp valid_uuid?(str) when is_binary(str) do
+    case Ecto.UUID.cast(str) do
+      {:ok, _} -> true
+      :error -> false
+    end
+  end
+
+  defp valid_uuid?(_), do: false
+
+  @doc """
   Gets a conversation with members preloaded.
   """
   def get_conversation_with_members(conversation_id, user_id \\ nil) do
@@ -577,6 +648,120 @@ defmodule WhisprMessaging.Conversations do
 
         {:ok, Map.put(conversation, :member_info, member_info)}
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Conversation pin / unpin (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  @max_pinned_conversations 5
+
+  @doc "Returns the maximum number of conversations a user can pin."
+  def max_pinned_conversations, do: @max_pinned_conversations
+
+  @doc """
+  Pins a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, `{:error, :already_pinned}` if already pinned, or
+  `{:error, :pin_limit_reached}` when the user already has
+  #{@max_pinned_conversations} pinned conversations.
+  """
+  def pin_conversation(conversation_id, user_id) do
+    lock_key = :erlang.phash2(user_id, 2_147_483_647)
+
+    Repo.transaction(fn ->
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
+
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_pin_member(user_id)
+    end)
+    |> unwrap_transaction_result()
+  end
+
+  defp do_pin_member(%ConversationMember{is_active: true} = member, user_id) do
+    settings = member.settings || %{}
+
+    cond do
+      Map.get(settings, "is_pinned", false) ->
+        Repo.rollback(:already_pinned)
+
+      count_pinned_conversations(user_id) >= @max_pinned_conversations ->
+        Repo.rollback(:pin_limit_reached)
+
+      true ->
+        apply_pin_settings(member, settings)
+    end
+  end
+
+  defp do_pin_member(_member, _user_id), do: Repo.rollback(:not_member)
+
+  defp apply_pin_settings(member, settings) do
+    new_settings = Map.put(settings, "is_pinned", true)
+
+    case member
+         |> ConversationMember.update_settings_changeset(new_settings)
+         |> Repo.update() do
+      {:ok, updated_member} -> updated_member
+      {:error, changeset} -> Repo.rollback({:changeset, changeset})
+    end
+  end
+
+  defp unwrap_transaction_result({:ok, result}), do: {:ok, result}
+  defp unwrap_transaction_result({:error, {:changeset, cs}}), do: {:error, cs}
+  defp unwrap_transaction_result({:error, reason}), do: {:error, reason}
+
+  @doc """
+  Unpins a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :not_pinned}` if the conversation is not
+  currently pinned.
+  """
+  def unpin_conversation(conversation_id, user_id) do
+    lock_key = :erlang.phash2(user_id, 2_147_483_647)
+
+    Repo.transaction(fn ->
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
+
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_unpin_member()
+    end)
+    |> unwrap_transaction_result()
+  end
+
+  defp do_unpin_member(%ConversationMember{is_active: true} = member) do
+    settings = member.settings || %{}
+
+    if Map.get(settings, "is_pinned", false) do
+      apply_unpin_settings(member, settings)
+    else
+      Repo.rollback(:not_pinned)
+    end
+  end
+
+  defp do_unpin_member(_member), do: Repo.rollback(:not_member)
+
+  defp apply_unpin_settings(member, settings) do
+    new_settings = Map.put(settings, "is_pinned", false)
+
+    case member
+         |> ConversationMember.update_settings_changeset(new_settings)
+         |> Repo.update() do
+      {:ok, updated_member} -> updated_member
+      {:error, changeset} -> Repo.rollback({:changeset, changeset})
+    end
+  end
+
+  defp count_pinned_conversations(user_id) do
+    from(m in ConversationMember,
+      where: m.user_id == ^user_id,
+      where: m.is_active == true,
+      where: fragment("(?->>'is_pinned')::boolean = true", m.settings)
+    )
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
@@ -603,5 +788,82 @@ defmodule WhisprMessaging.Conversations do
       conversation ->
         {:ok, conversation}
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Conversation archive / unarchive (WHISPR-466)
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Archives a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :already_archived}` if already archived.
+  """
+  def archive_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_archived", false) do
+          {:error, :already_archived}
+        else
+          new_settings = Map.put(member.settings || %{}, "is_archived", true)
+
+          member
+          |> ConversationMember.update_settings_changeset(new_settings)
+          |> Repo.update()
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Unarchives a conversation for a user.
+
+  Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
+  not an active member, or `{:error, :not_archived}` if the conversation is
+  not currently archived.
+  """
+  def unarchive_conversation(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        if Map.get(member.settings, "is_archived", false) do
+          new_settings = Map.put(member.settings, "is_archived", false)
+
+          member
+          |> ConversationMember.update_settings_changeset(new_settings)
+          |> Repo.update()
+        else
+          {:error, :not_archived}
+        end
+
+      _ ->
+        {:error, :not_member}
+    end
+  end
+
+  @doc """
+  Lists archived conversations for a user.
+  """
+  def list_archived_conversations(user_id, limit \\ 50) do
+    query =
+      from m in ConversationMember,
+        join: c in Conversation,
+        on: c.id == m.conversation_id,
+        where: m.user_id == ^user_id,
+        where: m.is_active == true,
+        where: c.is_active == true,
+        where: fragment("(?->>'is_archived')::boolean = true", m.settings),
+        order_by: [desc: c.updated_at],
+        limit: ^limit,
+        select: {m, c}
+
+    results = Repo.all(query)
+
+    Enum.map(results, fn {member, conversation} ->
+      conversation
+      |> Map.put(:member_info, member)
+    end)
   end
 end

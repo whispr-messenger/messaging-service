@@ -229,6 +229,118 @@ defmodule WhisprMessaging.MessagesTest do
     end
   end
 
+  describe "reply threading validation" do
+    setup do
+      {:ok, conversation1} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, conversation2} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user_id = Ecto.UUID.generate()
+
+      {:ok, parent_message} =
+        Messages.create_message(%{
+          conversation_id: conversation1.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "parent message",
+          client_random: 10_001
+        })
+
+      %{
+        conversation1: conversation1,
+        conversation2: conversation2,
+        user_id: user_id,
+        parent_message: parent_message
+      }
+    end
+
+    test "allows reply to message in same conversation", %{
+      conversation1: conversation1,
+      user_id: user_id,
+      parent_message: parent_message
+    } do
+      assert {:ok, reply} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "reply message",
+                 client_random: 10_002,
+                 reply_to_id: parent_message.id
+               })
+
+      assert reply.reply_to_id == parent_message.id
+      assert reply.reply_to.id == parent_message.id
+    end
+
+    test "rejects reply to message in different conversation", %{
+      conversation2: conversation2,
+      user_id: user_id,
+      parent_message: parent_message
+    } do
+      assert {:error, changeset} =
+               Messages.create_message(%{
+                 conversation_id: conversation2.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "cross-conversation reply",
+                 client_random: 10_003,
+                 reply_to_id: parent_message.id
+               })
+
+      assert %Ecto.Changeset{} = changeset
+      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
+      assert errors[:reply_to_id] != nil
+    end
+
+    test "rejects reply to non-existent message", %{
+      conversation1: conversation1,
+      user_id: user_id
+    } do
+      fake_id = Ecto.UUID.generate()
+
+      assert {:error, changeset} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "reply to nothing",
+                 client_random: 10_004,
+                 reply_to_id: fake_id
+               })
+
+      assert %Ecto.Changeset{} = changeset
+      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
+      assert errors[:reply_to_id] != nil
+    end
+
+    test "allows message without reply_to_id", %{
+      conversation1: conversation1,
+      user_id: user_id
+    } do
+      assert {:ok, message} =
+               Messages.create_message(%{
+                 conversation_id: conversation1.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "no reply",
+                 client_random: 10_005
+               })
+
+      assert is_nil(message.reply_to_id)
+    end
+  end
+
   describe "delivery statuses" do
     setup do
       {:ok, conversation} =
@@ -700,6 +812,400 @@ defmodule WhisprMessaging.MessagesTest do
       assert normal_msg.id in ids
       assert live_ephemeral.id in ids
       refute expired_id in ids
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Draft tests (WHISPR-471)
+  # ---------------------------------------------------------------------------
+
+  describe "drafts" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      %{conversation: conversation, user_id: user_id}
+    end
+
+    test "upsert_draft/3 creates a draft", %{conversation: c, user_id: user_id} do
+      assert {:ok, draft} = Messages.upsert_draft(c.id, user_id, "draft content")
+      assert draft.conversation_id == c.id
+      assert draft.user_id == user_id
+      assert draft.content == "draft content"
+    end
+
+    test "upsert_draft/3 replaces existing draft", %{conversation: c, user_id: user_id} do
+      {:ok, _first} = Messages.upsert_draft(c.id, user_id, "first draft")
+      {:ok, second} = Messages.upsert_draft(c.id, user_id, "updated draft")
+      assert second.content == "updated draft"
+      {:ok, fetched} = Messages.get_draft(c.id, user_id)
+      assert fetched.content == "updated draft"
+    end
+
+    test "get_draft/2 returns draft when it exists", %{conversation: c, user_id: user_id} do
+      {:ok, _draft} = Messages.upsert_draft(c.id, user_id, "my draft")
+      assert {:ok, draft} = Messages.get_draft(c.id, user_id)
+      assert draft.content == "my draft"
+    end
+
+    test "get_draft/2 returns not_found when no draft exists", %{conversation: c} do
+      other_user = Ecto.UUID.generate()
+      assert {:error, :not_found} = Messages.get_draft(c.id, other_user)
+    end
+
+    test "delete_draft/2 deletes owned draft", %{conversation: c, user_id: user_id} do
+      {:ok, draft} = Messages.upsert_draft(c.id, user_id, "to delete")
+      assert {:ok, _} = Messages.delete_draft(draft.id, user_id)
+      assert {:error, :not_found} = Messages.get_draft(c.id, user_id)
+    end
+
+    test "delete_draft/2 returns forbidden for another user's draft", %{
+      conversation: c,
+      user_id: user_id
+    } do
+      {:ok, draft} = Messages.upsert_draft(c.id, user_id, "not yours")
+      other_user = Ecto.UUID.generate()
+      assert {:error, :forbidden} = Messages.delete_draft(draft.id, other_user)
+    end
+
+    test "delete_draft/2 returns not_found for missing draft", %{user_id: user_id} do
+      assert {:error, :not_found} = Messages.delete_draft(Ecto.UUID.generate(), user_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Scheduled message tests (WHISPR-470)
+  # ---------------------------------------------------------------------------
+
+  describe "scheduled messages" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+      future = DateTime.add(DateTime.utc_now(), 3600, :second) |> DateTime.truncate(:second)
+
+      %{conversation: conversation, user_id: user_id, future: future}
+    end
+
+    test "schedule_message/1 creates a scheduled message", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      assert {:ok, sm} =
+               Messages.schedule_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "hello future",
+                 client_random: 5001,
+                 scheduled_at: future
+               })
+
+      assert sm.status == "pending"
+      assert sm.scheduled_at == future
+      assert sm.sender_id == user_id
+    end
+
+    test "schedule_message/1 rejects scheduled_at in the past", %{
+      conversation: c,
+      user_id: user_id
+    } do
+      past = DateTime.add(DateTime.utc_now(), -60, :second) |> DateTime.truncate(:second)
+
+      assert {:error, changeset} =
+               Messages.schedule_message(%{
+                 conversation_id: c.id,
+                 sender_id: user_id,
+                 message_type: "text",
+                 content: "late",
+                 client_random: 5002,
+                 scheduled_at: past
+               })
+
+      assert "must be in the future" in errors_on(changeset).scheduled_at
+    end
+
+    test "list_scheduled_messages/1 returns pending messages for sender", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, _} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "msg1",
+          client_random: 5010,
+          scheduled_at: future
+        })
+
+      messages = Messages.list_scheduled_messages(user_id)
+      refute Enum.empty?(messages)
+      assert Enum.all?(messages, &(&1.status == "pending"))
+    end
+
+    test "cancel_scheduled_message/2 cancels a pending message", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, sm} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "cancel me",
+          client_random: 5020,
+          scheduled_at: future
+        })
+
+      assert {:ok, cancelled} = Messages.cancel_scheduled_message(sm.id, user_id)
+      assert cancelled.status == "cancelled"
+    end
+
+    test "cancel_scheduled_message/2 returns forbidden for another user", %{
+      conversation: c,
+      user_id: user_id,
+      future: future
+    } do
+      {:ok, sm} =
+        Messages.schedule_message(%{
+          conversation_id: c.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "not yours",
+          client_random: 5030,
+          scheduled_at: future
+        })
+
+      other_user = Ecto.UUID.generate()
+      assert {:error, :forbidden} = Messages.cancel_scheduled_message(sm.id, other_user)
+    end
+
+    test "cancel_scheduled_message/2 returns not_found for missing message", %{user_id: user_id} do
+      assert {:error, :not_found} =
+               Messages.cancel_scheduled_message(Ecto.UUID.generate(), user_id)
+    end
+  end
+
+  describe "pinned messages" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "pin me",
+          client_random: 9001
+        })
+
+      %{conversation: conversation, user_id: user_id, message: message}
+    end
+
+    test "pin_message/2 pins a message", %{message: message, user_id: user_id} do
+      assert {:ok, pinned} = Messages.pin_message(message.id, user_id)
+      assert pinned.message_id == message.id
+      assert pinned.pinned_by == user_id
+    end
+
+    test "pin_message/2 prevents pinning the same message twice", %{
+      message: message,
+      user_id: user_id
+    } do
+      assert {:ok, _} = Messages.pin_message(message.id, user_id)
+      assert {:error, changeset} = Messages.pin_message(message.id, user_id)
+      refute changeset.valid?
+    end
+
+    test "unpin_message/1 removes the pin", %{message: message, user_id: user_id} do
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      assert {:ok, :unpinned} = Messages.unpin_message(message.id)
+      assert {:error, :not_found} = Messages.unpin_message(message.id)
+    end
+
+    test "list_pinned_messages/1 returns only pinned, non-deleted messages", %{
+      conversation: conversation,
+      user_id: user_id,
+      message: message
+    } do
+      {:ok, other} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "not pinned",
+          client_random: 9002
+        })
+
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      {:ok, _} = Messages.pin_message(other.id, user_id)
+
+      # Global delete should remove the pin from the listing
+      {:ok, _} = Messages.delete_message(other.id, user_id, true)
+
+      pins = Messages.list_pinned_messages(conversation.id)
+      assert length(pins) == 1
+      assert hd(pins).message_id == message.id
+    end
+
+    test "delete_message/3 with delete_for_everyone auto-unpins", %{
+      message: message,
+      user_id: user_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Messages.pin_message(message.id, user_id)
+      {:ok, _} = Messages.delete_message(message.id, user_id, true)
+      assert Messages.list_pinned_messages(conversation.id) == []
+    end
+  end
+
+  describe "per-user message deletion" do
+    setup do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      user1_id = Ecto.UUID.generate()
+      user2_id = Ecto.UUID.generate()
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "visible or not",
+          client_random: 9100
+        })
+
+      %{
+        conversation: conversation,
+        user1_id: user1_id,
+        user2_id: user2_id,
+        message: message
+      }
+    end
+
+    test "delete for me hides message only for that user", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id,
+      message: message
+    } do
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+
+      user1_list = Messages.list_recent_messages(conversation.id, 50, nil, user1_id)
+      user2_list = Messages.list_recent_messages(conversation.id, 50, nil, user2_id)
+
+      assert Enum.any?(user1_list, &(&1.id == message.id))
+      refute Enum.any?(user2_list, &(&1.id == message.id))
+    end
+
+    test "delete for me is idempotent", %{message: message, user2_id: user2_id} do
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+      assert {:ok, _} = Messages.delete_message(message.id, user2_id, false)
+    end
+
+    test "delete for everyone requires the sender", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      assert {:error, :forbidden} = Messages.delete_message(message.id, user2_id, true)
+    end
+  end
+
+  describe "search_messages_global/4" do
+    setup do
+      user_id = Ecto.UUID.generate()
+      other_user_id = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
+
+      {:ok, foreign_conv} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(foreign_conv.id, other_user_id)
+
+      {:ok, hello} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "hello world",
+          client_random: 9200
+        })
+
+      {:ok, _unrelated} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "goodbye world",
+          client_random: 9201
+        })
+
+      {:ok, _foreign} =
+        Messages.create_message(%{
+          conversation_id: foreign_conv.id,
+          sender_id: other_user_id,
+          message_type: "text",
+          content: "hello stranger",
+          client_random: 9202
+        })
+
+      %{user_id: user_id, hello: hello}
+    end
+
+    test "returns matches only from user's own conversations", %{user_id: user_id, hello: hello} do
+      results = Messages.search_messages_global(user_id, "hello")
+      assert length(results) == 1
+      assert hd(results).id == hello.id
+    end
+
+    test "escapes LIKE wildcards to prevent injection", %{user_id: user_id} do
+      # `%` should match literally, not as a wildcard — there is no message
+      # whose content literally contains `%`, so the result must be empty.
+      assert Messages.search_messages_global(user_id, "%") == []
+    end
+
+    test "excludes messages the user has deleted for themselves", %{
+      user_id: user_id,
+      hello: hello
+    } do
+      {:ok, _} = Messages.delete_message(hello.id, user_id, false)
+      assert Messages.search_messages_global(user_id, "hello") == []
     end
   end
 end

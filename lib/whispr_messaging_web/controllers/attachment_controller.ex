@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
   alias WhisprMessaging.Messages
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   require Logger
 
   @upload_dir "priv/static/uploads"
@@ -189,7 +191,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
       |> put_resp_content_type(attachment.mime_type)
       |> put_resp_header(
         "content-disposition",
-        "attachment; filename=\"#{attachment.file_name}\""
+        "attachment; filename=\"#{attachment.filename}\""
       )
       |> put_resp_header("content-length", "#{attachment.file_size}")
       |> send_resp(200, file_content)
@@ -343,9 +345,10 @@ defmodule WhisprMessagingWeb.AttachmentController do
 
     Messages.create_attachment(%{
       message_id: message_id,
-      file_name: upload.filename,
-      file_path: file_path,
-      file_url: file_url,
+      filename: upload.filename,
+      file_type:
+        upload.content_type |> String.split("/") |> List.first() |> normalize_file_type(),
+      storage_url: file_url,
       file_size: file_size,
       mime_type: upload.content_type
     })
@@ -368,15 +371,87 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
+  defp normalize_file_type(type) when type in ["image", "video", "audio"], do: type
+  defp normalize_file_type("application"), do: "document"
+  defp normalize_file_type("text"), do: "document"
+  defp normalize_file_type(_), do: "document"
+
   defp render_attachment(attachment) do
-    %{
+    meta = attachment.metadata || %{}
+
+    camelize_keys(%{
       id: attachment.id,
       message_id: attachment.message_id,
-      file_name: attachment.file_name,
-      file_url: attachment.file_url,
+      media_id: meta["media_id"],
+      file_name: attachment.filename,
+      file_type: attachment.file_type,
+      file_url: attachment.storage_url,
       file_size: attachment.file_size,
       mime_type: attachment.mime_type,
+      thumbnail_url: attachment.thumbnail_url,
+      metadata: meta,
       uploaded_at: attachment.inserted_at
+    })
+  end
+
+  @doc """
+  Lists attachments for a specific message.
+  GET /api/v1/messages/:id/attachments
+  """
+  def list_by_message(conn, %{"id" => message_id}) do
+    with {:ok, _message} <- Messages.get_message(message_id) do
+      attachments = Messages.list_message_attachments(message_id)
+
+      json(conn, %{
+        data: Enum.map(attachments, &render_attachment/1),
+        meta:
+          camelize_keys(%{
+            message_id: message_id,
+            count: length(attachments)
+          })
+      })
+    end
+  end
+
+  @doc """
+  Creates an attachment record from JSON metadata (file already uploaded to media-service).
+  POST /api/messages/:message_id/attachments
+  """
+  def create_from_metadata(conn, %{"message_id" => message_id} = params) do
+    params
+    |> build_attachment_attrs(message_id)
+    |> then(&save_attachment(conn, &1))
+  end
+
+  defp build_attachment_attrs(params, message_id) do
+    meta = params["metadata"] || %{}
+    merged = Map.merge(meta, params)
+
+    %{
+      message_id: message_id,
+      filename: merged["filename"] || "file",
+      file_type: merged["media_type"] || "image",
+      mime_type: merged["mime_type"] || "application/octet-stream",
+      file_size: merged["size"] || 0,
+      storage_url: merged["media_url"] || "",
+      thumbnail_url: merged["thumbnail_url"],
+      metadata: meta
     }
+  end
+
+  defp save_attachment(conn, attrs) do
+    case Messages.create_attachment(attrs) do
+      {:ok, attachment} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: render_attachment(attachment)})
+
+      {:error, changeset} ->
+        Logger.error("create_from_metadata failed: #{inspect(changeset.errors)}")
+
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Failed to create attachment"})
+    end
   end
 end

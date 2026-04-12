@@ -9,7 +9,28 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   alias WhisprMessaging.Conversations
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
+
+  @doc """
+  Lists members of a conversation.
+  GET /api/v1/conversations/:id/members
+  """
+  def index(conn, %{"id" => conversation_id}) do
+    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id) do
+      members = Conversations.list_conversation_members(conversation_id)
+
+      json(conn, %{
+        data: Enum.map(members, &render_member/1),
+        meta:
+          camelize_keys(%{
+            conversation_id: conversation_id,
+            count: length(members)
+          })
+      })
+    end
+  end
 
   swagger_path :create do
     post("/conversations/{id}/members")
@@ -158,11 +179,11 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   end
 
   defp render_member(member) do
-    %{
+    camelize_keys(%{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
       joined_at: member.joined_at,
       is_active: member.is_active
-    }
+    })
   end
 end
