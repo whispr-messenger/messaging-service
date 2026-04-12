@@ -99,6 +99,10 @@ Thumbs.db
 /priv/uploads/
 
 # mdBook generated documentation
-/documentation/book/.gitnexus/
+/documentation/book/
+
+# GitNexus index artifacts
+/.gitnexus/
+
 .playwright-mcp/
 AGENTS.md
