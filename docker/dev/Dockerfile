@@ -2,6 +2,8 @@ FROM elixir:1.19
 
 WORKDIR /app
 
+ENV MIX_ENV=dev
+
 COPY ./docker/dev/requirements.txt .
 
 RUN apt-get update && apt-get install -y --no-install-recommends $(cat requirements.txt) \
@@ -14,16 +16,16 @@ RUN mix local.hex --force && \
 # Copy mix files first for better layer caching
 COPY mix.exs mix.lock ./
 
-RUN MIX_ENV=dev mix deps.get
-
 # Pre-compile dependencies so the container starts immediately without compilation delay
-RUN MIX_ENV=dev mix deps.compile
+RUN --mount=type=cache,target=/root/.hex \
+    mix do deps.get, deps.compile
 
 COPY config ./config
 COPY lib ./lib
 COPY priv ./priv
 
-RUN MIX_ENV=dev mix compile
+RUN --mount=type=cache,target=/root/.hex \
+    mix compile
 
 COPY ./docker/dev/entrypoint.sh /tmp/entrypoint.sh
 RUN chmod +x /tmp/entrypoint.sh
@@ -33,5 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl 
 # Ajout d'un utilisateur non-root
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
-
 ENTRYPOINT [ "/usr/bin/tini", "--", "/bin/bash", "/tmp/entrypoint.sh" ]

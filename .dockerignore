@@ -1,0 +1,10 @@
+.git
+.github
+_build
+deps
+.local_hex
+documentation
+test
+docker/test
+docker/doc
+*.md
