@@ -33,7 +33,16 @@ defmodule WhisprMessagingWeb.ConversationChannel do
             send(self(), :after_join)
 
             socket = assign(socket, :conversation_id, conversation_id)
-            {:ok, %{conversation: conversation}, socket}
+
+            {:ok,
+             %{
+               conversation: %{
+                 id: conversation.id,
+                 type: conversation.type,
+                 metadata: conversation.metadata,
+                 is_active: conversation.is_active
+               }
+             }, socket}
 
           {:error, reason} ->
             Logger.error("Failed to start conversation server: #{inspect(reason)}")
@@ -374,6 +383,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
+
   defp serialize_message(%Message{} = message) do
     alias WhisprMessaging.Messages.DeliveryStatus
 
@@ -383,7 +400,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       sender_id: message.sender_id,
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
-      content: message.content,
+      content: safe_binary_content(message.content),
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
@@ -419,7 +436,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     %{
       id: parent.id,
       sender_id: parent.sender_id,
-      content: parent.content,
+      content: safe_binary_content(parent.content),
       message_type: parent.message_type,
       is_deleted: parent.is_deleted
     }
@@ -445,7 +462,4 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       end)
     end)
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

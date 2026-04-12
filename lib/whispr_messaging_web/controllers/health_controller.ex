@@ -39,7 +39,7 @@ defmodule WhisprMessagingWeb.HealthController do
       status: "running",
       endpoints: %{
         health: "/api/v1/health",
-        swagger: "/api/swagger",
+        swagger: "/swagger",
         websocket: "ws://#{conn.host}:#{conn.port}/socket"
       }
     })
