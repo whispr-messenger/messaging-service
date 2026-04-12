@@ -90,7 +90,7 @@ services:
       git-hooks:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${HTTP_PORT}/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${HTTP_PORT}/messaging/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3

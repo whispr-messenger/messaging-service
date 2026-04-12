@@ -16,10 +16,9 @@ RUN mix local.hex --force && \
 # Copy mix files first for better layer caching
 COPY mix.exs mix.lock ./
 
-RUN MIX_ENV=dev mix deps.get
 # Pre-compile dependencies so the container starts immediately without compilation delay
 RUN --mount=type=cache,target=/root/.hex \
-    mix do local.hex --force, local.rebar --force, deps.get, deps.compile
+    mix do deps.get, deps.compile
 
 COPY config ./config
 COPY lib ./lib

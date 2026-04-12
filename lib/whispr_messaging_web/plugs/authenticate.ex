@@ -63,27 +63,22 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   defp verify_jwt(token) do
-    case maybe_test_token(token) do
-      {:ok, _user_id} = ok ->
-        ok
+    with :not_test_token <- maybe_test_token(token) do
+      kid = peek_kid(token)
 
-      :not_test_token ->
-        # Extract kid from token header to select the correct cached key
-        kid = peek_kid(token)
+      with {:ok, pem} <- JwksCache.get_signing_key(kid),
+           {:ok, claims} <- validate_token(token, pem),
+           {:ok, user_id} <- extract_sub(claims) do
+        {:ok, user_id}
+      else
+        {:error, :not_loaded} ->
+          Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
+          {:error, :unauthorized}
 
-        with {:ok, pem} <- JwksCache.get_signing_key(kid),
-             {:ok, claims} <- validate_token(token, pem),
-             {:ok, user_id} <- extract_sub(claims) do
-          {:ok, user_id}
-        else
-          {:error, :not_loaded} ->
-            Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
-            {:error, :unauthorized}
-
-          {:error, reason} ->
-            Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
-            {:error, :unauthorized}
-        end
+        {:error, reason} ->
+          Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
+          {:error, :unauthorized}
+      end
     end
   end
 
