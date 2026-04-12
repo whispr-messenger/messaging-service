@@ -232,6 +232,17 @@ defmodule WhisprMessaging.ConversationServer do
       else
         Messages.mark_conversation_read(state.conversation_id, user_id)
       end
+
+      # Always update last_read_at on the conversation member so that
+      # the unread_count query (messages WHERE sent_at > last_read_at)
+      # returns the correct count on subsequent fetches.
+      case Conversations.get_conversation_member(state.conversation_id, user_id) do
+        %{is_active: true} = member ->
+          Conversations.mark_member_read(member)
+
+        _ ->
+          :ok
+      end
     end)
 
     # Broadcast read receipt
@@ -396,9 +407,21 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp broadcast_message(message, state) do
+    serialized = serialize_message(message)
+
+    # Broadcast to the conversation channel (for users with ChatScreen open)
     Endpoint.broadcast("conversation:#{state.conversation_id}", "new_message", %{
-      message: serialize_message(message)
+      message: serialized
     })
+
+    # Broadcast to each member's user channel (for ConversationsListScreen / background updates)
+    Enum.each(state.members, fn member ->
+      if member.user_id != message.sender_id do
+        Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
+          message: serialized
+        })
+      end
+    end)
   end
 
   defp notify_offline_members(message, state) do
@@ -500,6 +523,14 @@ defmodule WhisprMessaging.ConversationServer do
     end)
   end
 
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
+
   @doc false
   def serialize_message(message) do
     alias WhisprMessaging.Messages.DeliveryStatus
@@ -511,7 +542,7 @@ defmodule WhisprMessaging.ConversationServer do
       sender_id: message.sender_id,
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
-      content: message.content,
+      content: safe_binary_content(message.content),
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
@@ -535,7 +566,7 @@ defmodule WhisprMessaging.ConversationServer do
           Map.put(result, :reply_to, %{
             id: parent.id,
             sender_id: parent.sender_id,
-            content: parent.content,
+            content: safe_binary_content(parent.content),
             message_type: parent.message_type,
             is_deleted: parent.is_deleted
           })
