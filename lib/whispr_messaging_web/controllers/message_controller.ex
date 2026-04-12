@@ -10,6 +10,8 @@ defmodule WhisprMessagingWeb.MessageController do
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Messages
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :index do
@@ -53,16 +55,17 @@ defmodule WhisprMessagingWeb.MessageController do
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
-          Messages.list_recent_messages(conversation_id, limit, before_timestamp)
-          |> WhisprMessaging.Repo.preload(:delivery_statuses)
+          Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
+          |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
         json(conn, %{
           data: render_messages(messages),
-          meta: %{
-            count: length(messages),
-            conversation_id: conversation_id,
-            has_more: length(messages) == limit
-          }
+          meta:
+            camelize_keys(%{
+              count: length(messages),
+              conversation_id: conversation_id,
+              has_more: length(messages) == limit
+            })
         })
       else
         {:error, :not_found} ->
@@ -93,6 +96,7 @@ defmodule WhisprMessagingWeb.MessageController do
     security([%{Bearer: []}])
     response(201, "Created", Schema.ref(:MessageResponse))
     response(404, "Conversation Not Found")
+    response(422, "Invalid message signature")
   end
 
   @doc """
@@ -123,9 +127,10 @@ defmodule WhisprMessagingWeb.MessageController do
         |> put_status(:created)
         |> json(%{
           data: render_message(message),
-          meta: %{
-            conversation_id: conversation_id
-          }
+          meta:
+            camelize_keys(%{
+              conversation_id: conversation_id
+            })
         })
       else
         {:error, :not_found} ->
@@ -137,6 +142,21 @@ defmodule WhisprMessagingWeb.MessageController do
           conn
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
+
+        {:error, reason}
+        when reason in [
+               :invalid_signature,
+               :missing_signature_fields,
+               :invalid_key_length,
+               :invalid_signature_length,
+               :invalid_signature_encoding,
+               :invalid_public_key_encoding,
+               :untrusted_public_key,
+               :verification_error
+             ] ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Invalid message signature"})
 
         {:error, changeset} ->
           {:error, changeset}
@@ -154,6 +174,35 @@ defmodule WhisprMessagingWeb.MessageController do
     response(200, "Success", Schema.ref(:MessageResponse))
     response(404, "Not Found")
   end
+
+  @doc """
+  Searches messages by content across all conversations the user participates in.
+  GET /api/messages/search?query=...&limit=50&offset=0
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:user_id]
+    query = Map.get(params, "query", "")
+    limit = params |> Map.get("limit", 50) |> parse_int(50) |> min(100) |> max(1)
+    offset = params |> Map.get("offset", 0) |> parse_int(0) |> max(0)
+
+    if String.trim(query) == "" do
+      json(conn, [])
+    else
+      messages = Messages.search_messages_global(user_id, query, limit, offset)
+      json(conn, Enum.map(messages, &render_message/1))
+    end
+  end
+
+  defp parse_int(value, _default) when is_integer(value), do: value
+
+  defp parse_int(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, _} -> int
+      :error -> default
+    end
+  end
+
+  defp parse_int(_, default), do: default
 
   @doc """
   Gets a single message by ID.
@@ -211,10 +260,11 @@ defmodule WhisprMessagingWeb.MessageController do
 
           json(conn, %{
             data: render_message(message),
-            meta: %{
-              edited: true,
-              edited_at: message.edited_at
-            }
+            meta:
+              camelize_keys(%{
+                edited: true,
+                edited_at: message.edited_at
+              })
           })
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -270,12 +320,13 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, message} <- Messages.delete_message(id, user_id, delete_for_everyone) do
         json(conn, %{
-          data: %{
-            id: message.id,
-            is_deleted: message.is_deleted,
-            delete_for_everyone: message.delete_for_everyone,
-            deleted_at: message.updated_at
-          }
+          data:
+            camelize_keys(%{
+              id: message.id,
+              is_deleted: true,
+              delete_for_everyone: delete_for_everyone,
+              deleted_at: message.updated_at
+            })
         })
       end
     end
@@ -294,7 +345,7 @@ defmodule WhisprMessagingWeb.MessageController do
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
-      content: message.content,
+      content: safe_binary_content(message.content),
       message_type: message.message_type,
       metadata: message.metadata,
       reply_to_id: message.reply_to_id,
@@ -308,14 +359,35 @@ defmodule WhisprMessagingWeb.MessageController do
       updated_at: message.updated_at
     }
 
-    # Add delivery_status if delivery_statuses are preloaded
-    case message do
-      %{delivery_statuses: statuses} when is_list(statuses) ->
-        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+    result =
+      case message do
+        %{delivery_statuses: statuses} when is_list(statuses) ->
+          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
 
-      _ ->
-        Map.put(base, :delivery_status, "sent")
-    end
+        _ ->
+          Map.put(base, :delivery_status, "sent")
+      end
+
+    result =
+      case message do
+        %{reply_to: %WhisprMessaging.Messages.Message{} = parent} ->
+          Map.put(result, :reply_to, render_reply_context(parent))
+
+        _ ->
+          result
+      end
+
+    camelize_keys(result)
+  end
+
+  defp render_reply_context(parent_message) do
+    %{
+      id: parent_message.id,
+      sender_id: parent_message.sender_id,
+      content: safe_binary_content(parent_message.content),
+      message_type: parent_message.message_type,
+      is_deleted: parent_message.is_deleted
+    }
   end
 
   # Convert ttl_seconds convenience param to an explicit expires_at timestamp.
@@ -351,6 +423,12 @@ defmodule WhisprMessagingWeb.MessageController do
                 message_type(:string, "Message type")
                 metadata(:object, "Additional metadata")
                 reply_to_id(:string, "UUID of message being replied to")
+                signature(:string, "Base64-encoded Ed25519 signature (64 bytes)")
+
+                sender_public_key(
+                  :string,
+                  "Base64-encoded Ed25519 public key (32 bytes)"
+                )
               end
             end,
             "Message parameters"
@@ -385,6 +463,12 @@ defmodule WhisprMessagingWeb.MessageController do
             message_type(:string, "Message type")
             metadata(:object, "Additional metadata")
             reply_to_id(:string, "UUID of message being replied to")
+
+            reply_to(
+              Schema.ref(:MessageReplyContext),
+              "Parent message preview (present when reply_to_id is set)"
+            )
+
             is_edited(:boolean, "Whether the message has been edited")
             edited_at(:string, "Edit timestamp")
             is_deleted(:boolean, "Whether the message is deleted")
@@ -467,6 +551,19 @@ defmodule WhisprMessagingWeb.MessageController do
             "Edit metadata"
           )
         end,
+      MessageReplyContext:
+        swagger_schema do
+          title("Message Reply Context")
+          description("Preview of the parent message for reply threading")
+
+          properties do
+            id(:string, "Parent message UUID", format: :uuid)
+            sender_id(:string, "Parent message sender UUID", format: :uuid)
+            content(:string, "Parent message content")
+            message_type(:string, "Parent message type")
+            is_deleted(:boolean, "Whether the parent message is deleted")
+          end
+        end,
       MessageDeleteResponse:
         swagger_schema do
           title("Message Delete Response")
@@ -487,6 +584,16 @@ defmodule WhisprMessagingWeb.MessageController do
         end
     }
   end
+
+  # Ensure binary content is safe for JSON encoding.
+  # Content stored as BYTEA may not always be valid UTF-8.
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
 
   # Helper to translate Ecto changeset errors
   defp translate_errors(changeset) do

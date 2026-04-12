@@ -16,6 +16,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.Presence
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   require Logger
 
   @impl true
@@ -31,7 +33,16 @@ defmodule WhisprMessagingWeb.ConversationChannel do
             send(self(), :after_join)
 
             socket = assign(socket, :conversation_id, conversation_id)
-            {:ok, %{conversation: conversation}, socket}
+
+            {:ok,
+             %{
+               conversation: %{
+                 id: conversation.id,
+                 type: conversation.type,
+                 metadata: conversation.metadata,
+                 is_active: conversation.is_active
+               }
+             }, socket}
 
           {:error, reason} ->
             Logger.error("Failed to start conversation server: #{inspect(reason)}")
@@ -85,14 +96,20 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     sender_id = socket.assigns.user_id
     metadata = Map.get(payload, "metadata", %{})
 
-    message_attrs = %{
-      conversation_id: conversation_id,
-      sender_id: sender_id,
-      message_type: message_type,
-      content: encrypted_content,
-      client_random: client_random,
-      metadata: metadata
-    }
+    reply_to_id = Map.get(payload, "reply_to_id")
+
+    message_attrs =
+      %{
+        conversation_id: conversation_id,
+        sender_id: sender_id,
+        message_type: message_type,
+        content: encrypted_content,
+        client_random: client_random,
+        metadata: metadata
+      }
+      |> maybe_put(:reply_to_id, reply_to_id)
+      |> maybe_put("signature", Map.get(payload, "signature"))
+      |> maybe_put("sender_public_key", Map.get(payload, "sender_public_key"))
 
     case ConversationServer.send_message(conversation_id, message_attrs) do
       {:ok, message} ->
@@ -104,6 +121,19 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, {:duplicate, message}} ->
         # Return existing message as success, but don't re-notify or re-broadcast
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+
+      {:error, reason}
+      when reason in [
+             :invalid_signature,
+             :missing_signature_fields,
+             :invalid_key_length,
+             :invalid_signature_length,
+             :invalid_signature_encoding,
+             :invalid_public_key_encoding,
+             :untrusted_public_key,
+             :verification_error
+           ] ->
+        {:reply, {:error, %{reason: "invalid_signature"}}, socket}
 
       {:error, changeset} ->
         {:reply, {:error, %{errors: format_changeset_errors(changeset)}}, socket}
@@ -167,10 +197,14 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
       {:ok, message} ->
-        broadcast(socket, "message_deleted", %{
-          message_id: message_id,
-          delete_for_everyone: delete_for_everyone
-        })
+        broadcast(
+          socket,
+          "message_deleted",
+          camelize_keys(%{
+            message_id: message_id,
+            delete_for_everyone: delete_for_everyone
+          })
+        )
 
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 
@@ -264,11 +298,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.add_reaction(message_id, user_id, reaction) do
       {:ok, message_reaction} ->
-        broadcast(socket, "reaction_added", %{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        })
+        broadcast(
+          socket,
+          "reaction_added",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{reaction: serialize_reaction(message_reaction)}}, socket}
 
@@ -289,11 +327,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.remove_reaction(message_id, user_id, reaction) do
       {:ok, _} ->
-        broadcast(socket, "reaction_removed", %{
-          message_id: message_id,
-          user_id: user_id,
-          reaction: reaction
-        })
+        broadcast(
+          socket,
+          "reaction_removed",
+          camelize_keys(%{
+            message_id: message_id,
+            user_id: user_id,
+            reaction: reaction
+          })
+        )
 
         {:reply, {:ok, %{status: "removed"}}, socket}
 
@@ -328,18 +370,26 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         WhisprMessagingWeb.Endpoint.broadcast(
           "user:#{sender_id}",
           "delivery_status",
-          %{
+          camelize_keys(%{
             message_id: message_id,
             user_id: user_id,
             status: status,
             timestamp: DateTime.utc_now()
-          }
+          })
         )
 
       _ ->
         :ok
     end
   end
+
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
 
   defp serialize_message(%Message{} = message) do
     alias WhisprMessaging.Messages.DeliveryStatus
@@ -350,7 +400,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       sender_id: message.sender_id,
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
-      content: message.content,
+      content: safe_binary_content(message.content),
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
@@ -361,25 +411,49 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       updated_at: message.updated_at
     }
 
-    # Add delivery_status if delivery_statuses are preloaded
-    case message do
-      %{delivery_statuses: statuses} when is_list(statuses) ->
-        Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
+    result =
+      case message do
+        %{delivery_statuses: statuses} when is_list(statuses) ->
+          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
 
-      _ ->
-        Map.put(base, :delivery_status, "sent")
-    end
+        _ ->
+          Map.put(base, :delivery_status, "sent")
+      end
+
+    result =
+      case message do
+        %{reply_to: %Message{} = parent} ->
+          Map.put(result, :reply_to, serialize_reply_context(parent))
+
+        _ ->
+          result
+      end
+
+    camelize_keys(result)
+  end
+
+  defp serialize_reply_context(%Message{} = parent) do
+    %{
+      id: parent.id,
+      sender_id: parent.sender_id,
+      content: safe_binary_content(parent.content),
+      message_type: parent.message_type,
+      is_deleted: parent.is_deleted
+    }
   end
 
   defp serialize_reaction(reaction) do
-    %{
+    camelize_keys(%{
       id: reaction.id,
       message_id: reaction.message_id,
       user_id: reaction.user_id,
       reaction: reaction.reaction,
       inserted_at: reaction.inserted_at
-    }
+    })
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

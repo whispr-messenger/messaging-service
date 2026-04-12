@@ -159,10 +159,10 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert response["data"]["id"] != nil
       assert response["data"]["content"] == "encrypted_content"
-      assert response["data"]["message_type"] == "text"
-      assert response["data"]["sender_id"] == user1_id
-      assert response["data"]["conversation_id"] == conversation.id
-      assert response["data"]["delivery_status"] in ["sent", "pending"]
+      assert response["data"]["messageType"] == "text"
+      assert response["data"]["senderId"] == user1_id
+      assert response["data"]["conversationId"] == conversation.id
+      assert response["data"]["deliveryStatus"] in ["sent", "pending"]
     end
 
     test "returns 422 with invalid attributes", %{
@@ -245,6 +245,64 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["error"] == "Unauthorized"
     end
 
+    test "returns 422 when signature verification fails", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      {pub, _priv} = :crypto.generate_key(:eddsa, :ed25519)
+
+      message_attrs = %{
+        "content" => "test",
+        "message_type" => "text",
+        "client_random" => 77_777,
+        "sender_id" => user1_id,
+        "signature" => Base.encode64(:crypto.strong_rand_bytes(64)),
+        "sender_public_key" => Base.encode64(pub)
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          message_attrs
+        )
+        |> json_response(422)
+
+      assert response["error"] == "Invalid message signature"
+    end
+
+    test "creates a message without signature (backward compat)", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      message_attrs = %{
+        "content" => "no_sig_content",
+        "message_type" => "text",
+        "client_random" => 88_888,
+        "sender_id" => user1_id
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          message_attrs
+        )
+        |> json_response(201)
+
+      assert response["data"]["id"] != nil
+    end
+
     test "prevents duplicate client_random", %{
       conversation: conversation,
       user1_id: user1_id
@@ -318,7 +376,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert response["data"]["content"] == "updated_content"
       assert response["data"]["metadata"]["edited"] == true
-      assert response["data"]["edited_at"] != nil
+      assert response["data"]["editedAt"] != nil
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -425,8 +483,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      assert response["data"]["is_deleted"] == true
-      assert response["data"]["delete_for_everyone"] == true
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == true
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -448,7 +506,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["error"] in ["Message not found", "Resource not found"]
     end
 
-    test "returns 403 when trying to delete another user's message", %{
+    test "allows another user to delete for me (per-user deletion)", %{
       message: message,
       user2_id: user2_id
     } do
@@ -462,6 +520,27 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
           conn,
           ~p"/api/v1/messages/#{message.id}",
           delete_for_everyone: false
+        )
+        |> json_response(200)
+
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == false
+    end
+
+    test "returns 403 when non-sender tries to delete for everyone", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        delete(
+          conn,
+          ~p"/api/v1/messages/#{message.id}",
+          delete_for_everyone: true
         )
         |> json_response(403)
 
@@ -485,8 +564,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      assert response["data"]["is_deleted"] == true
-      assert response["data"]["delete_for_everyone"] == false
+      assert response["data"]["isDeleted"] == true
+      assert response["data"]["deleteForEveryone"] == false
     end
   end
 end

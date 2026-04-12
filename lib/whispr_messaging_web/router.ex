@@ -13,7 +13,7 @@ defmodule WhisprMessagingWeb.Router do
     plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
-  scope "/api/swagger" do
+  scope "/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
       swagger_file: "swagger.json"
@@ -51,11 +51,18 @@ defmodule WhisprMessagingWeb.Router do
     # Conversation routes
     get "/conversations", ConversationController, :index
     post "/conversations", ConversationController, :create
+
+    # Literal paths must come before parameterized :id routes
+    get "/conversations/archived", ConversationController, :archived
+    # Search must be declared before /:id to avoid Phoenix treating "search" as an ID
+    get "/conversations/search", ConversationController, :search
+
     get "/conversations/:id", ConversationController, :show
     put "/conversations/:id", ConversationController, :update
     delete "/conversations/:id", ConversationController, :delete
 
     # Conversation members
+    get "/conversations/:id/members", ConversationMemberController, :index
     post "/conversations/:id/members", ConversationMemberController, :create
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
@@ -63,11 +70,54 @@ defmodule WhisprMessagingWeb.Router do
     get "/conversations/:id/settings", ConversationController, :get_member_settings
     put "/conversations/:id/settings", ConversationController, :update_member_settings
 
+    # Conversation pin / unpin (WHISPR-465)
+    post "/conversations/:id/pin", ConversationController, :pin
+    delete "/conversations/:id/pin", ConversationController, :unpin
+
+    # Conversation archive / unarchive (WHISPR-466)
+    post "/conversations/:id/archive", ConversationController, :archive
+    delete "/conversations/:id/archive", ConversationController, :unarchive
+
+    # Pinned messages in a conversation
+    get "/conversations/:id/pins", PinController, :index
+
     get "/conversations/:id/messages", MessageController, :index
     post "/conversations/:id/messages", MessageController, :create
+
+    # Draft routes — literal paths must come before /messages/:id
+    post "/messages/drafts", DraftController, :create
+    delete "/messages/drafts/:id", DraftController, :delete
+
+    # Draft retrieval scoped to conversation
+    get "/conversations/:id/drafts", DraftController, :show
+
+    # Scheduled message routes — literal paths before parameterized :id
+    get "/messages/scheduled", ScheduledMessageController, :index
+    post "/messages/scheduled", ScheduledMessageController, :create
+    patch "/messages/scheduled/:id", ScheduledMessageController, :update
+    delete "/messages/scheduled/:id", ScheduledMessageController, :delete
+
+    # Message search — must come before /messages/:id
+    get "/messages/search", MessageController, :search
+
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+
+    # Message reactions
+    get "/messages/:id/reactions", ReactionController, :index
+    post "/messages/:id/reactions", ReactionController, :create
+    delete "/messages/:id/reactions/:reaction", ReactionController, :delete
+
+    # Message pin / unpin
+    post "/messages/:id/pin", PinController, :create
+    delete "/messages/:id/pin", PinController, :delete
+
+    # Message attachments
+    get "/messages/:id/attachments", AttachmentController, :list_by_message
+
+    # Message-scoped attachment creation (JSON metadata, file already on media-service)
+    post "/messages/:message_id/attachments", AttachmentController, :create_from_metadata
 
     # Attachment routes
     post "/attachments/upload", AttachmentController, :upload

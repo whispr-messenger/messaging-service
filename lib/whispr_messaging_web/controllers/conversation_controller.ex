@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   alias WhisprMessaging.Conversations
 
+  import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
+
   action_fallback WhisprMessagingWeb.FallbackController
 
   swagger_path :index do
@@ -47,7 +49,12 @@ defmodule WhisprMessagingWeb.ConversationController do
       |> put_status(:unauthorized)
       |> json(%{error: "Unauthorized"})
     else
-      limit = min(String.to_integer(params["limit"] || "50"), 100)
+      limit =
+        case Integer.parse(params["limit"] || "50") do
+          {n, ""} when n > 0 -> min(n, 100)
+          _ -> 50
+        end
+
       conversation_type = params["type"]
 
       conversations =
@@ -57,11 +64,81 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       json(conn, %{
         data: render_conversations(conversations),
-        meta: %{
-          count: length(conversations),
-          user_id: user_id
-        }
+        meta:
+          camelize_keys(%{
+            count: length(conversations),
+            user_id: user_id
+          })
       })
+    end
+  end
+
+  swagger_path :search do
+    get("/conversations/search")
+    summary("Search user conversations")
+
+    description(
+      "Searches the authenticated user's conversations by group name or participant user ID"
+    )
+
+    produces("application/json")
+
+    parameter(
+      :q,
+      :query,
+      :string,
+      "Search term (name fragment or exact participant user_id)",
+      required: true
+    )
+
+    parameter(:limit, :query, :integer, "Maximum number of results to return (max: 50)",
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationsResponse))
+    response(400, "Bad Request - missing q parameter")
+  end
+
+  @doc """
+  Searches conversations for the authenticated user.
+  GET /api/v1/conversations/search?q=...
+
+  Query params:
+  - q: search term (required) — matched against group name or participant user_id
+  - limit: max results (default: 20, max: 50)
+  """
+  def search(conn, params) do
+    user_id = conn.assigns[:user_id]
+    query_term = params["q"]
+
+    cond do
+      is_nil(user_id) ->
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Unauthorized"})
+
+      is_nil(query_term) or String.trim(query_term) == "" ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Missing required parameter: q"})
+
+      true ->
+        limit =
+          case Integer.parse(params["limit"] || "20") do
+            {n, ""} when n > 0 -> min(n, 50)
+            _ -> 20
+          end
+
+        conversations = Conversations.search_user_conversations(user_id, query_term, limit: limit)
+
+        json(conn, %{
+          data: render_conversations(conversations),
+          meta: %{
+            count: length(conversations),
+            query: query_term
+          }
+        })
     end
   end
 
@@ -384,11 +461,12 @@ defmodule WhisprMessagingWeb.ConversationController do
          true <- member?(conversation.id, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
-        data: %{
-          id: deactivated_conversation.id,
-          is_active: deactivated_conversation.is_active,
-          deleted_at: DateTime.utc_now()
-        }
+        data:
+          camelize_keys(%{
+            id: deactivated_conversation.id,
+            is_active: deactivated_conversation.is_active,
+            deleted_at: DateTime.utc_now()
+          })
       })
     else
       false ->
@@ -494,6 +572,135 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Archive / Unarchive (WHISPR-466)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :archived do
+    get("/conversations/archived")
+    summary("List archived conversations")
+    description("Returns all conversations the authenticated user has archived.")
+    produces("application/json")
+
+    parameter(:limit, :query, :integer, "Maximum number of archived conversations to return",
+      required: false
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ConversationsResponse))
+  end
+
+  @doc """
+  Lists archived conversations for the authenticated user.
+  GET /api/v1/conversations/archived
+  """
+  def archived(conn, params) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      limit =
+        case Integer.parse(params["limit"] || "50") do
+          {n, ""} when n > 0 -> min(n, 100)
+          _ -> 50
+        end
+
+      conversations = Conversations.list_archived_conversations(user_id, limit)
+
+      json(conn, %{
+        data: render_conversations(conversations),
+        meta: camelize_keys(%{count: length(conversations), user_id: user_id})
+      })
+    end
+  end
+
+  swagger_path :archive do
+    post("/conversations/{id}/archive")
+    summary("Archive a conversation")
+    description("Archives a conversation for the authenticated user.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation archived")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Already archived")
+  end
+
+  @doc """
+  Archives a conversation for the authenticated user.
+  POST /api/v1/conversations/:id/archive
+  """
+  def archive(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.archive_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_archived",
+            %{conversation_id: conversation_id, archived: true, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, archived: true}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :already_archived} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is already archived"})
+      end
+    end
+  end
+
+  swagger_path :unarchive do
+    PhoenixSwagger.Path.delete("/conversations/{id}/archive")
+    summary("Unarchive a conversation")
+    description("Removes a conversation from the user's archive.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation unarchived")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Conversation is not archived")
+  end
+
+  @doc """
+  Unarchives a conversation for the authenticated user.
+  DELETE /api/v1/conversations/:id/archive
+  """
+  def unarchive(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unarchive_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_archived",
+            %{conversation_id: conversation_id, archived: false, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, archived: false}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :not_archived} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is not archived"})
+      end
+    end
+  end
+
   @doc """
   Adds a member to a conversation.
   POST /api/v1/conversations/:id/members
@@ -558,6 +765,126 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Pin / Unpin (WHISPR-465)
+  # ---------------------------------------------------------------------------
+
+  swagger_path :pin do
+    post("/conversations/{id}/pin")
+    summary("Pin a conversation")
+
+    description(
+      "Pins a conversation for the authenticated user. Maximum #{Conversations.max_pinned_conversations()} pinned conversations."
+    )
+
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation pinned")
+    response(401, "Unauthorized")
+    response(404, "Conversation not found or user not a member")
+
+    response(
+      422,
+      "Pin limit reached (max #{Conversations.max_pinned_conversations()}) or already pinned"
+    )
+  end
+
+  @doc """
+  Pins a conversation for the authenticated user.
+  POST /api/v1/conversations/:id/pin
+  """
+  def pin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.pin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: true, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: true}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :already_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is already pinned"})
+
+        {:error, :pin_limit_reached} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{
+            error:
+              "Pin limit reached: you may pin at most #{Conversations.max_pinned_conversations()} conversations"
+          })
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
+      end
+    end
+  end
+
+  swagger_path :unpin do
+    PhoenixSwagger.Path.delete("/conversations/{id}/pin")
+    summary("Unpin a conversation")
+    description("Removes the pin from a conversation for the authenticated user.")
+    produces("application/json")
+    parameter(:id, :path, :string, "Conversation UUID", required: true)
+    security([%{Bearer: []}])
+    response(200, "Success - conversation unpinned")
+    response(401, "Unauthorized")
+    response(404, "Conversation not found or user not a member")
+    response(422, "Conversation is not pinned")
+  end
+
+  @doc """
+  Unpins a conversation for the authenticated user.
+  DELETE /api/v1/conversations/:id/pin
+  """
+  def unpin(conn, %{"id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      case Conversations.unpin_conversation(conversation_id, user_id) do
+        {:ok, _member} ->
+          # Broadcast to the user's other devices via the user channel
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{user_id}",
+            "conversation_pinned",
+            %{conversation_id: conversation_id, pinned: false, timestamp: DateTime.utc_now()}
+          )
+
+          json(conn, %{data: %{conversation_id: conversation_id, pinned: false}})
+
+        {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :not_pinned} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Conversation is not pinned"})
+
+        {:error, %Ecto.Changeset{}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "Failed to update conversation settings"})
+      end
+    end
+  end
+
   # Private rendering functions
 
   defp render_conversations(conversations) do
@@ -574,7 +901,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         %{}
       end
 
-    %{
+    camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
       name: Map.get(conversation.metadata || %{}, "name"),
@@ -586,30 +913,64 @@ defmodule WhisprMessagingWeb.ConversationController do
       is_muted: Map.get(settings, "is_muted", false),
       inserted_at: conversation.inserted_at,
       updated_at: conversation.updated_at
+    })
+    |> Map.put("unreadCount", Map.get(conversation, :unread_count, 0))
+    |> Map.put("lastMessage", render_last_message(Map.get(conversation, :last_message)))
+    |> maybe_add_member_ids(conversation)
+  end
+
+  defp render_last_message(nil), do: nil
+
+  defp render_last_message(message) do
+    %{
+      id: message.id,
+      sender_id: message.sender_id,
+      content: safe_binary_content(message.content),
+      message_type: message.message_type,
+      sent_at: message.sent_at,
+      is_deleted: message.is_deleted
     }
+  end
+
+  # Ensure binary content is safe for JSON encoding.
+  # Content stored as BYTEA may not always be valid UTF-8.
+  defp safe_binary_content(nil), do: nil
+
+  defp safe_binary_content(content) when is_binary(content) do
+    if String.valid?(content), do: content, else: Base.encode64(content)
+  end
+
+  defp safe_binary_content(content), do: to_string(content)
+
+  defp maybe_add_member_ids(rendered, conversation) do
+    if conversation.type == "direct" do
+      member_ids =
+        WhisprMessaging.Conversations.list_conversation_members(conversation.id)
+        |> Enum.map(& &1.user_id)
+
+      Map.put(rendered, "memberUserIds", member_ids)
+    else
+      rendered
+    end
   end
 
   defp render_conversation_with_members(conversation, member_info) do
     base =
       conversation
       |> render_conversation()
-      |> Map.put(:members, render_members(conversation.members))
-      |> Map.put(:member_count, length(conversation.members))
+      |> Map.put("members", Enum.map(conversation.members, &render_member/1))
+      |> Map.put("memberCount", length(conversation.members))
 
     if member_info do
       settings = member_info.settings || %{}
 
       base
-      |> Map.put(:is_muted, Map.get(settings, "is_muted", false))
-      |> Map.put(:is_pinned, Map.get(settings, "is_pinned", false))
-      |> Map.put(:is_archived, Map.get(settings, "is_archived", false))
+      |> Map.put("isMuted", Map.get(settings, "is_muted", false))
+      |> Map.put("isPinned", Map.get(settings, "is_pinned", false))
+      |> Map.put("isArchived", Map.get(settings, "is_archived", false))
     else
       base
     end
-  end
-
-  defp render_members(members) do
-    Enum.map(members, &render_member/1)
   end
 
   defp maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings) do
@@ -627,12 +988,12 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_member(member) do
-    %{
+    camelize_keys(%{
       user_id: member.user_id,
       role: Map.get(member.settings || %{}, "role", "member"),
       joined_at: member.joined_at,
       is_active: member.is_active
-    }
+    })
   end
 
   defp filter_by_type(conversations, nil), do: conversations
