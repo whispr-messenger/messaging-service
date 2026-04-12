@@ -268,7 +268,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           message_attrs
         )
         |> json_response(422)
@@ -295,7 +295,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       response =
         post(
           conn,
-          ~p"/api/v1/conversations/#{conversation.id}/messages",
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/messages",
           message_attrs
         )
         |> json_response(201)
