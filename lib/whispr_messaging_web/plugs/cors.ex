@@ -32,6 +32,7 @@ defmodule WhisprMessagingWeb.Plugs.Cors do
     |> put_allow_origin(origin)
     |> put_resp_header("access-control-allow-methods", @default_methods)
     |> put_resp_header("access-control-allow-headers", @default_headers)
+    |> put_resp_header("access-control-allow-credentials", "true")
     |> put_resp_header("access-control-max-age", "86400")
   end
 
