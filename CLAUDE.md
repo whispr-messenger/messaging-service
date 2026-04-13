@@ -24,17 +24,35 @@ when picking up and completing a Jira ticket for this repository.
 
 ---
 
-## 2. Prepare the branch
+## 2. Prepare the branch (worktree)
+
+Each ticket **must** be worked on in a dedicated
+[git worktree](https://git-scm.com/docs/git-worktree) stored under `.worktrees/`
+(ignored by git). This keeps the main checkout clean and allows parallel work on
+multiple tickets.
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b <TICKET-KEY>-<short-kebab-description>
+git fetch origin main
+git worktree add .worktrees/<TICKET-KEY>-<short-kebab-description> -b <TICKET-KEY>-<short-kebab-description> origin/main
+cd .worktrees/<TICKET-KEY>-<short-kebab-description>
 ```
 
 Branch naming convention: `WHISPR-XXX-short-description-of-the-fix`
 
-Example: `WHISPR-468-implement-conversation-search`
+Example:
+```bash
+git worktree add .worktrees/WHISPR-468-implement-conversation-search -b WHISPR-468-implement-conversation-search origin/main
+cd .worktrees/WHISPR-468-implement-conversation-search
+```
+
+### Cleanup after merge
+
+Once the PR is merged and the ticket is closed, remove the worktree:
+
+```bash
+git worktree remove .worktrees/<TICKET-KEY>-<short-kebab-description>
+git branch -d <TICKET-KEY>-<short-kebab-description>
+```
 
 ---
 
@@ -157,16 +175,34 @@ Fix any failing checks before proceeding.
 
 ## 8. Open a Pull Request
 
+### PR title must include the Jira ticket key
+
+Every PR title **must** contain the Jira ticket key in brackets: `[WHISPR-XXX] <title>`.
+
+Example: `[WHISPR-468] feat(conversations): implement conversation search endpoint`
+
+If no ticket is associated with the PR:
+
+1. Search Jira for an existing ticket that matches the PR scope using
+   `mcp__atlassian__searchJiraIssuesUsingJql`.
+2. If a matching ticket is found, use its key.
+3. If no matching ticket exists, **create a new ticket** using
+   `mcp__atlassian__createJiraIssue` with a summary and description derived from
+   the PR's scope, then use the new key.
+4. Rename the PR title to include the resolved key: `[WHISPR-XXX] <title>`.
+
+### Create the PR
+
 Use `mcp__github__create_pull_request`:
 
 ```json
 {
   "owner": "whispr-messenger",
   "repo": "messaging-service",
-  "title": "<same as commit title>",
+  "title": "[WHISPR-XXX] <same as commit title>",
   "head": "<branch-name>",
   "base": "main",
-  "body": "## Summary\n- bullet 1\n- bullet 2\n\n## Test plan\n- [ ] mix test green\n- [ ] mix format --check-formatted clean\n- [ ] mix credo --strict clean\n\nCloses <TICKET-KEY>"
+  "body": "## Summary\n- bullet 1\n- bullet 2\n\n## Test plan\n- [ ] mix test green\n- [ ] mix format --check-formatted clean\n- [ ] mix credo --strict clean\n\nCloses WHISPR-XXX"
 }
 ```
 
@@ -231,11 +267,12 @@ Use `mcp__atlassian__transitionJiraIssue` with the transition whose `name` is
 
 ---
 
-## 11. Return to main
+## 11. Clean up worktree and return to main
 
 ```bash
-git checkout main
-git pull origin main
+cd /path/to/messaging-service
+git worktree remove .worktrees/<TICKET-KEY>-<short-kebab-description>
+git branch -d <TICKET-KEY>-<short-kebab-description>
 ```
 
 ---
