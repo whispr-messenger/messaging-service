@@ -116,43 +116,59 @@ jobs:
           fi
           echo "✅ Image found in registry"
 
+      - name: Determine trigger branch
+        id: trigger_branch
+        run: |
+          TRIGGER_BRANCH="${{ github.event.workflow_run.head_branch || 'main' }}"
+          echo "branch=${TRIGGER_BRANCH}" >> $GITHUB_OUTPUT
+          if [ "$TRIGGER_BRANCH" = "main" ]; then
+            echo "infra_branch=main" >> $GITHUB_OUTPUT
+          else
+            echo "infra_branch=deploy/preprod" >> $GITHUB_OUTPUT
+          fi
+          echo "Trigger branch: $TRIGGER_BRANCH"
+
       - name: Checkout infrastructure repository
         uses: actions/checkout@v4
         with:
           repository: whispr-messenger/infrastructure
           path: infrastructure
-          ref: ${{ github.event.workflow_run.head_branch || 'main' }}
+          ref: ${{ steps.trigger_branch.outputs.infra_branch }}
           token: ${{ steps.generate_token.outputs.token }}
 
       - name: Validate manifest paths
         run: |
-          DEPLOYMENT_MANIFEST_PATH="infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml"
-          MIGRATION_JOB_MANIFEST_PATH="infrastructure/k8s/whispr/prod/messaging-service/migration-job.yaml"
+          TRIGGER_BRANCH="${{ steps.trigger_branch.outputs.branch }}"
 
-          if [ ! -f "$DEPLOYMENT_MANIFEST_PATH" ]; then
-            echo "❌ Error: Deployment manifest not found at $DEPLOYMENT_MANIFEST_PATH"
-            echo "Please verify the path in the infrastructure repository."
-            exit 1
+          REQUIRED=(
+            "infrastructure/k8s/whispr/preprod/messaging-service/deployment.yaml"
+          )
+          if [ "$TRIGGER_BRANCH" = "main" ]; then
+            REQUIRED+=(
+              "infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml"
+              "infrastructure/k8s/whispr/production/messaging-service/deployment.yaml"
+            )
           fi
 
-          if [ ! -f "$MIGRATION_JOB_MANIFEST_PATH" ]; then
-            echo "❌ Error: Migration job manifest not found at $MIGRATION_JOB_MANIFEST_PATH"
-            echo "Please verify the path in the infrastructure repository."
-            exit 1
-          fi
-
-          echo "✅ Deployment manifest found at $DEPLOYMENT_MANIFEST_PATH"
-          echo "✅ Migration job manifest found at $MIGRATION_JOB_MANIFEST_PATH"
+          for MANIFEST in "${REQUIRED[@]}"; do
+            if [ ! -f "$MANIFEST" ]; then
+              echo "❌ Error: Manifest not found at $MANIFEST"
+              exit 1
+            fi
+            echo "✅ Manifest found at $MANIFEST"
+          done
 
       - name: Update image tag in deployment
         id: update_image
         run: |
+          TRIGGER_BRANCH="${{ steps.trigger_branch.outputs.branch }}"
+
           # Use the validated commit SHA from the previous step
           COMMIT_SHA="${{ steps.validate_commit.outputs.commit_sha }}"
-          
+
           # Extract short SHA safely using printf (7 characters, matching docker metadata-action default)
           SHORT_SHA=$(printf "%.7s" "$COMMIT_SHA")
-          
+
           # Use the short SHA tag format that matches the CI docker workflow
           IMAGE_TAG="sha-${SHORT_SHA}"
 
@@ -165,27 +181,44 @@ jobs:
           echo "Image tag: $IMAGE_TAG"
           echo "Updating deployment image to: ${FULL_IMAGE}"
 
-          # Update the deployment manifest in the infrastructure repository
-          yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml
+          # Always update preprod
+          yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/preprod/messaging-service/deployment.yaml
 
-          # Update the migration job manifest so PreSync always uses the same image
-          yq -i 'select(.kind == "Job").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/prod/messaging-service/migration-job.yaml
+          if [ "$TRIGGER_BRANCH" = "main" ]; then
+            # prod/
+            yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml
+
+            # production/ (colleagues) — deployment + migration-job
+            yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/production/messaging-service/deployment.yaml
+            if [ -f "infrastructure/k8s/whispr/production/messaging-service/migration-job.yaml" ]; then
+              yq -i 'select(.kind == "Job").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/production/messaging-service/migration-job.yaml
+            fi
+          fi
 
       - name: Verify update
         run: |
-          echo "Updated deployment manifest:"
-          yq '.spec.template.spec.containers[0].image' infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml
-          echo "Updated migration job manifest:"
-          yq '.spec.template.spec.containers[0].image' infrastructure/k8s/whispr/prod/messaging-service/migration-job.yaml
+          TRIGGER_BRANCH="${{ steps.trigger_branch.outputs.branch }}"
+
+          echo "=== preprod/deployment.yaml ==="
+          yq 'select(.kind == "Deployment").spec.template.spec.containers[0].image' infrastructure/k8s/whispr/preprod/messaging-service/deployment.yaml
+          if [ "$TRIGGER_BRANCH" = "main" ]; then
+            echo "=== prod/deployment.yaml ==="
+            yq 'select(.kind == "Deployment").spec.template.spec.containers[0].image' infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml
+            echo "=== production/deployment.yaml ==="
+            yq 'select(.kind == "Deployment").spec.template.spec.containers[0].image' infrastructure/k8s/whispr/production/messaging-service/deployment.yaml
+          fi
 
       - name: Commit and push changes
         working-directory: infrastructure
         run: |
+          TRIGGER_BRANCH="${{ steps.trigger_branch.outputs.branch }}"
+          INFRA_BRANCH="${{ steps.trigger_branch.outputs.infra_branch }}"
+
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
+
           # Check if there are changes to commit
-          if git diff --quiet k8s/whispr/prod/messaging-service/deployment.yaml k8s/whispr/prod/messaging-service/migration-job.yaml; then
+          if git diff --quiet; then
             echo "No changes to commit"
             exit 0
           fi
@@ -193,7 +226,7 @@ jobs:
           # Use the validated commit SHA determined in the previous step
           COMMIT_SHA="${{ steps.validate_commit.outputs.commit_sha }}"
           SHORT_SHA=$(printf "%.7s" "$COMMIT_SHA")
-          
+
           # Build commit message based on trigger type
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${SHORT_SHA} (manual trigger)"
@@ -201,10 +234,9 @@ jobs:
             COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${SHORT_SHA}"
           fi
 
-          git add k8s/whispr/prod/messaging-service/deployment.yaml k8s/whispr/prod/messaging-service/migration-job.yaml
+          git add -A k8s/whispr/
           git commit -m "${COMMIT_MSG}"
 
-          # Push directly to main in infrastructure repo
-          # Use rebase to handle potential concurrent updates
-          git pull origin main --rebase
-          git push https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/whispr-messenger/infrastructure.git main
+          # Push to the correct branch in infrastructure repo
+          git pull origin "${INFRA_BRANCH}" --rebase
+          git push https://x-access-token:${{ steps.generate_token.outputs.token }}@github.com/whispr-messenger/infrastructure.git HEAD:"${INFRA_BRANCH}"
