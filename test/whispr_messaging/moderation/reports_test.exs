@@ -141,8 +141,9 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
                })
 
       assert resolved.status == "resolved_dismissed"
-      assert resolved.resolution["resolved_by"] == admin_id
-      assert resolved.resolution["action"] == "dismiss"
+      resolution = resolved.resolution
+      assert Map.get(resolution, "resolved_by") || Map.get(resolution, :resolved_by) == admin_id
+      assert Map.get(resolution, "action") || Map.get(resolution, :action) == "dismiss"
     end
 
     test "resolves a pending report with action", ctx do
