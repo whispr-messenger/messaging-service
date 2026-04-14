@@ -213,8 +213,10 @@ defmodule WhisprMessaging.Moderation.Analytics do
 
     case result do
       nil -> 0.0
+      %Decimal{} = avg -> avg |> Decimal.to_float() |> Float.round(1)
       avg when is_float(avg) -> Float.round(avg, 1)
-      avg -> Float.round(avg * 1.0, 1)
+      avg when is_integer(avg) -> avg / 1.0
+      _ -> 0.0
     end
   end
 

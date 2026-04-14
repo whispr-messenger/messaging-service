@@ -228,11 +228,13 @@ defmodule WhisprMessaging.Moderation.BatchTest do
           category: "spam"
         })
 
-      # The cooldown check prevents creating a true duplicate through the API,
-      # so we insert directly for this test
+      # Use a different reporter to avoid the unique constraint on (reporter_id, message_id)
+      # while still testing the same message being reported by multiple users
+      second_reporter = create_test_user_id()
+
       {:ok, _r2} =
         Repo.insert(%Report{
-          reporter_id: ctx.reporter_id,
+          reporter_id: second_reporter,
           reported_user_id: ctx.reported_user_id,
           conversation_id: conversation.id,
           message_id: message.id,
