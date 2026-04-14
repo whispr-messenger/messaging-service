@@ -113,7 +113,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
     Logger.info(
       "[ModerationQueueWorker] Started with interval=#{interval}ms, " <>
-        "moderators=#{length(moderator_ids)}, batch_size=#{batch_size}"
+        "moderators=#{Enum.count(moderator_ids)}, batch_size=#{batch_size}"
     )
 
     {:ok, state}
@@ -133,8 +133,8 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
       total_assigned: state.total_assigned,
       total_escalated: state.total_escalated,
       last_run_at: state.last_run_at,
-      moderator_count: length(state.moderator_ids),
-      queue_size: length(state.priority_queue),
+      moderator_count: Enum.count(state.moderator_ids),
+      queue_size: Enum.count(state.priority_queue),
       uptime_seconds: DateTime.diff(DateTime.utc_now(), state.started_at, :second)
     }
 
@@ -143,7 +143,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
   @impl true
   def handle_cast({:update_moderators, ids}, state) do
-    Logger.info("[ModerationQueueWorker] Updated moderators: #{length(ids)} active")
+    Logger.info("[ModerationQueueWorker] Updated moderators: #{Enum.count(ids)} active")
     {:noreply, %{state | moderator_ids: ids, moderator_index: 0}}
   end
 
@@ -200,8 +200,10 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
         # Step 3: Auto-assign to moderator if enabled
         {assign_count, next_mod_idx} =
-          if state.auto_assign and length(state.moderator_ids) > 0 do
-            moderator = Enum.at(state.moderator_ids, rem(mod_idx, length(state.moderator_ids)))
+          if state.auto_assign and state.moderator_ids != [] do
+            moderator =
+              Enum.at(state.moderator_ids, rem(mod_idx, Enum.count(state.moderator_ids)))
+
             assign_report(report, moderator)
             {1, mod_idx + 1}
           else
@@ -245,7 +247,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
       end
 
     # Then fill remaining batch capacity from general pending queue
-    remaining = state.batch_size - length(priority_reports)
+    remaining = state.batch_size - Enum.count(priority_reports)
     priority_ids = Enum.map(priority_reports, & &1.id)
 
     general_reports =

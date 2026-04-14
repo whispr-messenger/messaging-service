@@ -46,7 +46,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_response(200)
 
       assert response["data"] != nil
-      assert length(response["data"]) >= 2
+      assert Enum.count(response["data"]) >= 2
     end
 
     test "returns empty list when user has no conversations", %{user1_id: user1_id} do
@@ -321,7 +321,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         |> json_response(200)
 
       assert response["data"]["members"] != nil
-      assert length(response["data"]["members"]) == 2
+      assert Enum.count(response["data"]["members"]) == 2
     end
 
     test "returns is_muted, is_pinned, is_archived for the authenticated user (default false)", %{

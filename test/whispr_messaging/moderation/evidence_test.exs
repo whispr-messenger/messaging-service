@@ -37,7 +37,7 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
       assert snapshot.reported_message.id == ctx.message.id
       assert snapshot.reported_message.sender_id == ctx.reported_user_id
       assert is_list(snapshot.surrounding_messages)
-      assert length(snapshot.surrounding_messages) >= 1
+      assert snapshot.surrounding_messages != []
       assert snapshot.conversation_context.conversation_id == ctx.conversation.id
       assert snapshot.conversation_context.total_messages >= 1
       assert is_binary(snapshot.captured_at)
@@ -261,7 +261,7 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
 
       results = Evidence.batch_capture([report, report_no_msg])
 
-      assert length(results) == 2
+      assert Enum.count(results) == 2
 
       {_id1, result1} = Enum.find(results, fn {id, _} -> id == report.id end)
       assert match?({:ok, _}, result1)

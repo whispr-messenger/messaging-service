@@ -199,7 +199,7 @@ defmodule WhisprMessaging.MessagesTest do
 
       recent_messages = Messages.list_recent_messages(conversation.id, 3)
 
-      assert length(recent_messages) == 3
+      assert Enum.count(recent_messages) == 3
       # Should be in descending order by sent_at
       # 1 is newest.
       assert Enum.at(recent_messages, 0).client_random == 1
@@ -519,7 +519,7 @@ defmodule WhisprMessaging.MessagesTest do
 
       # Verify timestamps
       statuses = WhisprMessaging.Repo.all(WhisprMessaging.Messages.DeliveryStatus)
-      assert length(statuses) == 3
+      assert Enum.count(statuses) == 3
       assert Enum.all?(statuses, fn s -> s.read_at != nil end)
     end
   end
@@ -1061,7 +1061,7 @@ defmodule WhisprMessaging.MessagesTest do
       {:ok, _} = Messages.delete_message(other.id, user_id, true)
 
       pins = Messages.list_pinned_messages(conversation.id)
-      assert length(pins) == 1
+      assert Enum.count(pins) == 1
       assert hd(pins).message_id == message.id
     end
 
@@ -1190,7 +1190,7 @@ defmodule WhisprMessaging.MessagesTest do
 
     test "returns matches only from user's own conversations", %{user_id: user_id, hello: hello} do
       results = Messages.search_messages_global(user_id, "hello")
-      assert length(results) == 1
+      assert Enum.count(results) == 1
       assert hd(results).id == hello.id
     end
 

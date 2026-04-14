@@ -339,7 +339,7 @@ defmodule WhisprMessaging.ConversationServerTest do
           _ -> false
         end)
 
-      assert length(successful_results) == 10
+      assert Enum.count(successful_results) == 10
     end
 
     test "server responds to cleanup messages", %{conversation: conversation} do

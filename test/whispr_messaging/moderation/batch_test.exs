@@ -66,7 +66,7 @@ defmodule WhisprMessaging.Moderation.BatchTest do
 
       assert result.succeeded == 2
       assert result.failed == 1
-      assert length(result.errors) == 1
+      assert Enum.count(result.errors) == 1
     end
 
     test "handles already resolved reports", ctx do

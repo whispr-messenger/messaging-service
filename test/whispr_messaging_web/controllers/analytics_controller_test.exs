@@ -80,7 +80,7 @@ defmodule WhisprMessagingWeb.AnalyticsControllerTest do
       assert spam["count"] >= 3
 
       # Top reported should include the reported user
-      assert length(data["top_reported"]) >= 1
+      assert data["top_reported"] != []
       top = hd(data["top_reported"])
       assert top["user_id"] == ctx.reported_user_id
     end
@@ -148,7 +148,7 @@ defmodule WhisprMessagingWeb.AnalyticsControllerTest do
 
       data = response["data"]
       assert is_list(data)
-      assert length(data) >= 1
+      assert data != []
 
       entry = hd(data)
       assert Map.has_key?(entry, "date")
@@ -195,7 +195,7 @@ defmodule WhisprMessagingWeb.AnalyticsControllerTest do
 
       data = response["data"]
       assert is_list(data)
-      assert length(data) >= 1
+      assert data != []
 
       user = hd(data)
       assert Map.has_key?(user, "user_id")
@@ -210,7 +210,7 @@ defmodule WhisprMessagingWeb.AnalyticsControllerTest do
         |> json_response(200)
 
       assert is_list(response["data"])
-      assert length(response["data"]) <= 5
+      assert Enum.count(response["data"]) <= 5
     end
   end
 
@@ -223,7 +223,7 @@ defmodule WhisprMessagingWeb.AnalyticsControllerTest do
 
       data = response["data"]
       assert is_list(data)
-      assert length(data) >= 1
+      assert data != []
 
       entry = hd(data)
       assert Map.has_key?(entry, "category")

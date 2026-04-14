@@ -103,7 +103,7 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
       {:ok, _} = Reports.create_report(%{attrs | category: "spam"})
 
       reports = Reports.list_my_reports(ctx.reporter_id)
-      assert length(reports) == 2
+      assert Enum.count(reports) == 2
     end
 
     test "does not return other users' reports", ctx do

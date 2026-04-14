@@ -168,7 +168,7 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
     test "returns a non-empty list of rules" do
       rules = Policy.current_rules()
       assert is_list(rules)
-      assert length(rules) > 0
+      assert rules != []
 
       Enum.each(rules, fn rule ->
         assert Map.has_key?(rule, :name)
@@ -267,7 +267,7 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
 
       Enum.each(patterns, fn {_cat, keywords} ->
         assert is_list(keywords)
-        assert length(keywords) > 0
+        assert keywords != []
       end)
     end
   end

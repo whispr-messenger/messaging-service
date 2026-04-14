@@ -126,7 +126,7 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
         get(conn, ~p"/messaging/api/v1/reports")
         |> json_response(200)
 
-      assert length(response["data"]) >= 1
+      assert response["data"] != []
     end
   end
 
@@ -152,7 +152,7 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
         get(admin_conn, ~p"/messaging/api/v1/reports/queue")
         |> json_response(200)
 
-      assert length(response["data"]) >= 1
+      assert response["data"] != []
       assert hd(response["data"])["status"] == "pending"
     end
   end

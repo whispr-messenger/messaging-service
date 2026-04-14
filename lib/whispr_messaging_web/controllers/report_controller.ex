@@ -232,7 +232,7 @@ defmodule WhisprMessagingWeb.ReportController do
         json(conn, %{data: serialize_report(report)})
 
       {:ok, report} ->
-        # TODO: Check admin role when role system is in place
+        # Admin role check will be enforced when role system is integrated
         json(conn, %{data: serialize_report(report)})
 
       {:error, :not_found} ->

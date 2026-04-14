@@ -54,7 +54,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_response(200)
 
       assert response["data"] != nil
-      assert length(response["data"]) == 3
+      assert Enum.count(response["data"]) == 3
     end
 
     test "returns empty list when no messages exist", %{
@@ -127,7 +127,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/messages?limit=5")
         |> json_response(200)
 
-      assert length(response["data"]) <= 5
+      assert Enum.count(response["data"]) <= 5
     end
   end
 

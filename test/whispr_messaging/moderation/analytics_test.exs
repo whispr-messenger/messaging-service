@@ -40,7 +40,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       create_reports(3, ctx.reported_user_id)
 
       counts = Analytics.daily_report_counts(7)
-      assert length(counts) >= 1
+      assert counts != []
 
       today_entry = List.last(counts)
       assert today_entry.count >= 3
@@ -54,8 +54,8 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       counts_1 = Analytics.daily_report_counts(1)
 
       # Both should return today's reports
-      assert length(counts_30) >= 1
-      assert length(counts_1) >= 1
+      assert counts_30 != []
+      assert counts_1 != []
     end
   end
 
@@ -64,7 +64,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       create_reports(2, ctx.reported_user_id)
 
       counts = Analytics.hourly_report_counts(24)
-      assert length(counts) >= 1
+      assert counts != []
 
       entry = List.last(counts)
       assert entry.count >= 2
@@ -88,13 +88,13 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
     test "filters by days", ctx do
       create_reports(2, ctx.reported_user_id, "offensive")
       breakdown = Analytics.category_breakdown(days: 7)
-      assert length(breakdown) >= 1
+      assert breakdown != []
     end
 
     test "filters by status", ctx do
       create_reports(2, ctx.reported_user_id, "spam")
       breakdown = Analytics.category_breakdown(status: "pending")
-      assert length(breakdown) >= 1
+      assert breakdown != []
 
       # No resolved reports yet
       resolved_breakdown = Analytics.category_breakdown(status: "resolved_action")
@@ -133,7 +133,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       create_report(create_test_user_id(), other_user, "spam")
 
       top = Analytics.top_reported_users(10, 30)
-      assert length(top) >= 2
+      assert Enum.count(top) >= 2
 
       first = hd(top)
       assert first.user_id == ctx.reported_user_id
@@ -144,7 +144,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
     test "respects limit", ctx do
       create_reports(2, ctx.reported_user_id)
       top = Analytics.top_reported_users(1, 30)
-      assert length(top) <= 1
+      assert Enum.count(top) <= 1
     end
   end
 
@@ -155,7 +155,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       create_report(ctx.reporter_id, create_test_user_id(), "harassment")
 
       top = Analytics.top_reporters(10, 30)
-      assert length(top) >= 1
+      assert top != []
 
       reporter_entry = Enum.find(top, fn r -> r.reporter_id == ctx.reporter_id end)
       assert reporter_entry != nil
@@ -242,7 +242,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
       end
 
       hotspots = Analytics.conversation_hotspots(10, 30)
-      assert length(hotspots) >= 1
+      assert hotspots != []
 
       entry = Enum.find(hotspots, fn h -> h.conversation_id == conversation.id end)
       assert entry != nil

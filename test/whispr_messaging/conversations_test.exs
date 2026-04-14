@@ -49,7 +49,7 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, _} = Conversations.add_conversation_member(conv2.id, user_id)
 
       conversations = Conversations.list_user_conversations(user_id, 50)
-      assert length(conversations) == 2
+      assert Enum.count(conversations) == 2
     end
   end
 
@@ -456,7 +456,7 @@ defmodule WhisprMessaging.ConversationsTest do
       end
 
       results = Conversations.search_user_conversations(user_id, "Team", limit: 3)
-      assert length(results) <= 3
+      assert Enum.count(results) <= 3
     end
   end
 end

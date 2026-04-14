@@ -64,7 +64,7 @@ defmodule WhisprMessaging.Moderation.Evidence do
         captured_at: DateTime.utc_now() |> DateTime.to_iso8601(),
         metadata: %{
           context_window: @context_window,
-          total_surrounding: length(surrounding),
+          total_surrounding: Enum.count(surrounding),
           capture_version: "2.0"
         }
       }
@@ -249,7 +249,7 @@ defmodule WhisprMessaging.Moderation.Evidence do
       Map.get(evidence, "surrounding_messages") ||
         Map.get(evidence, :surrounding_messages) || []
 
-    lines = lines ++ ["", "Context messages: #{length(surrounding)}"]
+    lines = lines ++ ["", "Context messages: #{Enum.count(surrounding)}"]
 
     # Capture timestamp
     captured =
@@ -277,7 +277,7 @@ defmodule WhisprMessaging.Moderation.Evidence do
   """
   @spec batch_capture([Report.t()]) :: [{String.t(), {:ok, map()} | {:error, term()}}]
   def batch_capture(reports) when is_list(reports) do
-    Logger.info("[Evidence] Batch capturing evidence for #{length(reports)} reports")
+    Logger.info("[Evidence] Batch capturing evidence for #{Enum.count(reports)} reports")
 
     reports
     |> Enum.map(fn report ->
@@ -458,11 +458,9 @@ defmodule WhisprMessaging.Moderation.Evidence do
       "reported,#{Map.get(reported, :sender_id, "")},#{csv_escape(Map.get(reported, :content, ""))},#{Map.get(reported, :inserted_at, "")}\n"
 
     context_rows =
-      surrounding
-      |> Enum.map(fn msg ->
+      Enum.map_join(surrounding, "", fn msg ->
         "context,#{Map.get(msg, :sender_id, "")},#{csv_escape(Map.get(msg, :content, ""))},#{Map.get(msg, :inserted_at, "")}\n"
       end)
-      |> Enum.join()
 
     {:ok, headers <> reported_row <> context_rows}
   end

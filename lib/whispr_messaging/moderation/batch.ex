@@ -47,7 +47,7 @@ defmodule WhisprMessaging.Moderation.Batch do
   @spec bulk_resolve([String.t()], String.t(), map()) :: {:ok, batch_result()} | {:error, term()}
   def bulk_resolve(report_ids, admin_id, resolution_attrs) when is_list(report_ids) do
     Logger.info(
-      "[Batch] Bulk resolve #{length(report_ids)} reports by admin #{admin_id}, action: #{resolution_attrs.action}"
+      "[Batch] Bulk resolve #{Enum.count(report_ids)} reports by admin #{admin_id}, action: #{resolution_attrs.action}"
     )
 
     results =
@@ -111,7 +111,9 @@ defmodule WhisprMessaging.Moderation.Batch do
   def bulk_update_status(report_ids, new_status)
       when is_list(report_ids) and
              new_status in ~w(pending under_review resolved_action resolved_dismissed) do
-    Logger.info("[Batch] Bulk status update to '#{new_status}' for #{length(report_ids)} reports")
+    Logger.info(
+      "[Batch] Bulk status update to '#{new_status}' for #{Enum.count(report_ids)} reports"
+    )
 
     {count, _} =
       from(r in Report,
@@ -146,7 +148,9 @@ defmodule WhisprMessaging.Moderation.Batch do
           {:ok, non_neg_integer()} | {:error, :invalid_category}
   def bulk_categorize(report_ids, new_category) when is_list(report_ids) do
     if new_category in Report.valid_categories() do
-      Logger.info("[Batch] Re-categorizing #{length(report_ids)} reports to '#{new_category}'")
+      Logger.info(
+        "[Batch] Re-categorizing #{Enum.count(report_ids)} reports to '#{new_category}'"
+      )
 
       {count, _} =
         from(r in Report, where: r.id in ^report_ids)
@@ -258,10 +262,10 @@ defmodule WhisprMessaging.Moderation.Batch do
       end)
 
     Logger.info(
-      "[Batch] Duplicate scan complete: #{length(duplicates)} groups, #{dismissed_count} dismissed"
+      "[Batch] Duplicate scan complete: #{Enum.count(duplicates)} groups, #{dismissed_count} dismissed"
     )
 
-    {:ok, %{duplicates_found: length(duplicates), dismissed: dismissed_count}}
+    {:ok, %{duplicates_found: Enum.count(duplicates), dismissed: dismissed_count}}
   end
 
   # ---------------------------------------------------------------------------
@@ -277,8 +281,8 @@ defmodule WhisprMessaging.Moderation.Batch do
       end)
 
     %{
-      succeeded: length(ok_results),
-      failed: length(err_results),
+      succeeded: Enum.count(ok_results),
+      failed: Enum.count(err_results),
       errors: errors
     }
   end

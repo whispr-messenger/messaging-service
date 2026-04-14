@@ -58,7 +58,7 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
         get(conn, ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions")
         |> json_response(200)
 
-      assert length(response["data"]) >= 1
+      assert response["data"] != []
     end
   end
 
