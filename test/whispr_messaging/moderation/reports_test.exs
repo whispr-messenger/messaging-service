@@ -134,7 +134,10 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
       admin_id = create_test_user_id()
 
       assert {:ok, resolved} =
-               Reports.resolve_report(report.id, admin_id, %{action: "dismiss", notes: "False positive"})
+               Reports.resolve_report(report.id, admin_id, %{
+                 action: "dismiss",
+                 notes: "False positive"
+               })
 
       assert resolved.status == "resolved_dismissed"
       assert resolved.resolution["resolved_by"] == admin_id
@@ -152,7 +155,10 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
       admin_id = create_test_user_id()
 
       assert {:ok, resolved} =
-               Reports.resolve_report(report.id, admin_id, %{action: "mute", notes: "Confirmed harassment"})
+               Reports.resolve_report(report.id, admin_id, %{
+                 action: "mute",
+                 notes: "Confirmed harassment"
+               })
 
       assert resolved.status == "resolved_action"
     end

@@ -133,7 +133,11 @@ defmodule WhisprMessaging.Moderation.Analytics do
   A list of maps with `:user_id`, `:unique_reporters`, and `:total_reports`.
   """
   @spec top_reported_users(non_neg_integer(), non_neg_integer()) :: [
-          %{user_id: String.t(), unique_reporters: non_neg_integer(), total_reports: non_neg_integer()}
+          %{
+            user_id: String.t(),
+            unique_reporters: non_neg_integer(),
+            total_reports: non_neg_integer()
+          }
         ]
   def top_reported_users(limit \\ 10, days \\ 30) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 86_400, :second)

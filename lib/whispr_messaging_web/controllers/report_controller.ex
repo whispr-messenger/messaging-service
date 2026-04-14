@@ -30,7 +30,11 @@ defmodule WhisprMessagingWeb.ReportController do
             reported_user_id(:string, "UUID of the reported user", format: :uuid)
             conversation_id(:string, "UUID of the conversation", format: :uuid)
             message_id(:string, "UUID of the reported message", format: :uuid)
-            category(:string, "Report category", enum: [:spam, :harassment, :hate_speech, :violence, :other])
+
+            category(:string, "Report category",
+              enum: [:spam, :harassment, :hate_speech, :violence, :other]
+            )
+
             description(:string, "Free-text description of the issue")
             evidence(:object, "Automatically collected evidence")
             status(:string, "Report status", enum: [:pending, :reviewing, :resolved, :dismissed])
@@ -46,10 +50,19 @@ defmodule WhisprMessagingWeb.ReportController do
           description("Request body for creating a moderation report")
 
           properties do
-            reported_user_id(:string, "UUID of the user being reported", required: true, format: :uuid)
+            reported_user_id(:string, "UUID of the user being reported",
+              required: true,
+              format: :uuid
+            )
+
             conversation_id(:string, "UUID of the conversation", format: :uuid)
             message_id(:string, "UUID of the reported message", format: :uuid)
-            category(:string, "Report category", required: true, enum: [:spam, :harassment, :hate_speech, :violence, :other])
+
+            category(:string, "Report category",
+              required: true,
+              enum: [:spam, :harassment, :hate_speech, :violence, :other]
+            )
+
             description(:string, "Description of the issue")
           end
         end,
@@ -59,7 +72,11 @@ defmodule WhisprMessagingWeb.ReportController do
           description("Request body for resolving a report")
 
           properties do
-            action(:string, "Resolution action taken", required: true, enum: [:warn, :mute, :kick, :ban, :dismiss])
+            action(:string, "Resolution action taken",
+              required: true,
+              enum: [:warn, :mute, :kick, :ban, :dismiss]
+            )
+
             notes(:string, "Admin notes about the resolution")
           end
         end,
@@ -165,7 +182,10 @@ defmodule WhisprMessagingWeb.ReportController do
     produces("application/json")
     tag("Moderation - Reports")
 
-    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)", required: false)
+    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)",
+      required: false
+    )
+
     parameter(:offset, :query, :integer, "Offset for pagination (default: 0)", required: false)
 
     security([%{Bearer: []}])
@@ -231,12 +251,17 @@ defmodule WhisprMessagingWeb.ReportController do
     produces("application/json")
     tag("Moderation - Reports")
 
-    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)", required: false)
+    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)",
+      required: false
+    )
+
     parameter(:offset, :query, :integer, "Offset for pagination (default: 0)", required: false)
+
     parameter(:status, :query, :string, "Filter by status (default: pending)",
       required: false,
       enum: [:pending, :reviewing, :resolved, :dismissed]
     )
+
     parameter(:category, :query, :string, "Filter by category",
       required: false,
       enum: [:spam, :harassment, :hate_speech, :violence, :other]
@@ -265,7 +290,11 @@ defmodule WhisprMessagingWeb.ReportController do
   swagger_path :stats do
     get("/reports/stats")
     summary("Report statistics")
-    description("Returns report statistics for the admin dashboard (counts by status, category, etc.)")
+
+    description(
+      "Returns report statistics for the admin dashboard (counts by status, category, etc.)"
+    )
+
     produces("application/json")
     tag("Moderation - Reports")
 
@@ -291,7 +320,10 @@ defmodule WhisprMessagingWeb.ReportController do
     tag("Moderation - Reports")
 
     parameter(:id, :path, :string, "Report UUID", required: true, format: :uuid)
-    parameter(:body, :body, Schema.ref(:ReportResolveRequest), "Resolution parameters", required: true)
+
+    parameter(:body, :body, Schema.ref(:ReportResolveRequest), "Resolution parameters",
+      required: true
+    )
 
     security([%{Bearer: []}])
     response(200, "Report resolved", Schema.ref(:ReportResponse))
@@ -360,11 +392,13 @@ defmodule WhisprMessagingWeb.ReportController do
   defp format_changeset_errors(error), do: inspect(error)
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {int, _} -> int
       :error -> default
     end
   end
+
   defp parse_int(val, _default) when is_integer(val), do: val
 end

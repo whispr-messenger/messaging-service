@@ -135,8 +135,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
       last_run_at: state.last_run_at,
       moderator_count: length(state.moderator_ids),
       queue_size: length(state.priority_queue),
-      uptime_seconds:
-        DateTime.diff(DateTime.utc_now(), state.started_at, :second)
+      uptime_seconds: DateTime.diff(DateTime.utc_now(), state.started_at, :second)
     }
 
     {:reply, status, state}
@@ -179,7 +178,8 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
     reports = fetch_pending_reports(state)
 
     {processed, categorized, assigned, escalated, new_mod_idx} =
-      Enum.reduce(reports, {0, 0, 0, 0, state.moderator_index}, fn report, {p, c, a, e, mod_idx} ->
+      Enum.reduce(reports, {0, 0, 0, 0, state.moderator_index}, fn report,
+                                                                   {p, c, a, e, mod_idx} ->
         # Step 1: Auto-categorize if enabled and description available
         cat_count =
           if state.auto_categorize do

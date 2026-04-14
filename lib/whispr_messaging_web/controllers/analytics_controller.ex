@@ -26,7 +26,9 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/dashboard")
     |> PhoenixSwagger.Path.summary("Moderation dashboard")
-    |> PhoenixSwagger.Path.description("Returns comprehensive dashboard statistics including daily/hourly trends, category breakdown, top reported users, resolution metrics, and conversation hotspots. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns comprehensive dashboard statistics including daily/hourly trends, category breakdown, top reported users, resolution metrics, and conversation hotspots. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
@@ -43,7 +45,9 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/summary")
     |> PhoenixSwagger.Path.summary("Quick summary")
-    |> PhoenixSwagger.Path.description("Returns a lightweight summary suitable for sidebar widgets: total reports (30d and 24h), pending count, resolution rate. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns a lightweight summary suitable for sidebar widgets: total reports (30d and 24h), pending count, resolution rate. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
@@ -60,10 +64,18 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/trends")
     |> PhoenixSwagger.Path.summary("Daily report trends")
-    |> PhoenixSwagger.Path.description("Returns daily report counts for the specified look-back window. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns daily report counts for the specified look-back window. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
-    |> PhoenixSwagger.Path.parameter(:days, :query, :integer, "Look-back window in days (default: 30, max: 365)", required: false)
+    |> PhoenixSwagger.Path.parameter(
+      :days,
+      :query,
+      :integer,
+      "Look-back window in days (default: 30, max: 365)",
+      required: false
+    )
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
     |> PhoenixSwagger.Path.response(200, "Success")
     |> PhoenixSwagger.ensure_operation_id(__MODULE__, :trends)
@@ -78,10 +90,18 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/trends/hourly")
     |> PhoenixSwagger.Path.summary("Hourly report trends")
-    |> PhoenixSwagger.Path.description("Returns hourly report counts for the specified look-back window. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns hourly report counts for the specified look-back window. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
-    |> PhoenixSwagger.Path.parameter(:hours, :query, :integer, "Look-back window in hours (default: 24, max: 168)", required: false)
+    |> PhoenixSwagger.Path.parameter(
+      :hours,
+      :query,
+      :integer,
+      "Look-back window in hours (default: 24, max: 168)",
+      required: false
+    )
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
     |> PhoenixSwagger.Path.response(200, "Success")
     |> PhoenixSwagger.ensure_operation_id(__MODULE__, :trends_hourly)
@@ -96,11 +116,25 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/top-reported")
     |> PhoenixSwagger.Path.summary("Top reported users")
-    |> PhoenixSwagger.Path.description("Returns users with the most unique reporters. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns users with the most unique reporters. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
-    |> PhoenixSwagger.Path.parameter(:limit, :query, :integer, "Maximum results (default: 10, max: 50)", required: false)
-    |> PhoenixSwagger.Path.parameter(:days, :query, :integer, "Look-back window in days (default: 30, max: 365)", required: false)
+    |> PhoenixSwagger.Path.parameter(
+      :limit,
+      :query,
+      :integer,
+      "Maximum results (default: 10, max: 50)",
+      required: false
+    )
+    |> PhoenixSwagger.Path.parameter(
+      :days,
+      :query,
+      :integer,
+      "Look-back window in days (default: 30, max: 365)",
+      required: false
+    )
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
     |> PhoenixSwagger.Path.response(200, "Success")
     |> PhoenixSwagger.ensure_operation_id(__MODULE__, :top_reported)
@@ -115,11 +149,22 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/categories")
     |> PhoenixSwagger.Path.summary("Category breakdown")
-    |> PhoenixSwagger.Path.description("Returns report counts and percentages grouped by category. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns report counts and percentages grouped by category. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
-    |> PhoenixSwagger.Path.parameter(:days, :query, :integer, "Look-back window in days (default: all time)", required: false)
-    |> PhoenixSwagger.Path.parameter(:status, :query, :string, "Filter by report status", required: false, enum: [:pending, :reviewing, :resolved, :dismissed])
+    |> PhoenixSwagger.Path.parameter(
+      :days,
+      :query,
+      :integer,
+      "Look-back window in days (default: all time)",
+      required: false
+    )
+    |> PhoenixSwagger.Path.parameter(:status, :query, :string, "Filter by report status",
+      required: false,
+      enum: [:pending, :reviewing, :resolved, :dismissed]
+    )
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
     |> PhoenixSwagger.Path.response(200, "Success")
     |> PhoenixSwagger.ensure_operation_id(__MODULE__, :categories)
@@ -134,10 +179,18 @@ defmodule WhisprMessagingWeb.AnalyticsController do
     %PathObject{}
     |> PhoenixSwagger.Path.get("/reports/analytics/resolution")
     |> PhoenixSwagger.Path.summary("Resolution metrics")
-    |> PhoenixSwagger.Path.description("Returns resolution metrics: average time, median time, resolution rate, and status distribution. Admin only.")
+    |> PhoenixSwagger.Path.description(
+      "Returns resolution metrics: average time, median time, resolution rate, and status distribution. Admin only."
+    )
     |> PhoenixSwagger.Path.produces("application/json")
     |> PhoenixSwagger.Path.tag("Moderation - Analytics")
-    |> PhoenixSwagger.Path.parameter(:days, :query, :integer, "Look-back window in days (default: 30, max: 365)", required: false)
+    |> PhoenixSwagger.Path.parameter(
+      :days,
+      :query,
+      :integer,
+      "Look-back window in days (default: 30, max: 365)",
+      required: false
+    )
     |> PhoenixSwagger.Path.security([%{Bearer: []}])
     |> PhoenixSwagger.Path.response(200, "Success")
     |> PhoenixSwagger.ensure_operation_id(__MODULE__, :resolution)

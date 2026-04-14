@@ -29,7 +29,10 @@ defmodule WhisprMessaging.Moderation.Reports do
       |> Report.changeset(attrs)
       |> Repo.insert()
       |> tap_ok(fn report ->
-        Logger.info("Report #{report.id} created by #{report.reporter_id} against #{report.reported_user_id}")
+        Logger.info(
+          "Report #{report.id} created by #{report.reporter_id} against #{report.reported_user_id}"
+        )
+
         publish_report_created(report)
         check_escalation_thresholds(report.reported_user_id)
       end)
@@ -290,19 +293,24 @@ defmodule WhisprMessaging.Moderation.Reports do
   # ---------------------------------------------------------------------------
 
   defp maybe_filter_category(query, nil), do: query
-  defp maybe_filter_category(query, category), do: from(r in query, where: r.category == ^category)
+
+  defp maybe_filter_category(query, category),
+    do: from(r in query, where: r.category == ^category)
 
   defp count_resolved_today do
     today_start = Date.utc_today() |> DateTime.new!(~T[00:00:00], "Etc/UTC")
 
     from(r in Report,
-      where: r.status in ["resolved_action", "resolved_dismissed"] and r.updated_at >= ^today_start,
+      where:
+        r.status in ["resolved_action", "resolved_dismissed"] and r.updated_at >= ^today_start,
       select: count(r.id)
     )
     |> Repo.one()
   end
 
-  defp validate_resolvable(%Report{status: status}) when status in ~w(pending under_review), do: :ok
+  defp validate_resolvable(%Report{status: status}) when status in ~w(pending under_review),
+    do: :ok
+
   defp validate_resolvable(_), do: {:error, :already_resolved}
 
   defp tap_ok({:ok, value} = result, fun) do

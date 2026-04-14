@@ -120,7 +120,9 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
       _normal = create_report(ctx.reporter_id, ctx.reported_user_id)
 
       # Create and enqueue a priority report
-      priority = create_report(create_test_user_id(), ctx.reported_user_id, %{category: "violence"})
+      priority =
+        create_report(create_test_user_id(), ctx.reported_user_id, %{category: "violence"})
+
       :ok = ModerationQueueWorker.enqueue(priority.id)
 
       {:ok, count} = ModerationQueueWorker.process_now()

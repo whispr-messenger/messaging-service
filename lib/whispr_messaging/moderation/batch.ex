@@ -109,7 +109,8 @@ defmodule WhisprMessaging.Moderation.Batch do
   """
   @spec bulk_update_status([String.t()], String.t()) :: {:ok, non_neg_integer()}
   def bulk_update_status(report_ids, new_status)
-      when is_list(report_ids) and new_status in ~w(pending under_review resolved_action resolved_dismissed) do
+      when is_list(report_ids) and
+             new_status in ~w(pending under_review resolved_action resolved_dismissed) do
     Logger.info("[Batch] Bulk status update to '#{new_status}' for #{length(report_ids)} reports")
 
     {count, _} =
@@ -145,9 +146,7 @@ defmodule WhisprMessaging.Moderation.Batch do
           {:ok, non_neg_integer()} | {:error, :invalid_category}
   def bulk_categorize(report_ids, new_category) when is_list(report_ids) do
     if new_category in Report.valid_categories() do
-      Logger.info(
-        "[Batch] Re-categorizing #{length(report_ids)} reports to '#{new_category}'"
-      )
+      Logger.info("[Batch] Re-categorizing #{length(report_ids)} reports to '#{new_category}'")
 
       {count, _} =
         from(r in Report, where: r.id in ^report_ids)
@@ -217,7 +216,8 @@ defmodule WhisprMessaging.Moderation.Batch do
   ## Returns
   `{:ok, %{duplicates_found: N, dismissed: M}}`
   """
-  @spec merge_duplicates(String.t()) :: {:ok, %{duplicates_found: non_neg_integer(), dismissed: non_neg_integer()}}
+  @spec merge_duplicates(String.t()) ::
+          {:ok, %{duplicates_found: non_neg_integer(), dismissed: non_neg_integer()}}
   def merge_duplicates(admin_id) do
     Logger.info("[Batch] Scanning for duplicate reports")
 

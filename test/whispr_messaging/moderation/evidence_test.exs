@@ -46,7 +46,9 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
 
     test "returns error for non-existent message", ctx do
       fake_id = Ecto.UUID.generate()
-      assert {:error, :message_not_found} = Evidence.capture_full_context(fake_id, ctx.conversation.id)
+
+      assert {:error, :message_not_found} =
+               Evidence.capture_full_context(fake_id, ctx.conversation.id)
     end
   end
 

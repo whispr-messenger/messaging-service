@@ -8,7 +8,11 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
     user_id = Ecto.UUID.generate()
 
     {:ok, conversation} =
-      Conversations.create_conversation(%{type: "group", metadata: %{"name" => "Test"}, is_active: true})
+      Conversations.create_conversation(%{
+        type: "group",
+        metadata: %{"name" => "Test"},
+        is_active: true
+      })
 
     %{admin_id: admin_id, user_id: user_id, conversation: conversation}
   end
@@ -74,7 +78,10 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
         |> json_response(201)
 
       response =
-        delete(conn, ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{sanction_id}")
+        delete(
+          conn,
+          ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{sanction_id}"
+        )
         |> json_response(200)
 
       assert response["message"] == "Sanction lifted"

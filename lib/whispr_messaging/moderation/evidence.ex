@@ -110,7 +110,11 @@ defmodule WhisprMessaging.Moderation.Evidence do
   `{:ok, enriched_evidence}` or `{:error, reason}`
   """
   @spec enrich_evidence(Report.t()) :: {:ok, map()} | {:error, term()}
-  def enrich_evidence(%Report{evidence: evidence, message_id: message_id, conversation_id: conv_id})
+  def enrich_evidence(%Report{
+        evidence: evidence,
+        message_id: message_id,
+        conversation_id: conv_id
+      })
       when not is_nil(message_id) and not is_nil(conv_id) do
     case capture_full_context(message_id, conv_id) do
       {:ok, full_snapshot} ->
@@ -379,9 +383,17 @@ defmodule WhisprMessaging.Moderation.Evidence do
         {k, "[REDACTED]"}
       else
         cond do
-          is_map(v) -> {k, deep_redact_field(v, field)}
-          is_list(v) -> {k, Enum.map(v, fn item -> if is_map(item), do: deep_redact_field(item, field), else: item end)}
-          true -> {k, v}
+          is_map(v) ->
+            {k, deep_redact_field(v, field)}
+
+          is_list(v) ->
+            {k,
+             Enum.map(v, fn item ->
+               if is_map(item), do: deep_redact_field(item, field), else: item
+             end)}
+
+          true ->
+            {k, v}
         end
       end
     end)
@@ -404,7 +416,8 @@ defmodule WhisprMessaging.Moderation.Evidence do
         {k, deep_redact_strings(v)}
 
       {k, v} when is_list(v) ->
-        {k, Enum.map(v, fn item -> if is_map(item), do: deep_redact_strings(item), else: item end)}
+        {k,
+         Enum.map(v, fn item -> if is_map(item), do: deep_redact_strings(item), else: item end)}
 
       other ->
         other
@@ -433,8 +446,11 @@ defmodule WhisprMessaging.Moderation.Evidence do
 
   defp format_csv(evidence) do
     # Flatten evidence into rows for CSV export
-    reported = Map.get(evidence, "reported_message") || Map.get(evidence, :reported_message) || %{}
-    surrounding = Map.get(evidence, "surrounding_messages") || Map.get(evidence, :surrounding_messages) || []
+    reported =
+      Map.get(evidence, "reported_message") || Map.get(evidence, :reported_message) || %{}
+
+    surrounding =
+      Map.get(evidence, "surrounding_messages") || Map.get(evidence, :surrounding_messages) || []
 
     headers = "type,sender_id,content,timestamp\n"
 

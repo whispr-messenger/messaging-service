@@ -98,7 +98,9 @@ defmodule WhisprMessaging.Moderation.Policy do
       flags: flags
     }
 
-    Logger.debug("[Policy] Evaluated report #{report.id}: severity=#{severity}, score=#{priority_score}")
+    Logger.debug(
+      "[Policy] Evaluated report #{report.id}: severity=#{severity}, score=#{priority_score}"
+    )
 
     {:ok, result}
   end

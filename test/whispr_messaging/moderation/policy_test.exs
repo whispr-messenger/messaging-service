@@ -137,25 +137,28 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
     end
 
     test "scores are capped at 100", ctx do
-      report = create_report(ctx.reporter_id, ctx.reported_user_id, %{
-        category: "violence",
-        description: "kill murder threat weapon attack stab shoot"
-      })
+      report =
+        create_report(ctx.reporter_id, ctx.reported_user_id, %{
+          category: "violence",
+          description: "kill murder threat weapon attack stab shoot"
+        })
 
       score = Policy.compute_priority(report)
       assert score <= 100
     end
 
     test "description with violence keywords adds bonus", ctx do
-      plain = create_report(ctx.reporter_id, ctx.reported_user_id, %{
-        category: "other",
-        description: "something happened"
-      })
+      plain =
+        create_report(ctx.reporter_id, ctx.reported_user_id, %{
+          category: "other",
+          description: "something happened"
+        })
 
-      violent = create_report(create_test_user_id(), create_test_user_id(), %{
-        category: "other",
-        description: "threat to kill someone"
-      })
+      violent =
+        create_report(create_test_user_id(), create_test_user_id(), %{
+          category: "other",
+          description: "threat to kill someone"
+        })
 
       assert Policy.compute_priority(violent) > Policy.compute_priority(plain)
     end
