@@ -130,6 +130,16 @@ defmodule WhisprMessagingWeb.Router do
     post "/reports", ReportController, :create
     get "/reports/queue", ReportController, :queue
     get "/reports/stats", ReportController, :stats
+
+    # Moderation analytics
+    get "/reports/analytics/dashboard", AnalyticsController, :dashboard
+    get "/reports/analytics/summary", AnalyticsController, :summary
+    get "/reports/analytics/trends", AnalyticsController, :trends
+    get "/reports/analytics/trends/hourly", AnalyticsController, :trends_hourly
+    get "/reports/analytics/top-reported", AnalyticsController, :top_reported
+    get "/reports/analytics/categories", AnalyticsController, :categories
+    get "/reports/analytics/resolution", AnalyticsController, :resolution
+
     get "/reports/:id", ReportController, :show
     put "/reports/:id/resolve", ReportController, :resolve
 
