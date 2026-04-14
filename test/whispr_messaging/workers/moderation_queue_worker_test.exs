@@ -5,12 +5,18 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
   alias WhisprMessaging.Moderation.Reports
   alias WhisprMessaging.Workers.ModerationQueueWorker
 
+  @moduletag :integration
+
   setup do
     # Allow the GenServer worker to access the DB sandbox
     Sandbox.mode(WhisprMessaging.Repo, :auto)
 
     reporter_id = create_test_user_id()
     reported_user_id = create_test_user_id()
+
+    on_exit(fn ->
+      WhisprMessaging.Repo.delete_all(WhisprMessaging.Moderation.Report)
+    end)
 
     %{
       reporter_id: reporter_id,

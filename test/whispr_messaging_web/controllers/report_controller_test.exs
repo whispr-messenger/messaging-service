@@ -1,12 +1,9 @@
 defmodule WhisprMessagingWeb.ReportControllerTest do
   use WhisprMessagingWeb.ConnCase, async: false
 
-  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Conversations
 
   setup do
-    Sandbox.mode(WhisprMessaging.Repo, :auto)
-
     reporter_id = Ecto.UUID.generate()
     reported_user_id = Ecto.UUID.generate()
     admin_id = Ecto.UUID.generate()

@@ -1,12 +1,9 @@
 defmodule WhisprMessaging.Moderation.BatchTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.{Batch, Report, Reports}
 
   setup do
-    Sandbox.mode(WhisprMessaging.Repo, :auto)
-
     reporter_id = create_test_user_id()
     reported_user_id = create_test_user_id()
     admin_id = create_test_user_id()
