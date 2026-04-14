@@ -132,6 +132,11 @@ defmodule WhisprMessagingWeb.Router do
     get "/reports/stats", ReportController, :stats
     get "/reports/:id", ReportController, :show
     put "/reports/:id/resolve", ReportController, :resolve
+
+    # Conversation sanctions
+    get "/conversations/:conversation_id/sanctions", SanctionController, :index
+    post "/conversations/:conversation_id/sanctions", SanctionController, :create
+    delete "/conversations/:conversation_id/sanctions/:id", SanctionController, :delete
   end
 
   # Compatibility route for mobile frontend (reportApi.ts calls POST /api/v1/moderation/report)
