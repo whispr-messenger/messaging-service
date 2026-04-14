@@ -94,6 +94,16 @@ config :whispr_messaging, :phoenix_swagger,
 # Configure telemetry - simplified for tests
 config :whispr_messaging, WhisprMessagingWeb.Telemetry, metrics: []
 
+# Moderation auto-escalation thresholds
+config :whispr_messaging, :moderation,
+  mute_threshold: String.to_integer(System.get_env("MOD_MUTE_THRESHOLD") || "3"),
+  mute_days: String.to_integer(System.get_env("MOD_MUTE_DAYS") || "7"),
+  mute_duration_hours: String.to_integer(System.get_env("MOD_MUTE_DURATION_HOURS") || "24"),
+  ban_threshold: String.to_integer(System.get_env("MOD_BAN_THRESHOLD") || "5"),
+  ban_days: String.to_integer(System.get_env("MOD_BAN_DAYS") || "14"),
+  review_threshold: String.to_integer(System.get_env("MOD_REVIEW_THRESHOLD") || "10"),
+  review_days: String.to_integer(System.get_env("MOD_REVIEW_DAYS") || "30")
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

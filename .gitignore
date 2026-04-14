@@ -29,6 +29,9 @@ whispr_messaging-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Git worktrees for parallel ticket work
+.worktrees/
+
 # Phoenix specific
 /priv/static/
 

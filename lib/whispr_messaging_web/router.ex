@@ -124,5 +124,35 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id", AttachmentController, :show
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
+
+    # Moderation reports
+    get "/reports", ReportController, :index
+    post "/reports", ReportController, :create
+    get "/reports/queue", ReportController, :queue
+    get "/reports/stats", ReportController, :stats
+
+    # Moderation analytics
+    get "/reports/analytics/dashboard", AnalyticsController, :dashboard
+    get "/reports/analytics/summary", AnalyticsController, :summary
+    get "/reports/analytics/trends", AnalyticsController, :trends
+    get "/reports/analytics/trends/hourly", AnalyticsController, :trends_hourly
+    get "/reports/analytics/top-reported", AnalyticsController, :top_reported
+    get "/reports/analytics/categories", AnalyticsController, :categories
+    get "/reports/analytics/resolution", AnalyticsController, :resolution
+
+    get "/reports/:id", ReportController, :show
+    put "/reports/:id/resolve", ReportController, :resolve
+
+    # Conversation sanctions
+    get "/conversations/:conversation_id/sanctions", SanctionController, :index
+    post "/conversations/:conversation_id/sanctions", SanctionController, :create
+    delete "/conversations/:conversation_id/sanctions/:id", SanctionController, :delete
+  end
+
+  # Compatibility route for mobile frontend (reportApi.ts calls POST /api/v1/moderation/report)
+  scope "/api/v1/moderation", WhisprMessagingWeb do
+    pipe_through :api
+
+    post "/report", ReportController, :create
   end
 end

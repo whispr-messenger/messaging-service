@@ -17,8 +17,8 @@ defmodule WhisprMessagingWeb.Endpoint do
     same_site: "Lax"
   ]
 
-  # WebSocket configuration
-  socket "/socket", WhisprMessagingWeb.UserSocket,
+  # Shared WebSocket options — single source of truth for both mounts.
+  @ws_opts [
     websocket: [
       timeout: 45_000,
       transport_log: false,
@@ -27,6 +27,11 @@ defmodule WhisprMessagingWeb.Endpoint do
       check_origin: false
     ],
     longpoll: false
+  ]
+
+  socket "/socket", WhisprMessagingWeb.UserSocket, @ws_opts
+  # Ingress-prefixed path so clients behind /messaging can reach the socket.
+  socket "/messaging/socket", WhisprMessagingWeb.UserSocket, @ws_opts
 
   # Serve static files from the "priv/static" directory
   plug Plug.Static,

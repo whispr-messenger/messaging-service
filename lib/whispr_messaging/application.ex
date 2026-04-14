@@ -62,6 +62,9 @@ defmodule WhisprMessaging.Application do
       # Presence tracking
       WhisprMessagingWeb.Presence,
 
+      # Moderation workers
+      WhisprMessaging.Workers.SanctionExpiryWorker,
+
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
     ]
