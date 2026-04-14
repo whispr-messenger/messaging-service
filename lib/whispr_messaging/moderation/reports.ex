@@ -7,9 +7,9 @@ defmodule WhisprMessaging.Moderation.Reports do
   """
 
   import Ecto.Query
-  alias WhisprMessaging.Repo
-  alias WhisprMessaging.Moderation.Report
   alias WhisprMessaging.Messages
+  alias WhisprMessaging.Moderation.Report
+  alias WhisprMessaging.Repo
 
   require Logger
 

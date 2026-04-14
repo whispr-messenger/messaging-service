@@ -1,8 +1,8 @@
 defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias WhisprMessaging.Workers.ModerationQueueWorker
   alias WhisprMessaging.Moderation.Reports
+  alias WhisprMessaging.Workers.ModerationQueueWorker
 
   setup do
     reporter_id = create_test_user_id()

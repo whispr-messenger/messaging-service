@@ -9,9 +9,9 @@ defmodule WhisprMessaging.Moderation.Batch do
 
   import Ecto.Query
 
-  alias WhisprMessaging.Repo
   alias WhisprMessaging.Moderation.Report
   alias WhisprMessaging.Moderation.Reports
+  alias WhisprMessaging.Repo
 
   require Logger
 

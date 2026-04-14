@@ -6,8 +6,8 @@ defmodule WhisprMessaging.Moderation.Sanctions do
   Includes expiration handling for temporary sanctions.
   """
 
-  alias WhisprMessaging.Repo
   alias WhisprMessaging.Moderation.ConversationSanction
+  alias WhisprMessaging.Repo
 
   require Logger
 

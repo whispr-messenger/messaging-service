@@ -1,7 +1,8 @@
 defmodule WhisprMessaging.Moderation.BatchTest do
   use WhisprMessaging.DataCase, async: true
 
-  alias WhisprMessaging.Moderation.{Batch, Reports}
+  alias Ecto.Adapters.SQL.Sandbox
+  alias WhisprMessaging.Moderation.{Batch, Report, Reports}
 
   setup do
     reporter_id = create_test_user_id()
@@ -216,9 +217,9 @@ defmodule WhisprMessaging.Moderation.BatchTest do
     test "finds and merges duplicate reports", ctx do
       conversation = create_test_conversation()
 
-      Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto)
+      Sandbox.mode(Repo, :auto)
       message = create_test_message(conversation.id, ctx.reported_user_id)
-      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+      Sandbox.mode(Repo, {:shared, self()})
 
       # Same reporter, same message => duplicates
       {:ok, _r1} =
@@ -233,7 +234,7 @@ defmodule WhisprMessaging.Moderation.BatchTest do
       # The cooldown check prevents creating a true duplicate through the API,
       # so we insert directly for this test
       {:ok, _r2} =
-        Repo.insert(%WhisprMessaging.Moderation.Report{
+        Repo.insert(%Report{
           reporter_id: ctx.reporter_id,
           reported_user_id: ctx.reported_user_id,
           conversation_id: conversation.id,

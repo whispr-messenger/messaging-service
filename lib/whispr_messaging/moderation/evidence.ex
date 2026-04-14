@@ -8,9 +8,9 @@ defmodule WhisprMessaging.Moderation.Evidence do
 
   import Ecto.Query
 
-  alias WhisprMessaging.Repo
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Moderation.Report
+  alias WhisprMessaging.Repo
 
   require Logger
 
@@ -224,41 +224,48 @@ defmodule WhisprMessaging.Moderation.Evidence do
   """
   @spec summarize(map()) :: String.t()
   def summarize(evidence) when is_map(evidence) do
-    lines = ["=== Evidence Summary ===", ""]
-
-    # Reported message
     lines =
-      case Map.get(evidence, "reported_message") || Map.get(evidence, :reported_message) do
-        nil ->
-          lines ++ ["Reported message: N/A"]
-
-        msg ->
-          content = Map.get(msg, "content") || Map.get(msg, :content) || "[no content]"
-          sender = Map.get(msg, "sender_id") || Map.get(msg, :sender_id) || "unknown"
-
-          lines ++
-            [
-              "Reported message:",
-              "  Sender: #{sender}",
-              "  Content: #{truncate(content, 200)}"
-            ]
-      end
-
-    # Surrounding context count
-    surrounding =
-      Map.get(evidence, "surrounding_messages") ||
-        Map.get(evidence, :surrounding_messages) || []
-
-    lines = lines ++ ["", "Context messages: #{Enum.count(surrounding)}"]
-
-    # Capture timestamp
-    captured =
-      Map.get(evidence, "captured_at") ||
-        Map.get(evidence, :captured_at) || "unknown"
-
-    lines = lines ++ ["Captured at: #{captured}", ""]
+      ["=== Evidence Summary ===", ""] ++
+        summarize_reported_message(evidence) ++
+        summarize_context(evidence) ++
+        summarize_capture_time(evidence)
 
     Enum.join(lines, "\n")
+  end
+
+  defp summarize_reported_message(evidence) do
+    msg = flex_get(evidence, "reported_message")
+
+    case msg do
+      nil ->
+        ["Reported message: N/A"]
+
+      msg ->
+        content = flex_get(msg, "content") || "[no content]"
+        sender = flex_get(msg, "sender_id") || "unknown"
+
+        [
+          "Reported message:",
+          "  Sender: #{sender}",
+          "  Content: #{truncate(content, 200)}"
+        ]
+    end
+  end
+
+  defp summarize_context(evidence) do
+    surrounding = flex_get(evidence, "surrounding_messages") || []
+    ["", "Context messages: #{Enum.count(surrounding)}"]
+  end
+
+  defp summarize_capture_time(evidence) do
+    captured = flex_get(evidence, "captured_at") || "unknown"
+    ["Captured at: #{captured}", ""]
+  end
+
+  defp flex_get(map, string_key) do
+    Map.get(map, string_key) || Map.get(map, String.to_existing_atom(string_key))
+  rescue
+    ArgumentError -> nil
   end
 
   # ---------------------------------------------------------------------------
@@ -382,24 +389,22 @@ defmodule WhisprMessaging.Moderation.Evidence do
       if to_string(k) == field_str do
         {k, "[REDACTED]"}
       else
-        cond do
-          is_map(v) ->
-            {k, deep_redact_field(v, field)}
-
-          is_list(v) ->
-            {k,
-             Enum.map(v, fn item ->
-               if is_map(item), do: deep_redact_field(item, field), else: item
-             end)}
-
-          true ->
-            {k, v}
-        end
+        {k, deep_redact_value(v, field)}
       end
     end)
   end
 
   defp deep_redact_field(other, _field), do: other
+
+  defp deep_redact_value(v, field) when is_map(v), do: deep_redact_field(v, field)
+
+  defp deep_redact_value(v, field) when is_list(v) do
+    Enum.map(v, fn item ->
+      if is_map(item), do: deep_redact_field(item, field), else: item
+    end)
+  end
+
+  defp deep_redact_value(v, _field), do: v
 
   defp maybe_redact_content(evidence, false), do: evidence
 

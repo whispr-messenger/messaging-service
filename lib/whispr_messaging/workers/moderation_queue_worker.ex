@@ -24,8 +24,8 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
   import Ecto.Query
 
-  alias WhisprMessaging.Repo
   alias WhisprMessaging.Moderation.{Policy, Report}
+  alias WhisprMessaging.Repo
 
   require Logger
 
@@ -180,35 +180,8 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
     {processed, categorized, assigned, escalated, new_mod_idx} =
       Enum.reduce(reports, {0, 0, 0, 0, state.moderator_index}, fn report,
                                                                    {p, c, a, e, mod_idx} ->
-        # Step 1: Auto-categorize if enabled and description available
-        cat_count =
-          if state.auto_categorize do
-            case auto_categorize_report(report) do
-              {:ok, _} -> 1
-              _ -> 0
-            end
-          else
-            0
-          end
-
-        # Step 2: Compute priority and evaluate policy
-        esc_count =
-          case evaluate_and_escalate(report) do
-            {:escalated, _} -> 1
-            _ -> 0
-          end
-
-        # Step 3: Auto-assign to moderator if enabled
-        {assign_count, next_mod_idx} =
-          if state.auto_assign and state.moderator_ids != [] do
-            moderator =
-              Enum.at(state.moderator_ids, rem(mod_idx, Enum.count(state.moderator_ids)))
-
-            assign_report(report, moderator)
-            {1, mod_idx + 1}
-          else
-            {0, mod_idx}
-          end
+        {cat_count, esc_count, assign_count, next_mod_idx} =
+          process_single_report(report, state, mod_idx)
 
         {p + 1, c + cat_count, a + assign_count, e + esc_count, next_mod_idx}
       end)
@@ -232,6 +205,40 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
     end
 
     {processed, new_state}
+  end
+
+  defp process_single_report(report, state, mod_idx) do
+    # Step 1: Auto-categorize if enabled and description available
+    cat_count =
+      if state.auto_categorize do
+        case auto_categorize_report(report) do
+          {:ok, _} -> 1
+          _ -> 0
+        end
+      else
+        0
+      end
+
+    # Step 2: Compute priority and evaluate policy
+    esc_count =
+      case evaluate_and_escalate(report) do
+        {:escalated, _} -> 1
+        _ -> 0
+      end
+
+    # Step 3: Auto-assign to moderator if enabled
+    {assign_count, next_mod_idx} =
+      if state.auto_assign and state.moderator_ids != [] do
+        moderator =
+          Enum.at(state.moderator_ids, rem(mod_idx, Enum.count(state.moderator_ids)))
+
+        assign_report(report, moderator)
+        {1, mod_idx + 1}
+      else
+        {0, mod_idx}
+      end
+
+    {cat_count, esc_count, assign_count, next_mod_idx}
   end
 
   defp fetch_pending_reports(state) do

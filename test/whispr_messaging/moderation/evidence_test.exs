@@ -1,6 +1,7 @@
 defmodule WhisprMessaging.Moderation.EvidenceTest do
   use WhisprMessaging.DataCase, async: true
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.{Evidence, Reports}
 
   setup do
@@ -8,7 +9,7 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
     reported_user_id = create_test_user_id()
     conversation = create_test_conversation()
 
-    Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto)
+    Sandbox.mode(Repo, :auto)
     message = create_test_message(conversation.id, reported_user_id)
 
     # Create some surrounding messages for context
@@ -19,7 +20,7 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
       })
     end
 
-    Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+    Sandbox.mode(Repo, {:shared, self()})
 
     %{
       reporter_id: reporter_id,
