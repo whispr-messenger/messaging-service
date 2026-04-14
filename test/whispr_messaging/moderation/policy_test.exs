@@ -223,6 +223,36 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
     end
   end
 
+  describe "evaluate/1 with custom config rules" do
+    test "custom rules from application config override defaults", ctx do
+      # Temporarily set custom rules in application config
+      original = Application.get_env(:whispr_messaging, :moderation_policies, [])
+
+      custom_rules = [
+        rules: [
+          %{
+            name: "custom_spam_rule",
+            category: "spam",
+            action: :warn,
+            min_severity: :high,
+            description: "Custom spam handling"
+          }
+        ]
+      ]
+
+      Application.put_env(:whispr_messaging, :moderation_policies, custom_rules)
+
+      report = create_report(ctx.reporter_id, ctx.reported_user_id, %{category: "spam"})
+      {:ok, result} = Policy.evaluate(report)
+
+      assert "custom_spam_rule" in result.matched_rules
+      assert result.recommended_action == :warn
+
+      # Restore original config
+      Application.put_env(:whispr_messaging, :moderation_policies, original)
+    end
+  end
+
   describe "get_keyword_patterns/0" do
     test "returns a map of category => keywords" do
       patterns = Policy.get_keyword_patterns()

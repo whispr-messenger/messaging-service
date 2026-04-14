@@ -132,6 +132,44 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
     end
   end
 
+  describe "auto-categorization" do
+    test "auto-categorizes reports with matching descriptions", ctx do
+      start_worker()
+
+      # Create a report with a violence-related description but categorized as "other"
+      report =
+        create_report(ctx.reporter_id, ctx.reported_user_id, %{
+          category: "other",
+          description: "user made a threat to kill and attack"
+        })
+
+      {:ok, count} = ModerationQueueWorker.process_now()
+      assert count >= 1
+
+      # The report should have been re-categorized to "violence"
+      {:ok, updated} = Reports.get_report(report.id)
+      assert updated.category == "violence"
+
+      status = ModerationQueueWorker.status()
+      assert status.total_categorized >= 1
+    end
+
+    test "does not re-categorize when description matches current category", ctx do
+      start_worker()
+
+      report =
+        create_report(ctx.reporter_id, ctx.reported_user_id, %{
+          category: "spam",
+          description: "buy now free discount click this link"
+        })
+
+      {:ok, _} = ModerationQueueWorker.process_now()
+
+      {:ok, updated} = Reports.get_report(report.id)
+      assert updated.category == "spam"
+    end
+  end
+
   describe "auto-escalation" do
     test "escalates violence reports", ctx do
       start_worker()

@@ -33,6 +33,17 @@ defmodule WhisprMessaging.Moderation.BatchTest do
     end
   end
 
+  describe "bulk_resolve/3 (empty)" do
+    test "handles empty list gracefully", ctx do
+      {:ok, result} =
+        Batch.bulk_resolve([], ctx.admin_id, %{action: "dismiss", notes: "Empty batch"})
+
+      assert result.succeeded == 0
+      assert result.failed == 0
+      assert result.errors == []
+    end
+  end
+
   describe "bulk_resolve/3" do
     test "resolves multiple reports", ctx do
       reports = create_pending_reports(3, ctx.reported_user_id)
@@ -92,6 +103,16 @@ defmodule WhisprMessaging.Moderation.BatchTest do
     end
   end
 
+  describe "bulk_dismiss/3 (empty)" do
+    test "handles empty list gracefully", ctx do
+      {:ok, result} = Batch.bulk_dismiss([], ctx.admin_id)
+
+      assert result.succeeded == 0
+      assert result.failed == 0
+      assert result.errors == []
+    end
+  end
+
   describe "bulk_update_status/2" do
     test "updates status for multiple reports", ctx do
       reports = create_pending_reports(3, ctx.reported_user_id)
@@ -112,6 +133,13 @@ defmodule WhisprMessaging.Moderation.BatchTest do
       ids = Enum.map(reports, & &1.id)
 
       assert {:error, {:invalid_status, "bogus"}} = Batch.bulk_update_status(ids, "bogus")
+    end
+  end
+
+  describe "bulk_update_status/2 (empty)" do
+    test "handles empty list gracefully" do
+      {:ok, count} = Batch.bulk_update_status([], "under_review")
+      assert count == 0
     end
   end
 
@@ -160,6 +188,27 @@ defmodule WhisprMessaging.Moderation.BatchTest do
     test "returns 0 when no matching reports", ctx do
       {:ok, count} = Batch.dismiss_by_filter(ctx.admin_id, category: "violence")
       assert count == 0
+    end
+
+    test "respects older_than_days filter (recent reports skipped)", ctx do
+      # All reports were just created, so filtering for older_than_days: 1 should skip them
+      create_pending_reports(3, ctx.reported_user_id, "spam")
+
+      {:ok, count} = Batch.dismiss_by_filter(ctx.admin_id, older_than_days: 1)
+      assert count == 0
+    end
+
+    test "combines category and user filters", ctx do
+      create_pending_reports(3, ctx.reported_user_id, "spam")
+      create_pending_reports(2, ctx.reported_user_id, "harassment")
+
+      {:ok, count} =
+        Batch.dismiss_by_filter(ctx.admin_id,
+          category: "spam",
+          reported_user_id: ctx.reported_user_id
+        )
+
+      assert count >= 3
     end
   end
 

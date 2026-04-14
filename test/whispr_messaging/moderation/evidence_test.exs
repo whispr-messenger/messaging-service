@@ -199,6 +199,26 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
       {:ok, json} = Evidence.format_for_export(snapshot, :json, redact: false)
       assert is_binary(json)
     end
+
+    test "strips metadata when include_metadata is false", ctx do
+      {:ok, snapshot} = Evidence.capture_minimal(ctx.message.id)
+
+      {:ok, json} =
+        Evidence.format_for_export(snapshot, :json,
+          redact: false,
+          include_metadata: false
+        )
+
+      decoded = Jason.decode!(json)
+      refute Map.has_key?(decoded, "metadata")
+    end
+
+    test "includes metadata by default", ctx do
+      {:ok, snapshot} = Evidence.capture_minimal(ctx.message.id)
+      {:ok, json} = Evidence.format_for_export(snapshot, :json, redact: false)
+      decoded = Jason.decode!(json)
+      assert Map.has_key?(decoded, "metadata")
+    end
   end
 
   describe "summarize/1" do

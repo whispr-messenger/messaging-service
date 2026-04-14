@@ -180,6 +180,22 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
     end
   end
 
+  describe "median_resolution_time/1" do
+    test "returns 0.0 when no resolved reports" do
+      assert Analytics.median_resolution_time(30) == 0.0
+    end
+
+    test "returns median for resolved reports", ctx do
+      report = create_report(ctx.reporter_id, ctx.reported_user_id, "spam")
+      admin_id = create_test_user_id()
+      {:ok, _} = Reports.resolve_report(report.id, admin_id, %{action: "dismiss"})
+
+      median = Analytics.median_resolution_time(30)
+      assert is_float(median)
+      assert median >= 0.0
+    end
+  end
+
   describe "resolution_rate/1" do
     test "returns 0.0 when no reports" do
       assert Analytics.resolution_rate(30) == 0.0
