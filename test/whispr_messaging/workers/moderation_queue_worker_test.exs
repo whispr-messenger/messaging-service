@@ -1,12 +1,13 @@
 defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
   use WhisprMessaging.DataCase, async: false
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.Reports
   alias WhisprMessaging.Workers.ModerationQueueWorker
 
   setup do
     # Allow the GenServer worker to access the DB sandbox
-    Ecto.Adapters.SQL.Sandbox.mode(WhisprMessaging.Repo, :auto)
+    Sandbox.mode(WhisprMessaging.Repo, :auto)
 
     reporter_id = create_test_user_id()
     reported_user_id = create_test_user_id()
