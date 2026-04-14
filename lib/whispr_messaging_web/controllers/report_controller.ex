@@ -14,8 +14,106 @@ defmodule WhisprMessagingWeb.ReportController do
   action_fallback WhisprMessagingWeb.FallbackController
 
   # ---------------------------------------------------------------------------
+  # Swagger definitions
+  # ---------------------------------------------------------------------------
+
+  def swagger_definitions do
+    %{
+      Report:
+        swagger_schema do
+          title("Report")
+          description("A moderation report")
+
+          properties do
+            id(:string, "Report UUID", format: :uuid)
+            reporter_id(:string, "UUID of the user who filed the report", format: :uuid)
+            reported_user_id(:string, "UUID of the reported user", format: :uuid)
+            conversation_id(:string, "UUID of the conversation", format: :uuid)
+            message_id(:string, "UUID of the reported message", format: :uuid)
+            category(:string, "Report category", enum: [:spam, :harassment, :hate_speech, :violence, :other])
+            description(:string, "Free-text description of the issue")
+            evidence(:object, "Automatically collected evidence")
+            status(:string, "Report status", enum: [:pending, :reviewing, :resolved, :dismissed])
+            resolution(:object, "Resolution details (action taken, notes)")
+            auto_escalated(:boolean, "Whether the report was auto-escalated")
+            created_at(:string, "Creation timestamp (ISO 8601)", format: :"date-time")
+            updated_at(:string, "Last update timestamp (ISO 8601)", format: :"date-time")
+          end
+        end,
+      ReportCreateRequest:
+        swagger_schema do
+          title("Report Create Request")
+          description("Request body for creating a moderation report")
+
+          properties do
+            reported_user_id(:string, "UUID of the user being reported", required: true, format: :uuid)
+            conversation_id(:string, "UUID of the conversation", format: :uuid)
+            message_id(:string, "UUID of the reported message", format: :uuid)
+            category(:string, "Report category", required: true, enum: [:spam, :harassment, :hate_speech, :violence, :other])
+            description(:string, "Description of the issue")
+          end
+        end,
+      ReportResolveRequest:
+        swagger_schema do
+          title("Report Resolve Request")
+          description("Request body for resolving a report")
+
+          properties do
+            action(:string, "Resolution action taken", required: true, enum: [:warn, :mute, :kick, :ban, :dismiss])
+            notes(:string, "Admin notes about the resolution")
+          end
+        end,
+      ReportResponse:
+        swagger_schema do
+          title("Report Response")
+          description("Single report response")
+
+          properties do
+            data(Schema.ref(:Report), "Report object")
+            message(:string, "Status message")
+          end
+        end,
+      ReportsListResponse:
+        swagger_schema do
+          title("Reports List Response")
+          description("List of reports")
+
+          properties do
+            data(Schema.array(:Report), "Array of report objects")
+          end
+        end,
+      ReportStatsResponse:
+        swagger_schema do
+          title("Report Stats Response")
+          description("Report statistics for admin dashboard")
+
+          properties do
+            data(:object, "Statistics object")
+          end
+        end
+    }
+  end
+
+  # ---------------------------------------------------------------------------
   # User endpoints
   # ---------------------------------------------------------------------------
+
+  swagger_path :create do
+    post("/reports")
+    summary("Create a moderation report")
+    description("Submits a new moderation report against a user or message. Rate-limited.")
+    produces("application/json")
+    consumes("application/json")
+    tag("Moderation - Reports")
+
+    parameter(:body, :body, Schema.ref(:ReportCreateRequest), "Report parameters", required: true)
+
+    security([%{Bearer: []}])
+    response(201, "Report created", Schema.ref(:ReportResponse))
+    response(400, "Validation error")
+    response(409, "Cooldown active - duplicate report")
+    response(429, "Rate limited")
+  end
 
   @doc """
   POST /messaging/api/v1/reports
@@ -60,6 +158,20 @@ defmodule WhisprMessagingWeb.ReportController do
     end
   end
 
+  swagger_path :index do
+    get("/reports")
+    summary("List my reports")
+    description("Lists reports submitted by the authenticated user")
+    produces("application/json")
+    tag("Moderation - Reports")
+
+    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)", required: false)
+    parameter(:offset, :query, :integer, "Offset for pagination (default: 0)", required: false)
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ReportsListResponse))
+  end
+
   @doc """
   GET /messaging/api/v1/reports
   Lists reports submitted by the authenticated user.
@@ -72,6 +184,20 @@ defmodule WhisprMessagingWeb.ReportController do
     reports = Reports.list_my_reports(user_id, limit: limit, offset: offset)
 
     json(conn, %{data: Enum.map(reports, &serialize_report/1)})
+  end
+
+  swagger_path :show do
+    get("/reports/{id}")
+    summary("Get report detail")
+    description("Returns a single report. Must be the reporter or an admin.")
+    produces("application/json")
+    tag("Moderation - Reports")
+
+    parameter(:id, :path, :string, "Report UUID", required: true, format: :uuid)
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ReportResponse))
+    response(404, "Report not found")
   end
 
   @doc """
@@ -98,6 +224,28 @@ defmodule WhisprMessagingWeb.ReportController do
   # Admin endpoints
   # ---------------------------------------------------------------------------
 
+  swagger_path :queue do
+    get("/reports/queue")
+    summary("Admin report queue")
+    description("Lists pending reports for admin review. Filterable by status and category.")
+    produces("application/json")
+    tag("Moderation - Reports")
+
+    parameter(:limit, :query, :integer, "Maximum number of reports (default: 20)", required: false)
+    parameter(:offset, :query, :integer, "Offset for pagination (default: 0)", required: false)
+    parameter(:status, :query, :string, "Filter by status (default: pending)",
+      required: false,
+      enum: [:pending, :reviewing, :resolved, :dismissed]
+    )
+    parameter(:category, :query, :string, "Filter by category",
+      required: false,
+      enum: [:spam, :harassment, :hate_speech, :violence, :other]
+    )
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ReportsListResponse))
+  end
+
   @doc """
   GET /messaging/api/v1/reports/queue
   Lists pending reports for admin review.
@@ -114,6 +262,17 @@ defmodule WhisprMessagingWeb.ReportController do
     json(conn, %{data: Enum.map(reports, &serialize_report/1)})
   end
 
+  swagger_path :stats do
+    get("/reports/stats")
+    summary("Report statistics")
+    description("Returns report statistics for the admin dashboard (counts by status, category, etc.)")
+    produces("application/json")
+    tag("Moderation - Reports")
+
+    security([%{Bearer: []}])
+    response(200, "Success", Schema.ref(:ReportStatsResponse))
+  end
+
   @doc """
   GET /messaging/api/v1/reports/stats
   Returns report statistics for admin dashboard.
@@ -121,6 +280,24 @@ defmodule WhisprMessagingWeb.ReportController do
   def stats(conn, _params) do
     stats = Reports.get_stats()
     json(conn, %{data: stats})
+  end
+
+  swagger_path :resolve do
+    put("/reports/{id}/resolve")
+    summary("Resolve a report")
+    description("Resolves a moderation report with an action and optional notes. Admin only.")
+    produces("application/json")
+    consumes("application/json")
+    tag("Moderation - Reports")
+
+    parameter(:id, :path, :string, "Report UUID", required: true, format: :uuid)
+    parameter(:body, :body, Schema.ref(:ReportResolveRequest), "Resolution parameters", required: true)
+
+    security([%{Bearer: []}])
+    response(200, "Report resolved", Schema.ref(:ReportResponse))
+    response(404, "Report not found")
+    response(409, "Report already resolved")
+    response(400, "Validation error")
   end
 
   @doc """

@@ -24,6 +24,7 @@ defmodule WhisprMessagingWeb.SwaggerInfo do
         - Message delivery and read receipts
         - Message attachments
         - Conversation members management
+        - Moderation: reports, sanctions, and analytics
 
         ## Authentication
         All endpoints (except health checks) require a valid JWT token in the Authorization header:
