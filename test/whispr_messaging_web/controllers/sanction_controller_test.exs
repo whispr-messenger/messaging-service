@@ -1,9 +1,12 @@
 defmodule WhisprMessagingWeb.SanctionControllerTest do
-  use WhisprMessagingWeb.ConnCase, async: true
+  use WhisprMessagingWeb.ConnCase, async: false
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Conversations
 
   setup do
+    Sandbox.mode(WhisprMessaging.Repo, :auto)
+
     admin_id = Ecto.UUID.generate()
     user_id = Ecto.UUID.generate()
 

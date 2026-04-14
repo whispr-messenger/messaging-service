@@ -1,10 +1,12 @@
 defmodule WhisprMessaging.Moderation.PolicyTest do
-  use WhisprMessaging.DataCase, async: true
+  use WhisprMessaging.DataCase, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.{Policy, Reports}
 
   setup do
+    Sandbox.mode(WhisprMessaging.Repo, :auto)
+
     reporter_id = create_test_user_id()
     reported_user_id = create_test_user_id()
 
@@ -75,9 +77,7 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
     test "flags reports with evidence", ctx do
       conversation = create_test_conversation()
 
-      Sandbox.mode(Repo, :auto)
       message = create_test_message(conversation.id, ctx.reported_user_id)
-      Sandbox.mode(Repo, {:shared, self()})
 
       report =
         create_report(ctx.reporter_id, ctx.reported_user_id, %{

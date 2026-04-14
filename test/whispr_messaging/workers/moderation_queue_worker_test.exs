@@ -58,10 +58,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorkerTest do
       assert count >= 2
     end
 
-    @tag :skip
     test "returns 0 when no pending reports" do
-      # Skip: GenServer process_now runs a DB query inside the GenServer PID,
-      # which cannot access the test sandbox. Needs a dedicated integration test setup.
       start_worker()
       {:ok, count} = ModerationQueueWorker.process_now()
       assert count == 0

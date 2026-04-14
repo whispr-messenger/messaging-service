@@ -1,19 +1,17 @@
 defmodule WhisprMessaging.Moderation.ReportsTest do
-  use WhisprMessaging.DataCase, async: true
+  use WhisprMessaging.DataCase, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.{Report, Reports}
 
   setup do
+    Sandbox.mode(WhisprMessaging.Repo, :auto)
+
     reporter_id = create_test_user_id()
     reported_user_id = create_test_user_id()
     conversation = create_test_conversation()
 
-    Sandbox.mode(Repo, :auto)
-
     message = create_test_message(conversation.id, reported_user_id)
-
-    Sandbox.mode(Repo, {:shared, self()})
 
     %{
       reporter_id: reporter_id,
@@ -142,8 +140,9 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
 
       assert resolved.status == "resolved_dismissed"
       resolution = resolved.resolution
-      assert Map.get(resolution, "resolved_by") || Map.get(resolution, :resolved_by) == admin_id
-      assert Map.get(resolution, "action") || Map.get(resolution, :action) == "dismiss"
+
+      assert (resolution["resolved_by"] || resolution[:resolved_by]) == admin_id
+      assert (resolution["action"] || resolution[:action]) == "dismiss"
     end
 
     test "resolves a pending report with action", ctx do

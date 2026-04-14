@@ -1,9 +1,12 @@
 defmodule WhisprMessaging.Moderation.SanctionsTest do
-  use WhisprMessaging.DataCase, async: true
+  use WhisprMessaging.DataCase, async: false
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Moderation.Sanctions
 
   setup do
+    Sandbox.mode(WhisprMessaging.Repo, :auto)
+
     conversation = create_test_conversation()
     user_id = create_test_user_id()
     admin_id = create_test_user_id()
