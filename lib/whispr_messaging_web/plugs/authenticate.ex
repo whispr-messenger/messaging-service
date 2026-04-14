@@ -101,7 +101,9 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
     # Skip :iat and :nbf (clock-skew prone) but validate :exp so expired tokens
     # are rejected.  Do NOT list :exp in `skip` — that would disable expiration
     # validation regardless of the validate_exp option.
-    Joken.Config.default_claims(skip: [:iat, :nbf])
+    # iss/aud must match the values the auth-service puts in its JWTs;
+    # the Joken default ("Joken") would reject every real token.
+    Joken.Config.default_claims(skip: [:iat, :nbf], iss: "whispr-auth", aud: "whispr")
   end
 
   # Attempt to read the `kid` header field from a JWT without verifying it.

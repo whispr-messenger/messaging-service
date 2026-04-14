@@ -60,7 +60,9 @@ defmodule WhisprMessagingWeb.UserSocket do
   end
 
   defp token_config do
-    Joken.Config.default_claims(skip: [:iat, :nbf])
+    # iss/aud must match the values the auth-service puts in its JWTs;
+    # the Joken default ("Joken") would reject every real token.
+    Joken.Config.default_claims(skip: [:iat, :nbf], iss: "whispr-auth", aud: "whispr")
   end
 
   defp peek_kid(token) do
