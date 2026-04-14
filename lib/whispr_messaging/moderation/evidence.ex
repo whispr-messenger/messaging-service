@@ -171,8 +171,8 @@ defmodule WhisprMessaging.Moderation.Evidence do
   @spec redact_string(String.t()) :: String.t()
   def redact_string(text) when is_binary(text) do
     text
-    |> Regex.replace(@email_pattern, "[EMAIL REDACTED]")
-    |> Regex.replace(@phone_pattern, "[PHONE REDACTED]")
+    |> then(&Regex.replace(@email_pattern, &1, "[EMAIL REDACTED]"))
+    |> then(&Regex.replace(@phone_pattern, &1, "[PHONE REDACTED]"))
   end
 
   def redact_string(other), do: other
