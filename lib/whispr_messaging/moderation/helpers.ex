@@ -27,3 +27,5 @@ defmodule WhisprMessaging.Moderation.Helpers do
       Logger.error("[Moderation] Redis publish failed on #{channel}: #{inspect(error)}")
   end
 end
+
+# Trigger rebuild for configmap sync 1776262779
