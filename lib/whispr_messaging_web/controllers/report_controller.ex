@@ -37,7 +37,11 @@ defmodule WhisprMessagingWeb.ReportController do
 
             description(:string, "Free-text description of the issue")
             evidence(:object, "Automatically collected evidence")
-            status(:string, "Report status", enum: [:pending, :under_review, :resolved_action, :resolved_dismissed])
+
+            status(:string, "Report status",
+              enum: [:pending, :under_review, :resolved_action, :resolved_dismissed]
+            )
+
             resolution(:object, "Resolution details (action taken, notes)")
             auto_escalated(:boolean, "Whether the report was auto-escalated")
             created_at(:string, "Creation timestamp (ISO 8601)", format: :"date-time")
@@ -232,8 +236,11 @@ defmodule WhisprMessagingWeb.ReportController do
         json(conn, %{data: serialize_report(report)})
 
       {:ok, report} ->
-        # Admin role check will be enforced when role system is integrated
-        json(conn, %{data: serialize_report(report)})
+        if admin_or_moderator?(conn, user_id) do
+          json(conn, %{data: serialize_report(report)})
+        else
+          conn |> put_status(:forbidden) |> json(%{error: "Access denied"})
+        end
 
       {:error, :not_found} ->
         conn |> put_status(:not_found) |> json(%{error: "Report not found"})
@@ -390,6 +397,69 @@ defmodule WhisprMessagingWeb.ReportController do
   end
 
   defp format_changeset_errors(error), do: inspect(error)
+
+  defp admin_or_moderator?(conn, user_id) do
+    # If the role was already resolved by the RequireAdmin plug, use it directly
+    case conn.assigns[:user_role] do
+      role when role in ["admin", "moderator"] ->
+        true
+
+      _ ->
+        # Resolve inline via the same cache + user-service logic
+        alias WhisprMessaging.Cache
+
+        cache_key = "admin_role:#{user_id}"
+
+        case Cache.get(cache_key) do
+          {:ok, %{"role" => role}} when role in ["admin", "moderator"] ->
+            true
+
+          {:ok, role} when role in ["admin", "moderator"] ->
+            true
+
+          _ ->
+            resolve_role_from_user_service(conn, user_id, cache_key)
+        end
+    end
+  end
+
+  defp resolve_role_from_user_service(conn, user_id, cache_key) do
+    alias WhisprMessaging.Cache
+
+    url =
+      (System.get_env("USER_SERVICE_HTTP_URL") || "http://user-service:3002") <>
+        "/user/v1/roles/me"
+
+    headers =
+      case Plug.Conn.get_req_header(conn, "authorization") do
+        [auth | _] -> [{"authorization", auth}, {"accept", "application/json"}]
+        _ -> [{"accept", "application/json"}]
+      end
+
+    request = Finch.build(:get, url, headers)
+
+    case Finch.request(request, WhisprMessaging.Finch, receive_timeout: 5_000) do
+      {:ok, %Finch.Response{status: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"role" => role}} ->
+            Cache.set(cache_key, %{"role" => role}, 300)
+            role in ["admin", "moderator"]
+
+          _ ->
+            fallback_admin_check(user_id)
+        end
+
+      _ ->
+        fallback_admin_check(user_id)
+    end
+  end
+
+  defp fallback_admin_check(user_id) do
+    case System.get_env("ADMIN_USER_IDS") do
+      nil -> false
+      ids -> user_id in (ids |> String.split(",") |> Enum.map(&String.trim/1))
+    end
+  end
 
   defp parse_int(nil, default), do: default
 

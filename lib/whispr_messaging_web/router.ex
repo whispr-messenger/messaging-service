@@ -13,6 +13,12 @@ defmodule WhisprMessagingWeb.Router do
     plug WhisprMessagingWeb.Plugs.Authenticate
   end
 
+  pipeline :admin_api do
+    plug :accepts, ["json"]
+    plug WhisprMessagingWeb.Plugs.Authenticate
+    plug WhisprMessagingWeb.Plugs.RequireAdmin
+  end
+
   scope "/messaging/api/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
@@ -125,11 +131,25 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
 
-    # Moderation reports
+    # Moderation reports (user-accessible)
     get "/reports", ReportController, :index
     post "/reports", ReportController, :create
+    get "/reports/:id", ReportController, :show
+
+    # Conversation sanctions (list active — viewable by conversation members)
+    get "/conversations/:conversation_id/sanctions", SanctionController, :index
+  end
+
+  # Admin-only moderation endpoints (require admin or moderator role)
+  scope "/messaging/api/v1", WhisprMessagingWeb do
+    pipe_through :admin_api
+
+    # Report queue and stats
     get "/reports/queue", ReportController, :queue
     get "/reports/stats", ReportController, :stats
+
+    # Report resolution
+    put "/reports/:id/resolve", ReportController, :resolve
 
     # Moderation analytics
     get "/reports/analytics/dashboard", AnalyticsController, :dashboard
@@ -140,11 +160,7 @@ defmodule WhisprMessagingWeb.Router do
     get "/reports/analytics/categories", AnalyticsController, :categories
     get "/reports/analytics/resolution", AnalyticsController, :resolution
 
-    get "/reports/:id", ReportController, :show
-    put "/reports/:id/resolve", ReportController, :resolve
-
-    # Conversation sanctions
-    get "/conversations/:conversation_id/sanctions", SanctionController, :index
+    # Conversation sanctions (create / delete — admin only)
     post "/conversations/:conversation_id/sanctions", SanctionController, :create
     delete "/conversations/:conversation_id/sanctions/:id", SanctionController, :delete
   end
