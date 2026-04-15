@@ -32,12 +32,12 @@ defmodule WhisprMessagingWeb.ReportController do
             message_id(:string, "UUID of the reported message", format: :uuid)
 
             category(:string, "Report category",
-              enum: [:spam, :harassment, :hate_speech, :violence, :other]
+              enum: [:offensive, :spam, :nudity, :violence, :harassment, :other]
             )
 
             description(:string, "Free-text description of the issue")
             evidence(:object, "Automatically collected evidence")
-            status(:string, "Report status", enum: [:pending, :reviewing, :resolved, :dismissed])
+            status(:string, "Report status", enum: [:pending, :under_review, :resolved_action, :resolved_dismissed])
             resolution(:object, "Resolution details (action taken, notes)")
             auto_escalated(:boolean, "Whether the report was auto-escalated")
             created_at(:string, "Creation timestamp (ISO 8601)", format: :"date-time")
@@ -60,7 +60,7 @@ defmodule WhisprMessagingWeb.ReportController do
 
             category(:string, "Report category",
               required: true,
-              enum: [:spam, :harassment, :hate_speech, :violence, :other]
+              enum: [:offensive, :spam, :nudity, :violence, :harassment, :other]
             )
 
             description(:string, "Description of the issue")
@@ -259,12 +259,12 @@ defmodule WhisprMessagingWeb.ReportController do
 
     parameter(:status, :query, :string, "Filter by status (default: pending)",
       required: false,
-      enum: [:pending, :reviewing, :resolved, :dismissed]
+      enum: [:pending, :under_review, :resolved_action, :resolved_dismissed]
     )
 
     parameter(:category, :query, :string, "Filter by category",
       required: false,
-      enum: [:spam, :harassment, :hate_speech, :violence, :other]
+      enum: [:offensive, :spam, :nudity, :violence, :harassment, :other]
     )
 
     security([%{Bearer: []}])
