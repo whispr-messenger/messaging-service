@@ -6,6 +6,8 @@ defmodule WhisprMessaging.Moderation.Sanctions do
   Includes expiration handling for temporary sanctions.
   """
 
+  import WhisprMessaging.Moderation.Helpers, only: [tap_ok: 2, redis_publish: 2]
+
   alias WhisprMessaging.Moderation.ConversationSanction
   alias WhisprMessaging.Repo
 
@@ -139,13 +141,6 @@ defmodule WhisprMessaging.Moderation.Sanctions do
         expires_at: sanction.expires_at && DateTime.to_iso8601(sanction.expires_at)
       })
 
-    Redix.command(:redix, ["PUBLISH", "whispr:moderation:sanction_applied", payload])
+    redis_publish("whispr:moderation:sanction_applied", payload)
   end
-
-  defp tap_ok({:ok, value} = result, fun) do
-    fun.(value)
-    result
-  end
-
-  defp tap_ok(error, _fun), do: error
 end

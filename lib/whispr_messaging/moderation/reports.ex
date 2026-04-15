@@ -7,6 +7,8 @@ defmodule WhisprMessaging.Moderation.Reports do
   """
 
   import Ecto.Query
+  import WhisprMessaging.Moderation.Helpers, only: [tap_ok: 2, redis_publish: 2]
+
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Moderation.Report
   alias WhisprMessaging.Repo
@@ -269,7 +271,7 @@ defmodule WhisprMessaging.Moderation.Reports do
         conversation_id: report.conversation_id
       })
 
-    Redix.command(:redix, ["PUBLISH", "whispr:moderation:report_created", payload])
+    redis_publish("whispr:moderation:report_created", payload)
   end
 
   defp publish_threshold_reached(reported_user_id, level, count) do
@@ -281,7 +283,7 @@ defmodule WhisprMessaging.Moderation.Reports do
         report_count: count
       })
 
-    Redix.command(:redix, ["PUBLISH", "whispr:moderation:threshold_reached", payload])
+    redis_publish("whispr:moderation:threshold_reached", payload)
 
     Logger.warning(
       "Moderation threshold #{level} reached for user #{reported_user_id} (#{count} unique reporters)"
@@ -312,11 +314,4 @@ defmodule WhisprMessaging.Moderation.Reports do
     do: :ok
 
   defp validate_resolvable(_), do: {:error, :already_resolved}
-
-  defp tap_ok({:ok, value} = result, fun) do
-    fun.(value)
-    result
-  end
-
-  defp tap_ok(error, _fun), do: error
 end
