@@ -134,24 +134,23 @@ defmodule WhisprMessagingWeb.Router do
     # Moderation reports (user-accessible)
     get "/reports", ReportController, :index
     post "/reports", ReportController, :create
-    get "/reports/:id", ReportController, :show
 
     # Conversation sanctions (list active — viewable by conversation members)
     get "/conversations/:conversation_id/sanctions", SanctionController, :index
   end
 
   # Admin-only moderation endpoints (require admin or moderator role)
+  # IMPORTANT: these literal routes (/reports/queue, /reports/stats, /reports/analytics/*)
+  # must be declared BEFORE the parameterized /reports/:id route to avoid Phoenix
+  # matching "queue" or "stats" as a UUID.
   scope "/messaging/api/v1", WhisprMessagingWeb do
     pipe_through :admin_api
 
-    # Report queue and stats
+    # Report queue and stats — literal paths BEFORE :id
     get "/reports/queue", ReportController, :queue
     get "/reports/stats", ReportController, :stats
 
-    # Report resolution
-    put "/reports/:id/resolve", ReportController, :resolve
-
-    # Moderation analytics
+    # Moderation analytics — literal paths BEFORE :id
     get "/reports/analytics/dashboard", AnalyticsController, :dashboard
     get "/reports/analytics/summary", AnalyticsController, :summary
     get "/reports/analytics/trends", AnalyticsController, :trends
@@ -159,6 +158,10 @@ defmodule WhisprMessagingWeb.Router do
     get "/reports/analytics/top-reported", AnalyticsController, :top_reported
     get "/reports/analytics/categories", AnalyticsController, :categories
     get "/reports/analytics/resolution", AnalyticsController, :resolution
+
+    # Report detail and resolution — parameterized :id AFTER literal paths
+    get "/reports/:id", ReportController, :show
+    put "/reports/:id/resolve", ReportController, :resolve
 
     # Conversation sanctions (create / delete — admin only)
     post "/conversations/:conversation_id/sanctions", SanctionController, :create
