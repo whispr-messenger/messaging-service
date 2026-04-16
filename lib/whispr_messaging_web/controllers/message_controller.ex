@@ -43,10 +43,12 @@ defmodule WhisprMessagingWeb.MessageController do
   Query params:
   - limit: number of messages to return (default: 50, max: 100)
   - before: timestamp to get messages before (pagination)
+  - search: optional content filter; when present, returns matching messages instead of paginated history
   """
   def index(conn, %{"id" => conversation_id} = params) do
     limit = min(String.to_integer(params["limit"] || "50"), 100)
     before_timestamp = params["before"]
+    search_term = params["search"]
     user_id = conn.assigns[:user_id]
 
     if is_nil(user_id) do
@@ -57,7 +59,13 @@ defmodule WhisprMessagingWeb.MessageController do
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
-          Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
+          if is_binary(search_term) and search_term != "" do
+            conversation_id
+            |> Messages.search_messages(search_term, user_id)
+            |> Enum.take(limit)
+          else
+            Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
+          end
           |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
         json(conn, %{
