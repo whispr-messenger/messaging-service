@@ -6,6 +6,7 @@ defmodule WhisprMessagingWeb.ReactionController do
   use WhisprMessagingWeb, :controller
 
   alias WhisprMessaging.Messages
+  alias WhisprMessagingWeb.Endpoint
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -41,8 +42,20 @@ defmodule WhisprMessagingWeb.ReactionController do
     user_id = params["user_id"] || conn.assigns[:user_id]
     reaction = params["reaction"]
 
-    with {:ok, _message} <- Messages.get_message(message_id),
+    with {:ok, message} <- Messages.get_message(message_id),
          {:ok, message_reaction} <- Messages.add_reaction(message_id, user_id, reaction) do
+      # Diffusion WebSocket sur le topic conversation
+      Endpoint.broadcast(
+        "conversation:#{message.conversation_id}",
+        "reaction_added",
+        camelize_keys(%{
+          message_id: message_id,
+          conversation_id: message.conversation_id,
+          user_id: user_id,
+          reaction: reaction
+        })
+      )
+
       conn
       |> put_status(:created)
       |> json(%{data: render_reaction(message_reaction)})
@@ -60,6 +73,24 @@ defmodule WhisprMessagingWeb.ReactionController do
 
     case Messages.remove_reaction(message_id, user_id, reaction) do
       {:ok, :deleted} ->
+        # Récupère conversation_id pour router la diffusion sur le bon topic
+        case Messages.get_message(message_id) do
+          {:ok, message} ->
+            Endpoint.broadcast(
+              "conversation:#{message.conversation_id}",
+              "reaction_removed",
+              camelize_keys(%{
+                message_id: message_id,
+                conversation_id: message.conversation_id,
+                user_id: user_id,
+                reaction: reaction
+              })
+            )
+
+          _ ->
+            :ok
+        end
+
         json(conn, %{
           data: camelize_keys(%{message_id: message_id, reaction: reaction, deleted: true})
         })

@@ -8,7 +8,10 @@ defmodule WhisprMessagingWeb.MessageController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.ConversationServer
+  alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Messages
+  alias WhisprMessagingWeb.Endpoint
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -122,7 +125,8 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id),
-           {:ok, message} <- Messages.create_message(params_with_conv) do
+           {:ok, _pid} <- ConversationSupervisor.ensure_conversation_server(conversation_id),
+           {:ok, message} <- ConversationServer.send_message(conversation_id, params_with_conv) do
         conn
         |> put_status(:created)
         |> json(%{
@@ -142,6 +146,20 @@ defmodule WhisprMessagingWeb.MessageController do
           conn
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
+
+        {:error, {:duplicate, existing_message}} ->
+          # Idempotent : même (sender_id, client_random) que précédemment, on renvoie l'existant
+          # sans rejouer la diffusion WebSocket.
+          conn
+          |> put_status(:created)
+          |> json(%{
+            data: render_message(existing_message),
+            meta:
+              camelize_keys(%{
+                conversation_id: conversation_id,
+                duplicate: true
+              })
+          })
 
         {:error, reason}
         when reason in [
@@ -258,6 +276,13 @@ defmodule WhisprMessagingWeb.MessageController do
         {:ok, message} ->
           message = WhisprMessaging.Repo.preload(message, :delivery_statuses)
 
+          # Diffusion WebSocket sur le topic conversation
+          Endpoint.broadcast(
+            "conversation:#{message.conversation_id}",
+            "message_edited",
+            %{message: ConversationServer.serialize_message(message)}
+          )
+
           json(conn, %{
             data: render_message(message),
             meta:
@@ -319,6 +344,20 @@ defmodule WhisprMessagingWeb.MessageController do
       |> json(%{error: "User ID required"})
     else
       with {:ok, message} <- Messages.delete_message(id, user_id, delete_for_everyone) do
+        # Diffusion WebSocket sur le topic conversation (uniquement pour delete_for_everyone,
+        # les soft-deletes "pour moi" ne concernent que l'utilisateur courant)
+        if delete_for_everyone do
+          Endpoint.broadcast(
+            "conversation:#{message.conversation_id}",
+            "message_deleted",
+            camelize_keys(%{
+              message_id: message.id,
+              conversation_id: message.conversation_id,
+              delete_for_everyone: true
+            })
+          )
+        end
+
         json(conn, %{
           data:
             camelize_keys(%{
