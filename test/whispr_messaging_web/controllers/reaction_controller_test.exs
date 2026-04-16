@@ -71,9 +71,9 @@ defmodule WhisprMessagingWeb.ReactionControllerTest do
                      },
                      1_000
 
-      assert payload[:messageId] == message.id
-      assert payload[:userId] == user2_id
-      assert payload[:reaction] == "👍"
+      assert payload["messageId"] == message.id
+      assert payload["userId"] == user2_id
+      assert payload["reaction"] == "👍"
     end
   end
 
@@ -112,9 +112,9 @@ defmodule WhisprMessagingWeb.ReactionControllerTest do
                      },
                      1_000
 
-      assert payload[:messageId] == message.id
-      assert payload[:userId] == user2_id
-      assert payload[:reaction] == "👍"
+      assert payload["messageId"] == message.id
+      assert payload["userId"] == user2_id
+      assert payload["reaction"] == "👍"
     end
   end
 end

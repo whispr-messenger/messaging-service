@@ -181,8 +181,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                      },
                      1_000
 
-      assert broadcast_msg[:id] == response["data"]["id"]
-      assert broadcast_msg[:client_random] == 12_345
+      assert broadcast_msg["id"] == response["data"]["id"]
+      assert broadcast_msg["clientRandom"] == 12_345
 
       # Et sur le topic user:{memberId} pour chaque membre hors expéditeur
       assert_receive %Phoenix.Socket.Broadcast{
@@ -422,7 +422,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                      },
                      1_000
 
-      assert broadcast_msg[:id] == message.id
+      assert broadcast_msg["id"] == message.id
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -548,8 +548,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                      },
                      1_000
 
-      assert payload[:messageId] == message.id
-      assert payload[:deleteForEveryone] == true
+      assert payload["messageId"] == message.id
+      assert payload["deleteForEveryone"] == true
     end
 
     test "soft delete (pour moi) ne diffuse PAS message_deleted (WHISPR-915)", %{

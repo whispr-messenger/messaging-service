@@ -9,7 +9,6 @@ defmodule WhisprMessagingWeb.MessageController do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.ConversationServer
-  alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Messages
   alias WhisprMessagingWeb.Endpoint
 
@@ -125,8 +124,12 @@ defmodule WhisprMessagingWeb.MessageController do
     else
       with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
            true <- Messages.user_can_access_message?(conversation_id, user_id),
-           {:ok, _pid} <- ConversationSupervisor.ensure_conversation_server(conversation_id),
-           {:ok, message} <- ConversationServer.send_message(conversation_id, params_with_conv) do
+           {:ok, message} <- Messages.create_message(params_with_conv) do
+        # Diffusion WebSocket sur le topic conversation + chaque topic user
+        # des membres hors expéditeur (contrat WHISPR-915). Aligné sur la voie
+        # WS `ConversationChannel.send_message` → `ConversationServer.broadcast_message/2`.
+        broadcast_new_message(conversation_id, message)
+
         conn
         |> put_status(:created)
         |> json(%{
@@ -147,20 +150,6 @@ defmodule WhisprMessagingWeb.MessageController do
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
 
-        {:error, {:duplicate, existing_message}} ->
-          # Idempotent : même (sender_id, client_random) que précédemment, on renvoie l'existant
-          # sans rejouer la diffusion WebSocket.
-          conn
-          |> put_status(:created)
-          |> json(%{
-            data: render_message(existing_message),
-            meta:
-              camelize_keys(%{
-                conversation_id: conversation_id,
-                duplicate: true
-              })
-          })
-
         {:error, reason}
         when reason in [
                :invalid_signature,
@@ -180,6 +169,29 @@ defmodule WhisprMessagingWeb.MessageController do
           {:error, changeset}
       end
     end
+  end
+
+  # Diffuse `new_message` sur le topic de la conversation et sur le topic `user:*`
+  # de chaque membre hors expéditeur. Aligné sur le format produit par
+  # `ConversationServer.broadcast_message/2` pour que les clients WebSocket reçoivent
+  # exactement la même charge utile, peu importe si le message vient de la voie REST
+  # ou de la voie WebSocket.
+  defp broadcast_new_message(conversation_id, message) do
+    serialized = ConversationServer.serialize_message(message)
+
+    Endpoint.broadcast("conversation:#{conversation_id}", "new_message", %{
+      message: serialized
+    })
+
+    # Diffuse aussi sur le canal `user:*` pour les membres hors expéditeur,
+    # ce qui alimente ConversationsListScreen sans nécessiter que l'écran soit ouvert.
+    Enum.each(Conversations.list_conversation_members(conversation_id), fn member ->
+      if member.user_id != message.sender_id do
+        Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
+          message: serialized
+        })
+      end
+    end)
   end
 
   swagger_path :show do
