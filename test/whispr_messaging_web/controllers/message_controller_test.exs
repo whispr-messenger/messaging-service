@@ -132,10 +132,19 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
   end
 
   describe "POST /messaging/api/v1/conversations/:id/messages" do
-    test "creates a new message", %{
+    test "creates a new message and broadcasts new_message event (WHISPR-915)", %{
       conversation: conversation,
-      user1_id: user1_id
+      user1_id: user1_id,
+      user2_id: user2_id
     } do
+      # Abonnement aux topics conversation et user pour vérifier la diffusion
+      Phoenix.PubSub.subscribe(
+        WhisprMessaging.PubSub,
+        "conversation:#{conversation.id}"
+      )
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user2_id}")
+
       message_attrs = %{
         "content" => "encrypted_content",
         "message_type" => "text",
@@ -163,6 +172,25 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["data"]["senderId"] == user1_id
       assert response["data"]["conversationId"] == conversation.id
       assert response["data"]["deliveryStatus"] in ["sent", "pending"]
+
+      # La diffusion doit arriver sur le topic conversation (pour ChatScreen ouvert)
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "new_message",
+                       payload: %{message: broadcast_msg}
+                     },
+                     1_000
+
+      assert broadcast_msg["id"] == response["data"]["id"]
+      assert broadcast_msg["clientRandom"] == 12_345
+
+      # Et sur le topic user:{memberId} pour chaque membre hors expéditeur
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> _,
+                       event: "new_message",
+                       payload: %{message: _}
+                     },
+                     1_000
     end
 
     test "returns 422 with invalid attributes", %{
@@ -355,7 +383,16 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       %{message: message}
     end
 
-    test "updates a message", %{message: message, user1_id: user1_id} do
+    test "updates a message and broadcasts message_edited (WHISPR-915)", %{
+      message: message,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      Phoenix.PubSub.subscribe(
+        WhisprMessaging.PubSub,
+        "conversation:#{conversation.id}"
+      )
+
       update_attrs = %{
         "content" => "updated_content",
         "metadata" => %{"edited" => true}
@@ -377,6 +414,15 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["data"]["content"] == "updated_content"
       assert response["data"]["metadata"]["edited"] == true
       assert response["data"]["editedAt"] != nil
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "message_edited",
+                       payload: %{message: broadcast_msg}
+                     },
+                     1_000
+
+      assert broadcast_msg["id"] == message.id
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -469,7 +515,16 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       %{message: message}
     end
 
-    test "deletes a message", %{message: message, user1_id: user1_id} do
+    test "deletes a message and broadcasts message_deleted (WHISPR-915)", %{
+      message: message,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      Phoenix.PubSub.subscribe(
+        WhisprMessaging.PubSub,
+        "conversation:#{conversation.id}"
+      )
+
       conn =
         build_conn()
         |> authenticated_conn(user1_id)
@@ -485,6 +540,42 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert response["data"]["isDeleted"] == true
       assert response["data"]["deleteForEveryone"] == true
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "message_deleted",
+                       payload: payload
+                     },
+                     1_000
+
+      assert payload["messageId"] == message.id
+      assert payload["deleteForEveryone"] == true
+    end
+
+    test "soft delete (pour moi) ne diffuse PAS message_deleted (WHISPR-915)", %{
+      message: message,
+      conversation: conversation,
+      user2_id: user2_id
+    } do
+      Phoenix.PubSub.subscribe(
+        WhisprMessaging.PubSub,
+        "conversation:#{conversation.id}"
+      )
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      _response =
+        delete(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}",
+          delete_for_everyone: false
+        )
+        |> json_response(200)
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "message_deleted"}, 300
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
