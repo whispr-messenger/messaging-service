@@ -15,6 +15,14 @@ This microservice is responsible of all messaging tasks for the Whispr Messenger
 
 It handles real-time conversations, message delivery, reactions, attachments, scheduled messages, and content moderation via integration with the moderation-service.
 
+## Tech Stack
+
+- **Langage** : Elixir 1.18+
+- **Framework** : Phoenix + OTP
+- **Base de données** : PostgreSQL via Ecto
+- **Cache** : Redis
+- **Tests** : ExUnit + ExCoveralls
+
 ## Installation
 
 The repository uses `just` a custom recipe runner (like `make` in C lang) to provide useful scripts.
