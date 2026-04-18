@@ -47,3 +47,14 @@ just up dev
               └────────┘ └────────┘ │ Service      │
                                     └──────────────┘
 ```
+
+## API Endpoints
+
+### REST
+
+- `POST /conversations` — Créer une conversation
+- `GET /conversations/:id` — Récupérer une conversation
+- `POST /messages` — Envoyer un message
+- `GET /conversations/:id/messages` — Lister les messages
+- `POST /messages/:id/reactions` — Ajouter une réaction
+- `POST /reports` — Signaler un contenu
