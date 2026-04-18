@@ -58,3 +58,8 @@ just up dev
 - `GET /conversations/:id/messages` — Lister les messages
 - `POST /messages/:id/reactions` — Ajouter une réaction
 - `POST /reports` — Signaler un contenu
+
+### WebSocket
+
+- `conversation:lobby` — Présence et typing indicators
+- `conversation:<id>` — Messages en temps réel par conversation
