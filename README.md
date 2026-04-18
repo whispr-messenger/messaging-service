@@ -63,3 +63,10 @@ just up dev
 
 - `conversation:lobby` — Présence et typing indicators
 - `conversation:<id>` — Messages en temps réel par conversation
+
+## Testing
+
+```bash
+mix test
+mix coveralls
+```
