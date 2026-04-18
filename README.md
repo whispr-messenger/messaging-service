@@ -11,7 +11,9 @@
 
 ## Description
 
-This microservice is responsible of all messaging tasks for the Whispr Messenger system
+This microservice is responsible of all messaging tasks for the Whispr Messenger system.
+
+It handles real-time conversations, message delivery, reactions, attachments, scheduled messages, and content moderation via integration with the moderation-service.
 
 ## Installation
 
