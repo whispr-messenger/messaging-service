@@ -105,3 +105,8 @@ Client ──▶ Phoenix Endpoint ──▶ UserSocket ──▶ ConversationCha
                                                 │  online)   │
                                                 └────────────┘
 ```
+
+## Liens utiles
+
+- [Guide de contribution](CONTRIBUTING.md)
+- [Politique de sécurité](SECURITY.md)
