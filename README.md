@@ -90,3 +90,15 @@ mix coveralls
 ## Déploiement
 
 Le service est conteneurisé et déployé sur GKE via ArgoCD.
+
+### Flux WebSocket détaillé
+
+```
+Client ──▶ Phoenix Endpoint ──▶ UserSocket ──▶ ConversationChannel
+                                                      │
+                                                ┌─────▼─────┐
+                                                │  Presence  │
+                                                │ (typing,   │
+                                                │  online)   │
+                                                └────────────┘
+```
