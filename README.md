@@ -4,10 +4,9 @@
 
 ---
 
-- [Documentation]()
-- [Swagger UI]()
-- [ArgoCD UI]()
-- [CodeCov]() (SonarQube is not available for Elixir)
+- [Swagger UI](https://whispr.epitech.beer/messaging/swagger)
+- [ArgoCD UI](https://argocd.whispr.epitech.beer)
+- [CodeCov](https://codecov.io) (SonarQube is not available for Elixir)
 
 ## Description
 
