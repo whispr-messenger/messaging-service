@@ -91,6 +91,8 @@ mix coveralls
 | `REDIS_HOST` | Hôte Redis |
 | `SECRET_KEY_BASE` | Clé secrète Phoenix |
 | `AUTH_SERVICE_JWKS_URL` | URL JWKS pour vérifier les tokens |
+| `PORT` | Port HTTP (défaut: 4000) |
+| `MODERATION_SERVICE_URL` | URL du service de modération |
 
 ## Déploiement
 
