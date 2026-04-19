@@ -60,6 +60,8 @@ just up dev
 - `GET /conversations/:id/members` — Lister les membres
 - `POST /messages/:id/pin` — Épingler un message
 - `POST /drafts` — Sauvegarder un brouillon
+- `GET /conversations/:id/analytics` — Statistiques de conversation
+- `POST /scheduled-messages` — Planifier un message
 
 ### WebSocket
 
