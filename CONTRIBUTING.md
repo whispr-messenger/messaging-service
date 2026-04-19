@@ -23,3 +23,17 @@ Le service est écrit en Elixir/Phoenix.
 mix test
 mix coveralls
 ```
+
+## Structure du projet
+
+```
+lib/
+├── whispr_messaging/          # Logique métier
+│   ├── conversations.ex
+│   ├── messages.ex
+│   └── moderation/
+└── whispr_messaging_web/      # Couche web
+    ├── controllers/
+    ├── channels/
+    └── plugs/
+```
