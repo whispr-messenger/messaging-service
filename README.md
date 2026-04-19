@@ -1,6 +1,6 @@
 # Messaging Service
 
-> Add the ArgoCD badge here once deployed
+[![App Status](https://argocd.whispr.epitech.beer/api/badge?name=messaging-service&revision=true&showAppName=true)](https://argocd.whispr.epitech.beer/applications/messaging-service)
 
 ---
 
