@@ -77,3 +77,12 @@ mix coveralls
 - PostgreSQL 14+
 - Redis 6+
 - Docker
+
+## Variables d'environnement
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | URL de connexion PostgreSQL |
+| `REDIS_HOST` | Hôte Redis |
+| `SECRET_KEY_BASE` | Clé secrète Phoenix |
+| `AUTH_SERVICE_JWKS_URL` | URL JWKS pour vérifier les tokens |
