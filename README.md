@@ -69,3 +69,11 @@ just up dev
 mix test
 mix coveralls
 ```
+
+## Prérequis
+
+- Elixir 1.18+
+- Erlang 26+
+- PostgreSQL 14+
+- Redis 6+
+- Docker
