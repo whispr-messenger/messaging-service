@@ -57,6 +57,9 @@ just up dev
 - `GET /conversations/:id/messages` — Lister les messages
 - `POST /messages/:id/reactions` — Ajouter une réaction
 - `POST /reports` — Signaler un contenu
+- `GET /conversations/:id/members` — Lister les membres
+- `POST /messages/:id/pin` — Épingler un message
+- `POST /drafts` — Sauvegarder un brouillon
 
 ### WebSocket
 
