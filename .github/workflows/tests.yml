@@ -67,7 +67,7 @@ jobs:
       # Setup
       ####################################################################################################
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.ref || github.event.client_payload.ref }}
           fetch-depth: 0
@@ -122,3 +122,19 @@ jobs:
           name: messaging-service-coverage
           fail_ci_if_error: false
           verbose: true
+
+      ####################################################################################################
+      # SBOM - Supply Chain Governance
+      ####################################################################################################
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 30
