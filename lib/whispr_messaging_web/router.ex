@@ -72,6 +72,14 @@ defmodule WhisprMessagingWeb.Router do
     post "/conversations/:id/members", ConversationMemberController, :create
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
+    # Role management (WHISPR-965)
+    patch "/conversations/:id/members/:user_id/role",
+          ConversationMemberController,
+          :update_role
+
+    # Leave conversation (WHISPR-965 — handles auto-promote)
+    post "/conversations/:id/leave", ConversationMemberController, :leave
+
     # Per-user conversation settings (WHISPR-467)
     get "/conversations/:id/settings", ConversationController, :get_member_settings
     put "/conversations/:id/settings", ConversationController, :update_member_settings
