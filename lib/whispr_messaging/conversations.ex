@@ -323,6 +323,130 @@ defmodule WhisprMessaging.Conversations do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Group member role management (WHISPR-965)
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Returns the role ("admin" or "member") stored in a member's settings.
+  """
+  def member_role(%ConversationMember{settings: settings}) do
+    Map.get(settings || %{}, "role", "member")
+  end
+
+  def member_role(nil), do: nil
+
+  @doc """
+  Lists active admin members for a conversation.
+  """
+  def list_admin_members(conversation_id) do
+    conversation_id
+    |> list_conversation_members()
+    |> Enum.filter(fn m -> member_role(m) == "admin" end)
+  end
+
+  @doc """
+  Updates a member's role. Only `"admin"` and `"member"` are accepted.
+  """
+  def set_member_role(%ConversationMember{} = member, new_role)
+      when new_role in ["admin", "member"] do
+    new_settings = Map.put(member.settings || %{}, "role", new_role)
+
+    member
+    |> ConversationMember.update_settings_changeset(new_settings)
+    |> Repo.update()
+  end
+
+  def set_member_role(_member, _role), do: {:error, :invalid_role}
+
+  @doc """
+  Makes a user leave a conversation.
+
+  Handles the auto-promote rule: when the leaving user is the only admin and
+  at least one non-admin member remains, the oldest non-admin member is
+  promoted to admin before the leaver is deactivated. When the leaver is the
+  last active member, the conversation is deactivated.
+
+  Returns `{:ok, %{member: member, auto_promoted: member_or_nil,
+  conversation_deactivated: boolean}}` on success.
+  """
+  def leave_conversation(conversation_id, user_id) do
+    Repo.transaction(fn ->
+      with {:ok, conversation} <- get_conversation(conversation_id),
+           %ConversationMember{is_active: true} = member <-
+             get_conversation_member(conversation_id, user_id) do
+        members = list_conversation_members(conversation_id)
+        role = member_role(member)
+
+        auto_promoted =
+          if role == "admin" do
+            maybe_auto_promote(members, user_id)
+          else
+            nil
+          end
+
+        {:ok, deactivated} =
+          member
+          |> ConversationMember.deactivate_changeset()
+          |> Repo.update()
+
+        conversation_deactivated = maybe_deactivate_if_empty(conversation, members, user_id)
+
+        %{
+          member: deactivated,
+          auto_promoted: auto_promoted,
+          conversation_deactivated: conversation_deactivated
+        }
+      else
+        {:error, :not_found} -> Repo.rollback(:conversation_not_found)
+        nil -> Repo.rollback(:not_member)
+        %ConversationMember{is_active: false} -> Repo.rollback(:not_member)
+      end
+    end)
+  end
+
+  # If the leaver is the only admin, promote the oldest remaining plain member.
+  defp maybe_auto_promote(members, leaver_user_id) do
+    admins = Enum.filter(members, fn m -> member_role(m) == "admin" end)
+
+    if match?([%ConversationMember{user_id: ^leaver_user_id}], admins) do
+      promote_oldest_remaining(members, leaver_user_id)
+    else
+      nil
+    end
+  end
+
+  defp promote_oldest_remaining(members, leaver_user_id) do
+    candidate =
+      members
+      |> Enum.reject(fn m -> m.user_id == leaver_user_id end)
+      |> Enum.filter(fn m -> m.is_active and member_role(m) == "member" end)
+      |> Enum.sort_by(& &1.joined_at, DateTime)
+      |> List.first()
+
+    with %ConversationMember{} = c <- candidate,
+         {:ok, promoted} <- set_member_role(c, "admin") do
+      promoted
+    else
+      _ -> nil
+    end
+  end
+
+  defp maybe_deactivate_if_empty(conversation, members, user_id) do
+    case Enum.reject(members, fn m -> m.user_id == user_id end) do
+      [] ->
+        {:ok, _} =
+          conversation
+          |> Conversation.deactivate_changeset()
+          |> Repo.update()
+
+        true
+
+      _ ->
+        false
+    end
+  end
+
   @doc """
   Lists conversations for a specific user.
   """
