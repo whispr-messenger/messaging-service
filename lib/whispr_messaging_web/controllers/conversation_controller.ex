@@ -955,11 +955,14 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   defp render_conversation_with_members(conversation, member_info) do
+    member_user_ids = Enum.map(conversation.members, & &1.user_id)
+
     base =
       conversation
       |> render_conversation()
       |> Map.put("members", Enum.map(conversation.members, &render_member/1))
       |> Map.put("memberCount", length(conversation.members))
+      |> Map.put("memberUserIds", member_user_ids)
 
     if member_info do
       settings = member_info.settings || %{}

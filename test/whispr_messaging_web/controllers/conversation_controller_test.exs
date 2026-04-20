@@ -324,6 +324,40 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert Enum.count(response["data"]["members"]) == 2
     end
 
+    test "includes memberUserIds in group conversation response", %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      user3_id: user3_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          name: "Test Group",
+          metadata: %{},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user2_id)
+      Conversations.add_conversation_member(conversation.id, user3_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      member_user_ids = response["data"]["memberUserIds"]
+      assert is_list(member_user_ids)
+      assert length(member_user_ids) == 3
+      assert user1_id in member_user_ids
+      assert user2_id in member_user_ids
+      assert user3_id in member_user_ids
+    end
+
     test "returns is_muted, is_pinned, is_archived for the authenticated user (default false)", %{
       user1_id: user1_id,
       user2_id: user2_id
