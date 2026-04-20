@@ -122,10 +122,10 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
     with {:ok, _conversation} <- Conversations.get_conversation(id),
          :ok <- check_not_self_remove(current_user_id, member_id),
-         true <- admin?(id, current_user_id) || {:error, :forbidden},
          %ConversationMember{} = _member <-
            Conversations.get_conversation_member(id, member_id) ||
              {:error, :member_not_found},
+         true <- admin?(id, current_user_id) || {:error, :forbidden},
          {:ok, _} <- Conversations.remove_conversation_member(id, member_id) do
       broadcast_members_updated(id, "member_removed", %{
         user_id: member_id,
@@ -201,10 +201,10 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
     with {:ok, _conversation} <- Conversations.get_conversation(id),
          true <- new_role in ["admin", "member"] || {:error, :invalid_role},
-         true <- admin?(id, current_user_id) || {:error, :forbidden},
          %ConversationMember{} = target <-
            Conversations.get_conversation_member(id, target_id) ||
              {:error, :member_not_found},
+         true <- admin?(id, current_user_id) || {:error, :forbidden},
          :ok <- check_not_self_lock(id, current_user_id, target_id, new_role),
          {:ok, updated} <- Conversations.set_member_role(target, new_role) do
       broadcast_members_updated(id, "member_role_updated", %{

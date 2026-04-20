@@ -661,7 +661,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
           is_active: true
         })
 
-      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
+      Conversations.add_conversation_member(conversation.id, user1_id)
 
       fake_user_id = Ecto.UUID.generate()
 
