@@ -332,8 +332,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
-          name: "Test Group",
-          metadata: %{},
+          metadata: %{"name" => "Test Group"},
           is_active: true
         })
 
