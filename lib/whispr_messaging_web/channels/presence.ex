@@ -192,8 +192,10 @@ defmodule WhisprMessagingWeb.Presence do
 
   def handle_info({:stop_typing, user_id, conversation_id}, state) do
     # Clean up stale typing indicators
-    Logger.debug(
-      "Auto-stopping typing indicator for user #{user_id} in conversation #{conversation_id}"
+    Logger.debug("Auto-stopping typing indicator",
+      user_id: user_id,
+      conversation_id: conversation_id,
+      domain: :presence
     )
 
     # This would be handled by the channel process that started the typing

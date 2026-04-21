@@ -13,8 +13,6 @@ defmodule WhisprMessaging.Conversations do
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Services.UserService
 
-  require Logger
-
   # Conversation CRUD operations
 
   @doc """

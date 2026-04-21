@@ -22,7 +22,11 @@ defmodule WhisprMessagingWeb.UserSocket do
         {:ok, assign(socket, :user_id, user_id)}
 
       {:error, reason} ->
-        Logger.debug("[UserSocket] JWT verification failed: #{inspect(reason)}")
+        Logger.debug("JWT verification failed on socket",
+          reason: inspect(reason),
+          domain: :socket
+        )
+
         :error
     end
   end
@@ -46,7 +50,7 @@ defmodule WhisprMessagingWeb.UserSocket do
       {:ok, user_id}
     else
       {:error, :not_loaded} ->
-        Logger.warning("[UserSocket] JWKS key not yet loaded — rejecting connection")
+        Logger.warning("JWKS key not yet loaded, rejecting socket connection", domain: :socket)
         {:error, :jwks_not_loaded}
 
       {:error, reason} ->

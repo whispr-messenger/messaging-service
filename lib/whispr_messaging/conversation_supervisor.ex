@@ -28,30 +28,34 @@ defmodule WhisprMessaging.ConversationSupervisor do
 
         case DynamicSupervisor.start_child(__MODULE__, child_spec) do
           {:ok, pid} ->
-            Logger.info(
-              "Started ConversationServer for conversation #{conversation_id}, PID: #{inspect(pid)}"
+            Logger.info("ConversationServer started",
+              conversation_id: conversation_id,
+              pid: inspect(pid)
             )
 
             {:ok, pid}
 
           {:error, {:already_started, pid}} ->
-            Logger.debug(
-              "ConversationServer for conversation #{conversation_id} already exists, PID: #{inspect(pid)}"
+            Logger.debug("ConversationServer already exists",
+              conversation_id: conversation_id,
+              pid: inspect(pid)
             )
 
             {:ok, pid}
 
           {:error, reason} ->
-            Logger.error(
-              "Failed to start ConversationServer for conversation #{conversation_id}: #{inspect(reason)}"
+            Logger.error("ConversationServer start failed",
+              conversation_id: conversation_id,
+              reason: inspect(reason)
             )
 
             {:error, reason}
         end
 
       pid ->
-        Logger.debug(
-          "ConversationServer for conversation #{conversation_id} already running, PID: #{inspect(pid)}"
+        Logger.debug("ConversationServer already running",
+          conversation_id: conversation_id,
+          pid: inspect(pid)
         )
 
         {:ok, pid}
@@ -64,18 +68,19 @@ defmodule WhisprMessaging.ConversationSupervisor do
   def stop_conversation(conversation_id) do
     case get_conversation_pid(conversation_id) do
       nil ->
-        Logger.debug("No ConversationServer found for conversation #{conversation_id}")
+        Logger.debug("No ConversationServer found", conversation_id: conversation_id)
         :ok
 
       pid ->
         case DynamicSupervisor.terminate_child(__MODULE__, pid) do
           :ok ->
-            Logger.info("Stopped ConversationServer for conversation #{conversation_id}")
+            Logger.info("ConversationServer stopped", conversation_id: conversation_id)
             :ok
 
           {:error, reason} ->
-            Logger.error(
-              "Failed to stop ConversationServer for conversation #{conversation_id}: #{inspect(reason)}"
+            Logger.error("ConversationServer stop failed",
+              conversation_id: conversation_id,
+              reason: inspect(reason)
             )
 
             {:error, reason}
@@ -139,7 +144,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
       end
     end)
 
-    Logger.info("Stopped all conversation servers")
+    Logger.info("All conversation servers stopped")
   end
 
   @doc """
@@ -164,7 +169,8 @@ defmodule WhisprMessaging.ConversationSupervisor do
 
   @impl true
   def init(_init_arg) do
-    Logger.info("Starting ConversationSupervisor")
+    Logger.metadata(domain: :conversation_supervisor)
+    Logger.info("ConversationSupervisor starting")
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
@@ -230,7 +236,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
       |> Enum.filter(&conversation_idle?(&1, idle_threshold_minutes))
 
     Enum.each(idle_conversations, fn conversation_id ->
-      Logger.info("Stopping idle conversation server: #{conversation_id}")
+      Logger.info("Stopping idle conversation server", conversation_id: conversation_id)
       stop_conversation(conversation_id)
     end)
 

@@ -82,6 +82,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
   @impl true
   def init(opts) do
+    Logger.metadata(domain: :moderation_queue_worker)
     config = load_config()
 
     interval = Keyword.get(config, :process_interval, @default_interval)
@@ -111,9 +112,10 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
       schedule_tick(interval)
     end
 
-    Logger.info(
-      "[ModerationQueueWorker] Started with interval=#{interval}ms, " <>
-        "moderators=#{Enum.count(moderator_ids)}, batch_size=#{batch_size}"
+    Logger.info("ModerationQueueWorker started",
+      interval_ms: interval,
+      moderator_count: Enum.count(moderator_ids),
+      batch_size: batch_size
     )
 
     {:ok, state}
@@ -143,7 +145,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
 
   @impl true
   def handle_cast({:update_moderators, ids}, state) do
-    Logger.info("[ModerationQueueWorker] Updated moderators: #{Enum.count(ids)} active")
+    Logger.info("Moderators updated", count: Enum.count(ids))
     {:noreply, %{state | moderator_ids: ids, moderator_index: 0}}
   end
 
@@ -172,7 +174,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
   # ---------------------------------------------------------------------------
 
   defp do_process_batch(state) do
-    Logger.debug("[ModerationQueueWorker] Processing batch (size: #{state.batch_size})")
+    Logger.debug("Processing batch", batch_size: state.batch_size)
 
     # Fetch pending reports, prioritizing any in the priority queue
     reports = fetch_pending_reports(state)
@@ -198,9 +200,11 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
     }
 
     if processed > 0 do
-      Logger.info(
-        "[ModerationQueueWorker] Processed #{processed} reports " <>
-          "(categorized: #{categorized}, assigned: #{assigned}, escalated: #{escalated})"
+      Logger.info("Batch processed",
+        processed: processed,
+        categorized: categorized,
+        assigned: assigned,
+        escalated: escalated
       )
     end
 
@@ -281,9 +285,10 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
         {:skip, :no_match}
 
       suggested_category when suggested_category != report.category ->
-        Logger.debug(
-          "[ModerationQueueWorker] Auto-categorized report #{report.id}: " <>
-            "#{report.category} -> #{suggested_category}"
+        Logger.debug("Report auto-categorized",
+          report_id: report.id,
+          from: report.category,
+          to: suggested_category
         )
 
         report
@@ -298,9 +303,7 @@ defmodule WhisprMessaging.Workers.ModerationQueueWorker do
   defp evaluate_and_escalate(%Report{} = report) do
     case Policy.evaluate(report) do
       {:ok, %{auto_escalate: true, severity: severity}} ->
-        Logger.info(
-          "[ModerationQueueWorker] Auto-escalating report #{report.id} (severity: #{severity})"
-        )
+        Logger.info("Report auto-escalated", report_id: report.id, severity: severity)
 
         report
         |> Ecto.Changeset.change(%{

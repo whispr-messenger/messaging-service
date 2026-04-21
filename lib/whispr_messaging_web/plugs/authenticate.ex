@@ -33,6 +33,7 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   def call(conn, _opts) do
     case get_user_id(conn) do
       {:ok, user_id} ->
+        Logger.metadata(user_id: user_id)
         assign(conn, :user_id, user_id)
 
       {:error, :unauthorized} ->
@@ -78,11 +79,11 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
       {:ok, user_id}
     else
       {:error, :not_loaded} ->
-        Logger.warning("[Authenticate] JWKS key not yet loaded — rejecting request")
+        Logger.warning("JWKS key not yet loaded, rejecting request", domain: :auth)
         {:error, :unauthorized}
 
       {:error, reason} ->
-        Logger.debug("[Authenticate] JWT validation failed: #{inspect(reason)}")
+        Logger.debug("JWT validation failed", reason: inspect(reason), domain: :auth)
         {:error, :unauthorized}
     end
   end
