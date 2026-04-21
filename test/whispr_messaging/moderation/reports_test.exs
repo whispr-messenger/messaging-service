@@ -1,7 +1,7 @@
 defmodule WhisprMessaging.Moderation.ReportsTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias WhisprMessaging.Moderation.{Report, Reports}
+  alias WhisprMessaging.Moderation.Reports
 
   setup do
     reporter_id = create_test_user_id()

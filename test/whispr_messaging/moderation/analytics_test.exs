@@ -13,7 +13,7 @@ defmodule WhisprMessaging.Moderation.AnalyticsTest do
     }
   end
 
-  defp create_report(reporter_id, reported_user_id, category \\ "spam") do
+  defp create_report(reporter_id, reported_user_id, category) do
     {:ok, report} =
       Reports.create_report(%{
         reporter_id: reporter_id,

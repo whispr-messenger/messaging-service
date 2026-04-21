@@ -802,8 +802,6 @@ defmodule WhisprMessaging.MessagesTest do
         }
       ])
 
-      import Ecto.Query
-
       messages =
         Message.recent_messages_query(c.id, 50)
         |> WhisprMessaging.Repo.all()
