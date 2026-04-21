@@ -12,8 +12,10 @@ defmodule WhisprMessaging.Services.NotificationService do
   def queue_push_notifications(user_ids, message) do
     # Stub: logs until gRPC integration with notification service is done
     # For now, just log the notifications
-    Logger.debug(
-      "Queuing push notifications for users: #{inspect(user_ids)} for message: #{message.id}"
+    Logger.debug("Queuing push notifications",
+      user_count: length(user_ids),
+      message_id: message.id,
+      domain: :notifications
     )
 
     {:ok, :queued}

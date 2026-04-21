@@ -25,7 +25,7 @@ defmodule WhisprMessaging.Cache do
         end
 
       {:error, reason} ->
-        Logger.error("Redis GET error: #{inspect(reason)}")
+        Logger.error("Redis GET error", reason: inspect(reason), domain: :cache)
         {:error, reason}
     end
   end
@@ -45,7 +45,7 @@ defmodule WhisprMessaging.Cache do
         :ok
 
       {:error, reason} ->
-        Logger.error("Redis SET error: #{inspect(reason)}")
+        Logger.error("Redis SET error", reason: inspect(reason), domain: :cache)
         {:error, reason}
     end
   end
@@ -59,7 +59,7 @@ defmodule WhisprMessaging.Cache do
         :ok
 
       {:error, reason} ->
-        Logger.error("Redis DEL error: #{inspect(reason)}")
+        Logger.error("Redis DEL error", reason: inspect(reason), domain: :cache)
         {:error, reason}
     end
   end
@@ -70,11 +70,11 @@ defmodule WhisprMessaging.Cache do
   def fetch(key, fallback_fun, ttl \\ @default_ttl) do
     case get(key) do
       {:ok, value} ->
-        Logger.debug("Cache HIT: #{key}")
+        Logger.debug("Cache hit", key: key, domain: :cache)
         {:ok, value}
 
       {:error, :not_found} ->
-        Logger.debug("Cache MISS: #{key}")
+        Logger.debug("Cache miss", key: key, domain: :cache)
 
         case fallback_fun.() do
           {:ok, value} = result ->
@@ -94,14 +94,20 @@ defmodule WhisprMessaging.Cache do
     case Redix.command(:redix, ["KEYS", cache_key(pattern)]) do
       {:ok, keys} when keys != [] ->
         Redix.command(:redix, ["DEL" | keys])
-        Logger.info("Invalidated #{length(keys)} cache keys for pattern: #{pattern}")
+
+        Logger.info("Cache keys invalidated",
+          count: length(keys),
+          pattern: pattern,
+          domain: :cache
+        )
+
         :ok
 
       {:ok, []} ->
         :ok
 
       {:error, reason} ->
-        Logger.error("Redis KEYS error: #{inspect(reason)}")
+        Logger.error("Redis KEYS error", reason: inspect(reason), domain: :cache)
         {:error, reason}
     end
   end

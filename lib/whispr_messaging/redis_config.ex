@@ -132,13 +132,25 @@ defmodule WhisprMessaging.RedisConfig do
     sentinels_str =
       Enum.map_join(sentinels, ", ", fn s -> "#{s[:host]}:#{s[:port]}" end)
 
-    Logger.info("Redis mode: sentinel (master: #{master}, sentinels: #{sentinels_str})")
+    Logger.info("Redis configured",
+      mode: :sentinel,
+      master: master,
+      sentinels: sentinels_str,
+      domain: :redis
+    )
   end
 
   defp log_mode(_, opts) do
     host = Keyword.get(opts, :host, "localhost")
     port = Keyword.get(opts, :port, 6379)
     db = Keyword.get(opts, :database, 0)
-    Logger.info("Redis mode: direct (#{host}:#{port}/#{db})")
+
+    Logger.info("Redis configured",
+      mode: :direct,
+      host: host,
+      port: port,
+      database: db,
+      domain: :redis
+    )
   end
 end

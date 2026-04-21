@@ -56,6 +56,7 @@ defmodule WhisprMessaging.JwksCache do
     refresh_ms =
       Keyword.get(opts, :refresh_ms, Keyword.get(jwks_cfg, :refresh_ms, @default_refresh_ms))
 
+    Logger.metadata(domain: :jwks_cache)
     state = %{url: url, refresh_ms: refresh_ms, keys: %{}}
     send(self(), :refresh)
     {:ok, state}
@@ -76,15 +77,15 @@ defmodule WhisprMessaging.JwksCache do
     new_keys =
       case fetch_signing_keys(state.url) do
         {:ok, keys} when map_size(keys) > 0 ->
-          Logger.info("[JwksCache] Loaded #{map_size(keys)} EC P-256 key(s) from #{state.url}")
+          Logger.info("JWKS keys loaded", count: map_size(keys), url: state.url)
           keys
 
         {:ok, _empty} ->
-          Logger.error("[JwksCache] JWKS document contained no usable EC P-256 keys")
+          Logger.error("JWKS document contained no usable EC P-256 keys")
           state.keys
 
         {:error, reason} ->
-          Logger.error("[JwksCache] Failed to load JWKS: #{inspect(reason)}")
+          Logger.error("Failed to load JWKS", reason: inspect(reason))
           state.keys
       end
 
@@ -125,7 +126,7 @@ defmodule WhisprMessaging.JwksCache do
           Map.put(acc, kid, pem)
         rescue
           e ->
-            Logger.warning("[JwksCache] Skipping unreadable EC key: #{inspect(e)}")
+            Logger.warning("Skipping unreadable EC key", error: inspect(e))
             acc
         end
       end)

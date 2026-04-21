@@ -74,7 +74,10 @@ defmodule WhisprMessagingWeb.UserChannel do
         })
 
       _ ->
-        Logger.warning("Failed to fetch conversation #{conversation_id} for invitation")
+        Logger.warning("Failed to fetch conversation for invitation",
+          conversation_id: conversation_id,
+          domain: :channel
+        )
     end
 
     {:noreply, socket}

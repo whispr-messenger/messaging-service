@@ -79,7 +79,7 @@ config :whispr_messaging, :services,
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id, :conversation_id, :user_id, :query, :params]
+  metadata: :all
 
 # PhoenixSwagger configuration
 config :whispr_messaging, :phoenix_swagger,

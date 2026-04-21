@@ -46,8 +46,11 @@ defmodule WhisprMessaging.Moderation.Batch do
   """
   @spec bulk_resolve([String.t()], String.t(), map()) :: {:ok, batch_result()} | {:error, term()}
   def bulk_resolve(report_ids, admin_id, resolution_attrs) when is_list(report_ids) do
-    Logger.info(
-      "[Batch] Bulk resolve #{Enum.count(report_ids)} reports by admin #{admin_id}, action: #{resolution_attrs.action}"
+    Logger.info("Bulk resolve started",
+      count: Enum.count(report_ids),
+      admin_id: admin_id,
+      action: resolution_attrs.action,
+      domain: :moderation_batch
     )
 
     results =
@@ -63,8 +66,10 @@ defmodule WhisprMessaging.Moderation.Batch do
 
     summary = build_batch_summary(results)
 
-    Logger.info(
-      "[Batch] Bulk resolve complete: #{summary.succeeded} succeeded, #{summary.failed} failed"
+    Logger.info("Bulk resolve complete",
+      succeeded: summary.succeeded,
+      failed: summary.failed,
+      domain: :moderation_batch
     )
 
     {:ok, summary}
@@ -111,8 +116,10 @@ defmodule WhisprMessaging.Moderation.Batch do
   def bulk_update_status(report_ids, new_status)
       when is_list(report_ids) and
              new_status in ~w(pending under_review resolved_action resolved_dismissed) do
-    Logger.info(
-      "[Batch] Bulk status update to '#{new_status}' for #{Enum.count(report_ids)} reports"
+    Logger.info("Bulk status update",
+      new_status: new_status,
+      count: Enum.count(report_ids),
+      domain: :moderation_batch
     )
 
     {count, _} =
@@ -121,7 +128,12 @@ defmodule WhisprMessaging.Moderation.Batch do
       )
       |> Repo.update_all(set: [status: new_status])
 
-    Logger.info("[Batch] Updated #{count} reports to status '#{new_status}'")
+    Logger.info("Reports status updated",
+      count: count,
+      new_status: new_status,
+      domain: :moderation_batch
+    )
+
     {:ok, count}
   end
 
@@ -148,8 +160,10 @@ defmodule WhisprMessaging.Moderation.Batch do
           {:ok, non_neg_integer()} | {:error, :invalid_category}
   def bulk_categorize(report_ids, new_category) when is_list(report_ids) do
     if new_category in Report.valid_categories() do
-      Logger.info(
-        "[Batch] Re-categorizing #{Enum.count(report_ids)} reports to '#{new_category}'"
+      Logger.info("Bulk re-categorize",
+        count: Enum.count(report_ids),
+        new_category: new_category,
+        domain: :moderation_batch
       )
 
       {count, _} =
@@ -205,7 +219,12 @@ defmodule WhisprMessaging.Moderation.Batch do
         set: [status: "resolved_dismissed", resolution: resolution]
       )
 
-    Logger.info("[Batch] Dismissed #{count} reports by filter (admin: #{admin_id})")
+    Logger.info("Reports dismissed by filter",
+      count: count,
+      admin_id: admin_id,
+      domain: :moderation_batch
+    )
+
     {:ok, count}
   end
 
@@ -223,7 +242,7 @@ defmodule WhisprMessaging.Moderation.Batch do
   @spec merge_duplicates(String.t()) ::
           {:ok, %{duplicates_found: non_neg_integer(), dismissed: non_neg_integer()}}
   def merge_duplicates(admin_id) do
-    Logger.info("[Batch] Scanning for duplicate reports")
+    Logger.info("Scanning for duplicate reports", domain: :moderation_batch)
 
     # Find groups of reports with same reporter_id + message_id (pending only)
     duplicates =
@@ -261,8 +280,10 @@ defmodule WhisprMessaging.Moderation.Batch do
         end
       end)
 
-    Logger.info(
-      "[Batch] Duplicate scan complete: #{Enum.count(duplicates)} groups, #{dismissed_count} dismissed"
+    Logger.info("Duplicate scan complete",
+      groups: Enum.count(duplicates),
+      dismissed: dismissed_count,
+      domain: :moderation_batch
     )
 
     {:ok, %{duplicates_found: Enum.count(duplicates), dismissed: dismissed_count}}
