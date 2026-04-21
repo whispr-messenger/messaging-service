@@ -88,7 +88,13 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
 
     test "runs escalation check synchronously in test env (no sandbox leak)", ctx do
       prev_cfg = Application.get_env(:whispr_messaging, :moderation, [])
-      Application.put_env(:whispr_messaging, :moderation, Keyword.put(prev_cfg, :mute_threshold, 1))
+
+      Application.put_env(
+        :whispr_messaging,
+        :moderation,
+        Keyword.put(prev_cfg, :mute_threshold, 1)
+      )
+
       on_exit(fn -> Application.put_env(:whispr_messaging, :moderation, prev_cfg) end)
 
       attrs = %{
