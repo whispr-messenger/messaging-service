@@ -41,6 +41,10 @@ config :whispr_messaging, WhisprMessaging.PubSub,
 # Configure gRPC for testing
 config :whispr_messaging, :grpc_port, 50053
 
+# Run moderation escalation checks synchronously so they share the test's
+# Ecto sandbox connection instead of leaking into Task.Supervisor.
+config :whispr_messaging, :moderation, escalation_async: false
+
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 

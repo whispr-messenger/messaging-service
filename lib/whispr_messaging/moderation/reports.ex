@@ -218,10 +218,16 @@ defmodule WhisprMessaging.Moderation.Reports do
   # ---------------------------------------------------------------------------
 
   defp check_escalation_thresholds(reported_user_id) do
-    # These are checked async to not block the report creation response
-    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+    # Async in prod to avoid blocking the report response.
+    # Sync in test so the check runs under the caller's sandbox connection
+    # instead of leaking a DB connection that outlives the test owner.
+    if escalation_config(:async, true) do
+      Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+        do_check_escalation(reported_user_id)
+      end)
+    else
       do_check_escalation(reported_user_id)
-    end)
+    end
   end
 
   defp do_check_escalation(reported_user_id) do
