@@ -30,3 +30,7 @@ user:<user_id>
 ```
 
 Reçoit les notifications globales de l'utilisateur (invitations, etc.).
+
+## Presence
+
+Le module Presence de Phoenix permet de tracker les utilisateurs en ligne et leur statut de typing en temps réel.
