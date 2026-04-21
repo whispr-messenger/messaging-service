@@ -410,32 +410,35 @@ defmodule WhisprMessagingWeb.MessageController do
         |> json(%{error: "conversation_ids must be a non-empty list"})
 
       true ->
-        case Messages.forward_message(source_id, target_ids, user_id) do
-          {:ok, messages} ->
-            Enum.each(messages, fn message ->
-              broadcast_new_message(message.conversation_id, message)
-            end)
-
-            conn
-            |> put_status(:created)
-            |> json(%{data: Enum.map(messages, &render_message/1)})
-
-          {:error, :not_found} ->
-            conn |> put_status(:not_found) |> json(%{error: "Message not found"})
-
-          {:error, :forbidden} ->
-            conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
-
-          {:error, %Ecto.Changeset{} = cs} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: translate_errors(cs)})
-
-          {:error, reason} ->
-            conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
-        end
+        handle_forward_result(conn, Messages.forward_message(source_id, target_ids, user_id))
     end
   end
+
+  defp handle_forward_result(conn, {:ok, messages}) do
+    Enum.each(messages, &broadcast_forwarded/1)
+
+    conn
+    |> put_status(:created)
+    |> json(%{data: Enum.map(messages, &render_message/1)})
+  end
+
+  defp handle_forward_result(conn, {:error, :not_found}),
+    do: conn |> put_status(:not_found) |> json(%{error: "Message not found"})
+
+  defp handle_forward_result(conn, {:error, :forbidden}),
+    do: conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+  defp handle_forward_result(conn, {:error, %Ecto.Changeset{} = cs}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: translate_errors(cs)})
+  end
+
+  defp handle_forward_result(conn, {:error, reason}),
+    do: conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+
+  defp broadcast_forwarded(message),
+    do: broadcast_new_message(message.conversation_id, message)
 
   # Private rendering functions
 
