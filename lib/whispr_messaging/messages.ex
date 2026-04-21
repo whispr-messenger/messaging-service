@@ -648,30 +648,36 @@ defmodule WhisprMessaging.Messages do
   defp do_forward(%Message{} = source, target_ids, user_id) do
     target_ids
     |> Enum.uniq()
-    |> Enum.reduce_while({:ok, []}, fn target_id, {:ok, acc} ->
-      if user_can_access_message?(target_id, user_id) do
-        attrs = %{
-          "conversation_id" => target_id,
-          "sender_id" => user_id,
-          "message_type" => source.message_type,
-          "content" => source.content,
-          "metadata" => Map.put(source.metadata || %{}, "forwarded", true),
-          "client_random" => :erlang.unique_integer([:positive]) |> rem(2_147_483_647),
-          "forwarded_from_id" => source.id
-        }
-
-        case create_message(attrs) do
-          {:ok, message} -> {:cont, {:ok, [message | acc]}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      else
-        {:halt, {:error, :forbidden}}
-      end
+    |> Enum.reduce_while({:ok, []}, fn target_id, acc ->
+      forward_to_target(source, target_id, user_id, acc)
     end)
     |> case do
       {:ok, messages} -> {:ok, Enum.reverse(messages)}
       error -> error
     end
+  end
+
+  defp forward_to_target(source, target_id, user_id, {:ok, acc}) do
+    if user_can_access_message?(target_id, user_id) do
+      wrap_forward_insert(create_message(forward_attrs(source, target_id, user_id)), acc)
+    else
+      {:halt, {:error, :forbidden}}
+    end
+  end
+
+  defp wrap_forward_insert({:ok, message}, acc), do: {:cont, {:ok, [message | acc]}}
+  defp wrap_forward_insert({:error, reason}, _acc), do: {:halt, {:error, reason}}
+
+  defp forward_attrs(source, target_id, user_id) do
+    %{
+      "conversation_id" => target_id,
+      "sender_id" => user_id,
+      "message_type" => source.message_type,
+      "content" => source.content,
+      "metadata" => Map.put(source.metadata || %{}, "forwarded", true),
+      "client_random" => :erlang.unique_integer([:positive]) |> rem(2_147_483_647),
+      "forwarded_from_id" => source.id
+    }
   end
 
   @doc """
