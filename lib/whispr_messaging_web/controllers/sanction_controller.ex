@@ -11,6 +11,11 @@ defmodule WhisprMessagingWeb.SanctionController do
 
   action_fallback WhisprMessagingWeb.FallbackController
 
+  # Defense-in-depth: the router pipes :create and :delete through :admin_api,
+  # but we also gate at the controller level so the guard survives any router
+  # refactor that moves a route out of the admin scope.
+  plug WhisprMessagingWeb.Plugs.RequireAdmin when action in [:create, :delete]
+
   # ---------------------------------------------------------------------------
   # Swagger definitions
   # ---------------------------------------------------------------------------
