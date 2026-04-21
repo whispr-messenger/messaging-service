@@ -13,7 +13,7 @@ defmodule WhisprMessaging.Moderation.PolicyTest do
     }
   end
 
-  defp create_report(reporter_id, reported_user_id, attrs \\ %{}) do
+  defp create_report(reporter_id, reported_user_id, attrs) do
     default = %{
       reporter_id: reporter_id,
       reported_user_id: reported_user_id,
