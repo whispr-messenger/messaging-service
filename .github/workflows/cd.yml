@@ -181,9 +181,7 @@ jobs:
           echo "Image tag: $IMAGE_TAG"
           echo "Updating deployment image to: ${FULL_IMAGE}"
 
-          # Always update preprod
-          yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/preprod/messaging-service/deployment.yaml
-
+          # preprod uses a rolling :preprod tag (WHISPR-1014) — skip sha pinning here
           if [ "$TRIGGER_BRANCH" = "main" ]; then
             # prod/
             yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].image = "'"${FULL_IMAGE}"'"' infrastructure/k8s/whispr/prod/messaging-service/deployment.yaml
