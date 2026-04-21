@@ -12,7 +12,8 @@ defmodule WhisprMessaging.Application do
 
   @impl true
   def start(_type, _args) do
-    Logger.info("Starting WhisprMessaging application...")
+    WhisprMessaging.TelemetryHandlers.attach()
+    Logger.info("Application starting")
 
     # Store application start time
     :persistent_term.put(:app_start_time, System.monotonic_time(:second))
@@ -23,11 +24,11 @@ defmodule WhisprMessaging.Application do
 
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
-        Logger.info("WhisprMessaging application started successfully")
+        Logger.info("Application started")
         {:ok, pid}
 
       {:error, reason} ->
-        Logger.error("Failed to start WhisprMessaging application: #{inspect(reason)}")
+        Logger.error("Application start failed", reason: inspect(reason))
         {:error, reason}
     end
   end

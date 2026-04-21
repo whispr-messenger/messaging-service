@@ -121,17 +121,24 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
               {:ok, role}
 
             _ ->
-              Logger.warning("[RequireAdmin] Unexpected response body from user-service: #{body}")
+              Logger.warning("Unexpected response body from user-service",
+                body: body,
+                domain: :admin_check
+              )
 
               :error
           end
 
         {:ok, %Finch.Response{status: status}} ->
-          Logger.warning("[RequireAdmin] user-service returned status #{status}")
+          Logger.warning("User-service returned unexpected status",
+            status: status,
+            domain: :admin_check
+          )
+
           :error
 
         {:error, reason} ->
-          Logger.error("[RequireAdmin] user-service unreachable: #{inspect(reason)}")
+          Logger.error("User-service unreachable", reason: inspect(reason), domain: :admin_check)
           :error
       end
     end
@@ -140,8 +147,9 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
       admin_ids = fallback_admin_ids()
 
       if user_id in admin_ids do
-        Logger.info(
-          "[RequireAdmin] Granted access via ADMIN_USER_IDS fallback for user #{user_id}"
+        Logger.info("Admin access granted via fallback",
+          user_id: user_id,
+          domain: :admin_check
         )
 
         {:ok, "admin"}

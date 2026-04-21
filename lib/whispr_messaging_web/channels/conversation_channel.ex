@@ -45,7 +45,12 @@ defmodule WhisprMessagingWeb.ConversationChannel do
              }, socket}
 
           {:error, reason} ->
-            Logger.error("Failed to start conversation server: #{inspect(reason)}")
+            Logger.error("Failed to start conversation server",
+              conversation_id: conversation_id,
+              reason: inspect(reason),
+              domain: :channel
+            )
+
             {:error, %{reason: "internal_server_error"}}
         end
 

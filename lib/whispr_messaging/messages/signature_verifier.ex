@@ -64,13 +64,17 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
       if :crypto.verify(:eddsa, :none, signed_data, signature, [public_key, :ed25519]) do
         :ok
       else
-        Logger.warning("Message signature verification failed for sender=#{inspect(sender_id)}")
+        Logger.warning("Message signature verification failed",
+          sender_id: sender_id,
+          domain: :signature
+        )
+
         {:error, :invalid_signature}
       end
     end
   rescue
     e ->
-      Logger.error("Signature verification error: #{inspect(e)}")
+      Logger.error("Signature verification error", error: inspect(e), domain: :signature)
       {:error, :verification_error}
   end
 
@@ -93,7 +97,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
 
       # Provided key differs from the trusted key — reject
       _ ->
-        Logger.warning("Untrusted public key for sender=#{inspect(sender_id)}")
+        Logger.warning("Untrusted public key", sender_id: sender_id, domain: :signature)
         {:error, :untrusted_public_key}
     end
   end
@@ -103,7 +107,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
          |> SenderPublicKey.changeset(%{user_id: sender_id, public_key: public_key_b64})
          |> Repo.insert() do
       {:ok, _} ->
-        Logger.info("Registered new public key for sender=#{inspect(sender_id)} (TOFU)")
+        Logger.info("Public key registered (TOFU)", sender_id: sender_id, domain: :signature)
         :ok
 
       {:error, _changeset} ->

@@ -267,7 +267,7 @@ defmodule WhisprMessagingWeb.HealthController do
   Always returns 200 OK if the application can respond to requests.
   """
   def live(conn, _params) do
-    Logger.debug("Liveness check requested")
+    Logger.debug("Liveness check requested", domain: :health)
 
     uptime_seconds = get_uptime_seconds()
 
@@ -306,7 +306,7 @@ defmodule WhisprMessagingWeb.HealthController do
   - 503 Service Unavailable: Service is not ready (dependencies unavailable)
   """
   def ready(conn, _params) do
-    Logger.debug("Readiness check started")
+    Logger.debug("Readiness check started", domain: :health)
 
     db_check = measure_check(&check_database/0)
     cache_check = measure_check(&check_redis/0)
@@ -351,34 +351,42 @@ defmodule WhisprMessagingWeb.HealthController do
 
   @doc false
   defp check_redis do
-    Logger.debug("Checking cache connection")
+    Logger.debug("Checking cache connection", domain: :health)
 
     # Try to set and get a health check value
     set_result = Redix.command(:redix, ["SET", "health-check", "ok", "EX", "1"])
-    Logger.debug("Redis SET result: #{inspect(set_result)}")
+    Logger.debug("Redis SET result", result: inspect(set_result), domain: :health)
 
     case set_result do
       {:ok, _} ->
         get_result = Redix.command(:redix, ["GET", "health-check"])
-        Logger.debug("Redis GET result: #{inspect(get_result)}")
+        Logger.debug("Redis GET result", result: inspect(get_result), domain: :health)
 
         case get_result do
           {:ok, _} ->
-            Logger.debug("Cache check passed")
+            Logger.debug("Cache check passed", domain: :health)
             :ok
 
           error ->
-            Logger.error("Cache check failed: unable to read test value - #{inspect(error)}")
+            Logger.error("Cache check failed: unable to read test value",
+              error: inspect(error),
+              domain: :health
+            )
+
             {:error, :redis}
         end
 
       error ->
-        Logger.error("Cache check failed: unable to set test value - #{inspect(error)}")
+        Logger.error("Cache check failed: unable to set test value",
+          error: inspect(error),
+          domain: :health
+        )
+
         {:error, :redis}
     end
   rescue
     error ->
-      Logger.error("Cache check failed with exception: #{inspect(error)}")
+      Logger.error("Cache check failed with exception", error: inspect(error), domain: :health)
       {:error, :redis}
   end
 

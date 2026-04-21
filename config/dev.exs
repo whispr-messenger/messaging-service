@@ -44,9 +44,11 @@ config :whispr_messaging, :redis,
 # Enable dev routes for dashboard and mailbox
 config :whispr_messaging, dev_routes: true
 
-# Do not include metadata nor timestamps in development logs
+# Development logs: colored output with key metadata
 config :logger, :console,
-  format: "[$level] $message\n",
+  format: "\n$time [$level] $message\n    $metadata\n",
+  metadata: :all,
+  colors: [enabled: true, debug: :cyan, info: :green, warning: :yellow, error: :red],
   level: :debug
 
 # Set a higher stacktrace during development. Avoid configuring such
@@ -73,7 +75,3 @@ config :whispr_messaging, :conversations,
 # Development logging
 # Note: :backends is removed — :console is the default handler in Elixir 1.19+
 # and passing it explicitly triggers a deprecation warning.
-config :logger,
-  compile_time_purge_matching: [
-    [level_lower_than: :info]
-  ]

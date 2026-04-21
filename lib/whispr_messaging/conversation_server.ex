@@ -101,7 +101,8 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def init(conversation_id) do
-    Logger.info("Starting ConversationServer for conversation #{conversation_id}")
+    Logger.metadata(conversation_id: conversation_id, domain: :conversation_server)
+    Logger.info("ConversationServer starting")
 
     case load_conversation_data(conversation_id) do
       {:ok, conversation, members, settings} ->
@@ -123,9 +124,7 @@ defmodule WhisprMessaging.ConversationServer do
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error(
-          "Failed to initialize ConversationServer for #{conversation_id}: #{inspect(reason)}"
-        )
+        Logger.error("ConversationServer init failed", reason: inspect(reason))
 
         {:stop, reason}
     end
@@ -147,9 +146,7 @@ defmodule WhisprMessaging.ConversationServer do
         {:reply, {:ok, message}, updated_state}
 
       {:error, reason} ->
-        Logger.warning(
-          "Failed to process message in conversation #{state.conversation_id}: #{inspect(reason)}"
-        )
+        Logger.warning("Message processing failed", reason: inspect(reason))
 
         {:reply, {:error, reason}, state}
     end
@@ -262,7 +259,7 @@ defmodule WhisprMessaging.ConversationServer do
     new_active_members = MapSet.put(state.active_members, user_id)
     new_state = %{state | active_members: new_active_members}
 
-    Logger.debug("Member #{user_id} joined conversation #{state.conversation_id}")
+    Logger.debug("Member joined", user_id: user_id)
     {:noreply, new_state}
   end
 
@@ -272,20 +269,18 @@ defmodule WhisprMessaging.ConversationServer do
 
     new_state = %{state | active_members: new_active_members, typing_users: new_typing_users}
 
-    Logger.debug("Member #{user_id} left conversation #{state.conversation_id}")
+    Logger.debug("Member left", user_id: user_id)
     {:noreply, new_state}
   end
 
   def handle_info(msg, state) do
-    Logger.debug("Unhandled message in ConversationServer: #{inspect(msg)}")
+    Logger.debug("Unhandled message", msg: inspect(msg))
     {:noreply, state}
   end
 
   @impl true
-  def terminate(reason, state) do
-    Logger.debug(
-      "ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}"
-    )
+  def terminate(reason, _state) do
+    Logger.debug("ConversationServer terminating", reason: inspect(reason))
 
     # The Registry will be automatically cleaned up when the process exits
     :ok
@@ -613,7 +608,7 @@ defmodule WhisprMessaging.ConversationServer do
 
     # Update last activity if conversation has been idle
     if DateTime.diff(DateTime.utc_now(), state.last_activity, :minute) > 5 do
-      Logger.debug("Conversation #{state.conversation_id} has been idle for 5+ minutes")
+      Logger.debug("Conversation idle for 5+ minutes")
     end
 
     new_state
