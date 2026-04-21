@@ -43,20 +43,27 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
     member_id = params["user_id"] || params["member_id"]
     current_user_id = conn.assigns[:user_id]
 
-    with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- can_manage_members?(conversation, current_user_id),
-         {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
-      conn
-      |> put_status(:created)
-      |> json(%{data: render_member(member)})
-    else
-      false ->
+    with {:ok, conversation} <- Conversations.get_conversation(id) do
+      if conversation.type == "direct" do
         conn
-        |> put_status(:forbidden)
-        |> json(%{error: "Not authorized to add members"})
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Cannot add members to a direct conversation"})
+      else
+        with true <- can_manage_members?(conversation, current_user_id),
+             {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
+          conn
+          |> put_status(:created)
+          |> json(%{data: render_member(member)})
+        else
+          false ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "Not authorized to add members"})
 
-      error ->
-        error
+          error ->
+            error
+        end
+      end
     end
   end
 

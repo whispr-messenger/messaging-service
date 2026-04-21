@@ -2,6 +2,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   use WhisprMessagingWeb.ConnCase, async: true
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Services.UserService
+
+  import Mock
 
   setup do
     user1_id = Ecto.UUID.generate()
@@ -126,6 +129,36 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["id"] != nil
       assert response["data"]["type"] == "direct"
       assert response["data"]["isActive"] == true
+    end
+
+    test "returns 403 when users are not contacts", %{user1_id: user1_id, user2_id: user2_id} do
+      previous = Application.get_env(:whispr_messaging, :enforce_direct_contact, false)
+      Application.put_env(:whispr_messaging, :enforce_direct_contact, true)
+
+      on_exit(fn ->
+        Application.put_env(:whispr_messaging, :enforce_direct_contact, previous)
+      end)
+
+      attrs = %{
+        "type" => "direct",
+        "other_user_id" => user2_id,
+        "metadata" => %{}
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      with_mock UserService,
+        [:passthrough],
+        check_users_are_contacts: fn ^user1_id, ^user2_id, _auth -> {:ok, false} end do
+        response =
+          post(conn, ~p"/api/v1/conversations", attrs)
+          |> json_response(403)
+
+        assert response["error"] != nil
+      end
     end
 
     test "returns error when trying to create conversation with self", %{user1_id: user1_id} do

@@ -8,6 +8,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Services.UserService
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -197,23 +198,29 @@ defmodule WhisprMessagingWeb.ConversationController do
       |> put_status(:unauthorized)
       |> json(%{error: "Authentication required"})
     else
-      case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
-        {:ok, conversation} ->
-          conn
-          |> put_status(:created)
-          |> json(%{
-            data: render_conversation(conversation)
-          })
+      case ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+        :ok ->
+          case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
+            {:ok, conversation} ->
+              conn
+              |> put_status(:created)
+              |> json(%{
+                data: render_conversation(conversation)
+              })
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: translate_errors(changeset)})
+            {:error, %Ecto.Changeset{} = changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{errors: translate_errors(changeset)})
 
-        {:error, reason} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{error: inspect(reason)})
+            {:error, reason} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: inspect(reason)})
+          end
+
+        {:error, resp_conn} ->
+          resp_conn
       end
     end
   end
@@ -222,23 +229,50 @@ defmodule WhisprMessagingWeb.ConversationController do
   defp do_create(conn, %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params) do
     metadata = params["metadata"] || %{}
 
-    case Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
-      {:ok, conversation} ->
-        conn
-        |> put_status(:created)
-        |> json(%{
-          data: render_conversation(conversation)
-        })
+    current_user_id = conn.assigns[:user_id]
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: translate_errors(changeset)})
+    if is_nil(current_user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Authentication required"})
+    else
+      other_user_id =
+        cond do
+          user1_id == current_user_id -> user2_id
+          user2_id == current_user_id -> user1_id
+          true -> nil
+        end
 
-      {:error, reason} ->
+      if is_nil(other_user_id) do
         conn
-        |> put_status(:bad_request)
-        |> json(%{error: reason})
+        |> put_status(:forbidden)
+        |> json(%{error: "Invalid participants"})
+      else
+        case ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+          :ok ->
+            case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
+              {:ok, conversation} ->
+                conn
+                |> put_status(:created)
+                |> json(%{
+                  data: render_conversation(conversation)
+                })
+
+              {:error, %Ecto.Changeset{} = changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{errors: translate_errors(changeset)})
+
+              {:error, reason} ->
+                conn
+                |> put_status(:bad_request)
+                |> json(%{error: reason})
+            end
+
+          {:error, resp_conn} ->
+            resp_conn
+        end
+      end
     end
   end
 
@@ -273,6 +307,33 @@ defmodule WhisprMessagingWeb.ConversationController do
     conn
     |> put_status(:bad_request)
     |> json(%{error: "creator_id is required for group conversations"})
+  end
+
+  defp ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+    enforce? = Application.get_env(:whispr_messaging, :enforce_direct_contact, true)
+
+    if enforce? do
+      authorization = conn |> get_req_header("authorization") |> List.first()
+
+      case UserService.check_users_are_contacts(current_user_id, other_user_id, authorization) do
+        {:ok, true} ->
+          :ok
+
+        {:ok, false} ->
+          {:error,
+           conn
+           |> put_status(:forbidden)
+           |> json(%{error: "Users must be contacts to create a direct conversation"})}
+
+        {:error, _reason} ->
+          {:error,
+           conn
+           |> put_status(:forbidden)
+           |> json(%{error: "Unable to verify contact relationship"})}
+      end
+    else
+      :ok
+    end
   end
 
   defp validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata) do
@@ -709,20 +770,27 @@ defmodule WhisprMessagingWeb.ConversationController do
     member_id = params["user_id"] || params["member_id"]
     current_user_id = conn.assigns[:user_id]
 
-    with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- can_manage_members?(conversation, current_user_id),
-         {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
-      conn
-      |> put_status(:created)
-      |> json(%{data: render_member(member)})
-    else
-      false ->
+    with {:ok, conversation} <- Conversations.get_conversation(id) do
+      if conversation.type == "direct" do
         conn
-        |> put_status(:forbidden)
-        |> json(%{error: "Not authorized to add members"})
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Cannot add members to a direct conversation"})
+      else
+        with true <- can_manage_members?(conversation, current_user_id),
+             {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
+          conn
+          |> put_status(:created)
+          |> json(%{data: render_member(member)})
+        else
+          false ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "Not authorized to add members"})
 
-      error ->
-        error
+          error ->
+            error
+        end
+      end
     end
   end
 

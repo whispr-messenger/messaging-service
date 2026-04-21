@@ -47,3 +47,5 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks in development
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+config :whispr_messaging, :enforce_direct_contact, false
