@@ -659,4 +659,70 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["data"]["deleteForEveryone"] == false
     end
   end
+
+  describe "POST /messaging/api/v1/messages/:id/forward" do
+    setup %{conversation: conversation, user1_id: user1_id, user2_id: user2_id} do
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "to-forward",
+          client_random: 424_242
+        })
+
+      {:ok, target} =
+        Conversations.create_conversation(%{type: "direct", is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(target.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(target.id, user2_id)
+
+      %{source_message: message, target_conversation: target}
+    end
+
+    test "forwards a message to a target conversation", %{
+      source_message: message,
+      target_conversation: target,
+      user1_id: user1_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}/forward",
+          conversation_ids: [target.id]
+        )
+        |> json_response(201)
+
+      assert [forwarded] = response["data"]
+      assert forwarded["conversationId"] == target.id
+      assert forwarded["forwardedFromId"] == message.id
+    end
+
+    test "returns 403 when user is not a member of the source conversation", %{
+      source_message: message,
+      target_conversation: target
+    } do
+      outsider = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(outsider)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}/forward",
+          conversation_ids: [target.id]
+        )
+        |> json_response(403)
+
+      assert response["error"] == "Forbidden"
+    end
+  end
 end
