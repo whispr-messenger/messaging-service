@@ -258,11 +258,20 @@ defmodule WhisprMessaging.Messages do
 
     case Repo.query(sql, [message_id, conversation_id, sender_id]) do
       {:ok, %{num_rows: count}} ->
-        Logger.debug("Created #{count} delivery statuses for message #{message_id}")
+        Logger.debug("Delivery statuses created",
+          count: count,
+          message_id: message_id,
+          domain: :messages
+        )
+
         {:ok, count}
 
       {:error, reason} ->
-        Logger.error("Failed to create delivery statuses: #{inspect(reason)}")
+        Logger.error("Failed to create delivery statuses",
+          reason: inspect(reason),
+          domain: :messages
+        )
+
         {:error, reason}
     end
   end

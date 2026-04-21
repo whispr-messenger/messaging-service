@@ -127,3 +127,18 @@ config :whispr_messaging, :jwks,
       "http://auth-service/auth/.well-known/jwks.json"
     ),
   refresh_ms: System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
+
+# ---------------------------------------------------------------------------
+# Logger runtime configuration
+# ---------------------------------------------------------------------------
+
+# LOG_LEVEL env var: "debug" (preprod) or "info" (prod, default)
+if log_level = System.get_env("LOG_LEVEL") do
+  config :logger, level: String.to_existing_atom(log_level)
+end
+
+# Global metadata: service name + Kubernetes pod (HOSTNAME)
+pod = System.get_env("HOSTNAME")
+
+config :logger,
+  metadata: [service: "whispr-messaging"] ++ if(pod, do: [pod: pod], else: [])

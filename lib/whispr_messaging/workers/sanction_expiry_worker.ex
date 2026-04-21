@@ -17,6 +17,7 @@ defmodule WhisprMessaging.Workers.SanctionExpiryWorker do
 
   @impl true
   def init(_opts) do
+    Logger.metadata(domain: :sanction_expiry_worker)
     schedule_tick()
     {:ok, %{}}
   end
@@ -25,7 +26,7 @@ defmodule WhisprMessaging.Workers.SanctionExpiryWorker do
   def handle_info(:tick, state) do
     case Sanctions.expire_sanctions() do
       {:ok, count} when count > 0 ->
-        Logger.info("[SanctionExpiryWorker] Expired #{count} sanctions")
+        Logger.info("Sanctions expired", count: count)
 
       _ ->
         :ok

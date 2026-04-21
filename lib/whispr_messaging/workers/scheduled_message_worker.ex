@@ -26,6 +26,7 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
 
   @impl true
   def init(_opts) do
+    Logger.metadata(domain: :scheduled_message_worker)
     schedule_poll()
     {:ok, %{}}
   end
@@ -62,10 +63,13 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
     Enum.each(batch, fn sm ->
       case dispatch_scheduled_message(sm) do
         :ok ->
-          Logger.info("Dispatched scheduled message #{sm.id}")
+          Logger.info("Scheduled message dispatched", scheduled_message_id: sm.id)
 
         {:error, reason} ->
-          Logger.error("Failed to dispatch scheduled message #{sm.id}: #{inspect(reason)}")
+          Logger.error("Scheduled message dispatch failed",
+            scheduled_message_id: sm.id,
+            reason: inspect(reason)
+          )
       end
     end)
 
@@ -115,8 +119,9 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
     import Ecto.Query
 
     if permanent_failure?(reason) do
-      Logger.warning(
-        "Permanent failure for scheduled message #{sm.id}, marking as failed: #{inspect(reason)}"
+      Logger.warning("Permanent failure for scheduled message",
+        scheduled_message_id: sm.id,
+        reason: inspect(reason)
       )
 
       from(s in ScheduledMessage, where: s.id == ^sm.id)
