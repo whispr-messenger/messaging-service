@@ -22,3 +22,11 @@ conversation:<conversation_id>
 - `new_message` — Nouveau message reçu
 - `typing` — Un utilisateur est en train d'écrire
 - `message_read` — Message lu
+
+### UserChannel
+
+```
+user:<user_id>
+```
+
+Reçoit les notifications globales de l'utilisateur (invitations, etc.).
