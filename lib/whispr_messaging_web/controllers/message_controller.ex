@@ -391,6 +391,52 @@ defmodule WhisprMessagingWeb.MessageController do
     end
   end
 
+  @doc """
+  Forwards a message to one or more conversations.
+  POST /messaging/api/v1/messages/:id/forward
+  Body: `{ "conversation_ids": ["<uuid>", ...] }`
+  """
+  def forward(conn, %{"id" => source_id} = params) do
+    user_id = conn.assigns[:user_id]
+    target_ids = params["conversation_ids"] || []
+
+    cond do
+      is_nil(user_id) ->
+        conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+
+      not is_list(target_ids) or target_ids == [] ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "conversation_ids must be a non-empty list"})
+
+      true ->
+        case Messages.forward_message(source_id, target_ids, user_id) do
+          {:ok, messages} ->
+            Enum.each(messages, fn message ->
+              broadcast_new_message(message.conversation_id, message)
+            end)
+
+            conn
+            |> put_status(:created)
+            |> json(%{data: Enum.map(messages, &render_message/1)})
+
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Message not found"})
+
+          {:error, :forbidden} ->
+            conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+          {:error, %Ecto.Changeset{} = cs} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: translate_errors(cs)})
+
+          {:error, reason} ->
+            conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+        end
+    end
+  end
+
   # Private rendering functions
 
   defp render_messages(messages) do
@@ -408,6 +454,7 @@ defmodule WhisprMessagingWeb.MessageController do
       message_type: message.message_type,
       metadata: message.metadata,
       reply_to_id: message.reply_to_id,
+      forwarded_from_id: Map.get(message, :forwarded_from_id),
       is_edited: message.edited_at != nil,
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,

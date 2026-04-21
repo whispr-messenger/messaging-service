@@ -627,6 +627,54 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
+  Forwards a source message to one or more target conversations.
+
+  The caller must be a member of the source conversation and of every
+  target conversation. Returns `{:ok, messages}` where `messages` is the
+  list of created messages (one per target), or `{:error, reason}` on the
+  first failure.
+  """
+  def forward_message(source_message_id, target_conversation_ids, user_id)
+      when is_list(target_conversation_ids) do
+    with {:ok, source} <- get_message(source_message_id),
+         true <- user_can_access_message?(source.conversation_id, user_id) || :forbidden_source do
+      do_forward(source, target_conversation_ids, user_id)
+    else
+      :forbidden_source -> {:error, :forbidden}
+      other -> other
+    end
+  end
+
+  defp do_forward(%Message{} = source, target_ids, user_id) do
+    target_ids
+    |> Enum.uniq()
+    |> Enum.reduce_while({:ok, []}, fn target_id, {:ok, acc} ->
+      if user_can_access_message?(target_id, user_id) do
+        attrs = %{
+          "conversation_id" => target_id,
+          "sender_id" => user_id,
+          "message_type" => source.message_type,
+          "content" => source.content,
+          "metadata" => Map.put(source.metadata || %{}, "forwarded", true),
+          "client_random" => :erlang.unique_integer([:positive]) |> rem(2_147_483_647),
+          "forwarded_from_id" => source.id
+        }
+
+        case create_message(attrs) do
+          {:ok, message} -> {:cont, {:ok, [message | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      else
+        {:halt, {:error, :forbidden}}
+      end
+    end)
+    |> case do
+      {:ok, messages} -> {:ok, Enum.reverse(messages)}
+      error -> error
+    end
+  end
+
+  @doc """
   Checks if a user can access messages in a conversation.
   """
   def user_can_access_message?(conversation_id, user_id) do

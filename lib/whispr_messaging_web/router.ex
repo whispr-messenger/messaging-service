@@ -118,6 +118,9 @@ defmodule WhisprMessagingWeb.Router do
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
 
+    # Message forward (WHISPR-1045)
+    post "/messages/:id/forward", MessageController, :forward
+
     # Message reactions
     get "/messages/:id/reactions", ReactionController, :index
     post "/messages/:id/reactions", ReactionController, :create
