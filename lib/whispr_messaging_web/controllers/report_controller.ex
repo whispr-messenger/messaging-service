@@ -13,6 +13,11 @@ defmodule WhisprMessagingWeb.ReportController do
 
   action_fallback WhisprMessagingWeb.FallbackController
 
+  # Defense-in-depth: the router also pipes these actions through :admin_api,
+  # but we gate at the controller level too so the guard survives any router
+  # refactor that moves a route out of the admin scope.
+  plug WhisprMessagingWeb.Plugs.RequireAdmin when action in [:queue, :stats, :resolve]
+
   # ---------------------------------------------------------------------------
   # Swagger definitions
   # ---------------------------------------------------------------------------
