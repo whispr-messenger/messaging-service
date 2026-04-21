@@ -25,6 +25,8 @@ RUN --mount=type=cache,target=/root/.hex \
 # Set test environment
 ENV MIX_ENV=test
 
-RUN useradd -m appuser && chown -R appuser /app
-USER appuser
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl -f http://localhost:4000/metrics || exit 1
+# Create non-root user for running tests.
+# Note: we keep root as the runtime user because bind-mounted volumes
+# (cover/, app source) may be owned by root and the UID mismatch would
+# cause permission errors writing coverage reports.
+RUN useradd -m -u 1000 appuser && chown -R appuser /app
