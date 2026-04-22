@@ -84,11 +84,9 @@ defmodule WhisprMessaging.JsonFormatter do
   defp format_timestamp(_), do: DateTime.utc_now() |> DateTime.to_iso8601()
 
   defp safe_chardata_to_string(message) do
-    try do
-      IO.chardata_to_string(message)
-    rescue
-      _ -> inspect(message)
-    end
+    IO.chardata_to_string(message)
+  rescue
+    _ -> inspect(message)
   end
 
   defp escape_string(str) do

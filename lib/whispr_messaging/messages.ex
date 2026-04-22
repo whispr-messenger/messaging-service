@@ -170,21 +170,19 @@ defmodule WhisprMessaging.Messages do
   def build_match_preview(content, query) when is_binary(content) and is_binary(query) do
     trimmed = String.trim(query)
 
-    cond do
-      trimmed == "" ->
-        nil
+    if trimmed == "" do
+      nil
+    else
+      case :binary.match(String.downcase(content), String.downcase(trimmed)) do
+        {start, length} ->
+          from = max(0, start - @radius)
+          to = min(byte_size(content), start + length + @radius)
+          excerpt = binary_part(content, from, to - from)
+          %{excerpt: excerpt, match_start: start - from, match_length: length}
 
-      true ->
-        case :binary.match(String.downcase(content), String.downcase(trimmed)) do
-          {start, length} ->
-            from = max(0, start - @radius)
-            to = min(byte_size(content), start + length + @radius)
-            excerpt = binary_part(content, from, to - from)
-            %{excerpt: excerpt, match_start: start - from, match_length: length}
-
-          :nomatch ->
-            nil
-        end
+        :nomatch ->
+          nil
+      end
     end
   end
 
