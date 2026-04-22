@@ -495,7 +495,10 @@ defmodule WhisprMessagingWeb.MessageController do
     status = Map.get(params, "status")
 
     with true <- valid_receipt_status(status),
-         {:ok, _message} <- Messages.get_message_with_relations(id),
+         :ok <- ensure_receipt_user(user_id),
+         {:ok, message} <- Messages.get_message_with_relations(id),
+         true <-
+           Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
          {:ok, delivery_status} <- apply_receipt(id, user_id, status) do
       json(conn, %{
         data: %{
@@ -511,6 +514,14 @@ defmodule WhisprMessagingWeb.MessageController do
         |> put_status(:bad_request)
         |> json(%{errors: %{status: "must be 'delivered' or 'read'"}})
 
+      :unauthorized ->
+        conn |> put_status(:unauthorized) |> json(%{errors: %{detail: "Unauthorized"}})
+
+      :forbidden ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "Not a member of the conversation"}})
+
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
@@ -522,6 +533,9 @@ defmodule WhisprMessagingWeb.MessageController do
         |> json(%{errors: changeset_errors(changeset)})
     end
   end
+
+  defp ensure_receipt_user(nil), do: :unauthorized
+  defp ensure_receipt_user(_user_id), do: :ok
 
   defp valid_receipt_status("delivered"), do: true
   defp valid_receipt_status("read"), do: true
