@@ -725,4 +725,88 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert response["error"] == "Forbidden"
     end
   end
+
+  # WHISPR-1059
+  describe "PATCH /messaging/api/v1/messages/:id/receipt" do
+    setup %{conversation: conversation, user1_id: user1_id} do
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "receipt target",
+          client_random: 555_555
+        })
+
+      %{message: message}
+    end
+
+    test "marks the message as delivered for the caller", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt", status: "delivered")
+        |> json_response(200)
+
+      assert response["data"]["message_id"] == message.id
+      assert response["data"]["user_id"] == user2_id
+      assert response["data"]["delivered_at"] != nil
+      assert response["data"]["read_at"] == nil
+    end
+
+    test "marks the message as read AND backfills delivered_at on the same row", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt", status: "read")
+        |> json_response(200)
+
+      assert response["data"]["message_id"] == message.id
+      assert response["data"]["user_id"] == user2_id
+      assert response["data"]["delivered_at"] != nil
+      assert response["data"]["read_at"] != nil
+    end
+
+    test "returns 400 when status is missing or invalid", %{message: message, user2_id: user2_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      assert %{"errors" => %{"status" => _}} =
+               patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt",
+                 status: "unknown"
+               )
+               |> json_response(400)
+
+      assert %{"errors" => %{"status" => _}} =
+               patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt", %{})
+               |> json_response(400)
+    end
+
+    test "returns 404 for a non-existent message", %{user2_id: user2_id} do
+      missing = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      assert %{"errors" => _} =
+               patch(conn, ~p"/messaging/api/v1/messages/#{missing}/receipt", status: "delivered")
+               |> json_response(404)
+    end
+  end
 end
