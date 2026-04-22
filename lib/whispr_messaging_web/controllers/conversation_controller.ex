@@ -250,7 +250,11 @@ defmodule WhisprMessagingWeb.ConversationController do
       else
         case ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
           :ok ->
-            case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
+            case Conversations.create_direct_conversation(
+                   current_user_id,
+                   other_user_id,
+                   metadata
+                 ) do
               {:ok, conversation} ->
                 conn
                 |> put_status(:created)
