@@ -9,6 +9,7 @@ defmodule WhisprMessagingWeb.UserChannel do
   use WhisprMessagingWeb, :channel
 
   alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessagingWeb.Presence
 
   require Logger
@@ -166,6 +167,11 @@ defmodule WhisprMessagingWeb.UserChannel do
             message_count: count
           }
         )
+
+        # WHISPR-1109: decrement the reader's badge for the whole batch.
+        if count > 0 do
+          MessagingEvents.publish_message_read(conversation_id, user_id, nil, count: count)
+        end
 
         {:reply, {:ok, %{messages_marked: count}}, socket}
 
