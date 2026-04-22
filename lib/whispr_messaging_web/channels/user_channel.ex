@@ -120,12 +120,22 @@ defmodule WhisprMessagingWeb.UserChannel do
   end
 
   # Handle unread messages request
+  #
+  # Note: `Messages.get_unread_messages_for_user/1` returns `{:ok, [{ds, msg}, ...]}` — a
+  # list of `{DeliveryStatus, Message}` tuples (not plain messages), so we must project
+  # the message struct out before serialising or the client would crash serialisation.
   def handle_in("get_unread_messages", _payload, socket) do
     user_id = socket.assigns.user_id
 
     case Messages.get_unread_messages_for_user(user_id) do
       {:ok, unread_messages} ->
-        serialized_messages = Enum.map(unread_messages, &serialize_message_summary/1)
+        serialized_messages =
+          unread_messages
+          |> Enum.map(fn
+            {_delivery_status, message} -> serialize_message_summary(message)
+            message -> serialize_message_summary(message)
+          end)
+
         {:reply, {:ok, %{unread_messages: serialized_messages}}, socket}
     end
   end
