@@ -65,6 +65,7 @@ defmodule WhisprMessaging.Application do
 
       # Moderation workers
       WhisprMessaging.Workers.SanctionExpiryWorker,
+      WhisprMessaging.Workers.ModerationSubscriber,
 
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
