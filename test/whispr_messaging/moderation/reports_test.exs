@@ -110,7 +110,8 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
           assert {:ok, _report} = Reports.create_report(attrs)
         end)
 
-      assert log =~ "Moderation threshold auto_mute reached"
+      assert log =~ "Moderation threshold reached"
+      assert log =~ "level=auto_mute"
       assert log =~ ctx.reported_user_id
     end
   end
