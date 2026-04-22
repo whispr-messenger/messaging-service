@@ -131,7 +131,6 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["isActive"] == true
     end
 
-    @tag :skip
     test "returns 403 when users are not contacts", %{user1_id: user1_id, user2_id: user2_id} do
       previous = Application.get_env(:whispr_messaging, :enforce_direct_contact, false)
       Application.put_env(:whispr_messaging, :enforce_direct_contact, true)
