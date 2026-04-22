@@ -8,8 +8,17 @@ docker build -t messaging-service .
 
 ## Run local
 
+Les fichiers docker-compose sont dans le dossier `docker/` :
+
 ```bash
-docker-compose up -d
+# Dev
+docker-compose -f docker/dev/docker-compose.yml up -d
+
+# Prod
+docker-compose -f docker/prod/docker-compose.yml up -d
+
+# Test
+docker-compose -f docker/test/docker-compose.yml up -d
 ```
 
 ## Dépendances
