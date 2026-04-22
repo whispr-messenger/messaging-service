@@ -1205,5 +1205,66 @@ defmodule WhisprMessaging.MessagesTest do
       {:ok, _} = Messages.delete_message(hello.id, user_id, false)
       assert Messages.search_messages_global(user_id, "hello") == []
     end
+
+    # WHISPR-1061
+    test "filters by conversation_id when provided", %{user_id: user_id, hello: hello} do
+      other_conv_id = Ecto.UUID.generate()
+
+      # Filter by a conversation the user isn't even in → empty
+      assert [] =
+               Messages.search_messages_global(user_id, "hello",
+                 conversation_id: other_conv_id
+               )
+
+      # Filter by the conversation that actually holds the match → hit
+      results =
+        Messages.search_messages_global(user_id, "hello",
+          conversation_id: hello.conversation_id
+        )
+
+      assert Enum.count(results) == 1
+      assert hd(results).id == hello.id
+    end
+
+    test "filters by message_type when provided", %{user_id: user_id, hello: hello} do
+      assert [hit] = Messages.search_messages_global(user_id, "hello", message_type: "text")
+      assert hit.id == hello.id
+
+      assert [] = Messages.search_messages_global(user_id, "hello", message_type: "media")
+    end
+
+    test "respects limit and offset", %{user_id: user_id} do
+      page1 = Messages.search_messages_global(user_id, "world", limit: 1, offset: 0)
+      page2 = Messages.search_messages_global(user_id, "world", limit: 1, offset: 1)
+
+      assert Enum.count(page1) == 1
+      assert Enum.count(page2) == 1
+      refute hd(page1).id == hd(page2).id
+    end
+  end
+
+  describe "build_match_preview/2 (WHISPR-1061)" do
+    test "returns nil for an empty query" do
+      assert Messages.build_match_preview("hello world", "") == nil
+      assert Messages.build_match_preview("hello world", "   ") == nil
+    end
+
+    test "returns nil when the query isn't present in the content" do
+      assert Messages.build_match_preview("hello", "nope") == nil
+    end
+
+    test "matches case-insensitively and reports position within the excerpt" do
+      result = Messages.build_match_preview("Hello World", "WORLD")
+      assert result.match_length == 5
+      assert String.slice(result.excerpt, result.match_start, 5) == "World"
+    end
+
+    test "clips to a ~40-char radius around the match" do
+      content = String.duplicate("a", 100) <> "needle" <> String.duplicate("b", 100)
+      result = Messages.build_match_preview(content, "needle")
+      # Excerpt length is roughly 40 + len(needle) + 40 = 86
+      assert byte_size(result.excerpt) <= 86
+      assert String.slice(result.excerpt, result.match_start, result.match_length) == "needle"
+    end
   end
 end
