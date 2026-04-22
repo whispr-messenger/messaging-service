@@ -1212,15 +1212,11 @@ defmodule WhisprMessaging.MessagesTest do
 
       # Filter by a conversation the user isn't even in → empty
       assert [] =
-               Messages.search_messages_global(user_id, "hello",
-                 conversation_id: other_conv_id
-               )
+               Messages.search_messages_global(user_id, "hello", conversation_id: other_conv_id)
 
       # Filter by the conversation that actually holds the match → hit
       results =
-        Messages.search_messages_global(user_id, "hello",
-          conversation_id: hello.conversation_id
-        )
+        Messages.search_messages_global(user_id, "hello", conversation_id: hello.conversation_id)
 
       assert Enum.count(results) == 1
       assert hd(results).id == hello.id
