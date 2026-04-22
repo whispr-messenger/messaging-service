@@ -22,7 +22,14 @@ defmodule WhisprMessaging.Services.UserService do
     {:ok, false}
   end
 
-  defp do_check_users_are_contacts(owner_id, other_user_id, authorization_header, base_url, cursor, pages) do
+  defp do_check_users_are_contacts(
+         owner_id,
+         other_user_id,
+         authorization_header,
+         base_url,
+         cursor,
+         pages
+       ) do
     limit = 200
 
     url =
