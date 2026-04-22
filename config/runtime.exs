@@ -142,3 +142,11 @@ pod = System.get_env("HOSTNAME")
 
 config :logger,
   metadata: [service: "whispr-messaging"] ++ if(pod, do: [pod: pod], else: [])
+
+# WHISPR-1068 : LOG_FORMAT=json → formatter JSON unifié avec les services
+# NestJS. Sinon on garde la sortie texte native pour `mix phx.server`.
+if System.get_env("LOG_FORMAT") == "json" do
+  config :logger, :console,
+    format: {WhisprMessaging.JsonFormatter, :format},
+    metadata: :all
+end
