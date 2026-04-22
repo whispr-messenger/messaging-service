@@ -16,28 +16,31 @@ defmodule WhisprMessagingWeb.PinController do
   @doc """
   Pins a message.
   POST /api/v1/messages/:id/pin
+
+  Only members of the conversation can pin messages in it.
   """
   def create(conn, %{"id" => message_id}) do
     user_id = conn.assigns[:user_id]
 
     if is_nil(user_id) do
-      conn
-      |> put_status(:unauthorized)
-      |> json(%{error: "Unauthorized"})
+      unauthorized(conn)
     else
-      case Messages.pin_message(message_id, user_id) do
-        {:ok, pinned_message} ->
-          conn
-          |> put_status(:created)
-          |> json(%{data: render_pinned_message(pinned_message)})
+      with {:ok, message} <- Messages.get_message(message_id),
+           true <-
+             Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
+           {:ok, pinned_message} <- Messages.pin_message(message_id, user_id) do
+        conn
+        |> put_status(:created)
+        |> json(%{data: render_pinned_message(pinned_message)})
+      else
+        :forbidden ->
+          conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "Message not found"})
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:error, changeset}
-
-        {:error, :not_found} ->
-          conn
-          |> put_status(:not_found)
-          |> json(%{error: "Message not found"})
       end
     end
   end
@@ -45,23 +48,26 @@ defmodule WhisprMessagingWeb.PinController do
   @doc """
   Unpins a message.
   DELETE /api/v1/messages/:id/pin
+
+  Only members of the conversation can unpin messages.
   """
   def delete(conn, %{"id" => message_id}) do
     user_id = conn.assigns[:user_id]
 
     if is_nil(user_id) do
-      conn
-      |> put_status(:unauthorized)
-      |> json(%{error: "Unauthorized"})
+      unauthorized(conn)
     else
-      case Messages.unpin_message(message_id) do
-        {:ok, :unpinned} ->
-          json(conn, %{data: camelize_keys(%{message_id: message_id, unpinned: true})})
+      with {:ok, message} <- Messages.get_message(message_id),
+           true <-
+             Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
+           {:ok, :unpinned} <- Messages.unpin_message(message_id) do
+        json(conn, %{data: camelize_keys(%{message_id: message_id, unpinned: true})})
+      else
+        :forbidden ->
+          conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
 
         {:error, :not_found} ->
-          conn
-          |> put_status(:not_found)
-          |> json(%{error: "Pinned message not found"})
+          conn |> put_status(:not_found) |> json(%{error: "Pinned message not found"})
       end
     end
   end
@@ -69,20 +75,41 @@ defmodule WhisprMessagingWeb.PinController do
   @doc """
   Lists pinned messages for a conversation.
   GET /api/v1/conversations/:id/pins
+
+  Only members of the conversation can list its pinned messages.
   """
   def index(conn, %{"id" => conversation_id}) do
-    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id) do
-      pinned_messages = Messages.list_pinned_messages(conversation_id)
+    user_id = conn.assigns[:user_id]
 
-      json(conn, %{
-        data: Enum.map(pinned_messages, &render_pinned_message/1),
-        meta:
-          camelize_keys(%{
-            conversation_id: conversation_id,
-            count: length(pinned_messages)
-          })
-      })
+    if is_nil(user_id) do
+      unauthorized(conn)
+    else
+      with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
+           true <- Messages.user_can_access_message?(conversation_id, user_id) || :forbidden do
+        pinned_messages = Messages.list_pinned_messages(conversation_id)
+
+        json(conn, %{
+          data: Enum.map(pinned_messages, &render_pinned_message/1),
+          meta:
+            camelize_keys(%{
+              conversation_id: conversation_id,
+              count: length(pinned_messages)
+            })
+        })
+      else
+        :forbidden ->
+          conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+      end
     end
+  end
+
+  defp unauthorized(conn) do
+    conn
+    |> put_status(:unauthorized)
+    |> json(%{error: "Unauthorized"})
   end
 
   defp render_pinned_message(pinned_message) do
