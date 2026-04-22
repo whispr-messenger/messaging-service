@@ -115,6 +115,13 @@ defmodule WhisprMessaging.MixProject do
       {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false},
 
+      # WHISPR-979 : SAST Elixir en complément du scan CodeQL (qui ne supporte
+      # pas BEAM). Sobelow couvre les patterns de sécurité Phoenix (XSS, SQLi,
+      # template injection, SSRF, CSRF, disabled plugs). mix_audit scanne les
+      # deps Hex contre la base de CVE elixir-security-advisories.
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+
       # API Documentation
       {:phoenix_swagger, "~> 0.8"},
       {:ex_json_schema, github: "jonasschmidt/ex_json_schema", override: true},
