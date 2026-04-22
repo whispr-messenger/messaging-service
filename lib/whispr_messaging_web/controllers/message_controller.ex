@@ -9,6 +9,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.ConversationServer
+  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Messages
   alias WhisprMessagingWeb.Endpoint
 
@@ -193,13 +194,20 @@ defmodule WhisprMessagingWeb.MessageController do
 
     # Diffuse aussi sur le canal `user:*` pour les membres hors expéditeur,
     # ce qui alimente ConversationsListScreen sans nécessiter que l'écran soit ouvert.
-    Enum.each(Conversations.list_conversation_members(conversation_id), fn member ->
+    members = Conversations.list_conversation_members(conversation_id)
+
+    Enum.each(members, fn member ->
       if member.user_id != message.sender_id do
         Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
           message: serialized
         })
       end
     end)
+
+    # WHISPR-1109: publish on Redis so notification-service can bump the
+    # badge counter of every recipient. The REST path never hits the
+    # GenServer, so the publish has to live here too.
+    MessagingEvents.publish_new_message(message, members)
   end
 
   swagger_path :show do
@@ -500,6 +508,12 @@ defmodule WhisprMessagingWeb.MessageController do
          true <-
            Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
          {:ok, delivery_status} <- apply_receipt(id, user_id, status) do
+      # WHISPR-1109: notify notification-service so the reader's badge
+      # decrements. Only the "read" transition matters for unread counts.
+      if status == "read" do
+        MessagingEvents.publish_message_read(message.conversation_id, user_id, id)
+      end
+
       json(conn, %{
         data: %{
           message_id: delivery_status.message_id,
