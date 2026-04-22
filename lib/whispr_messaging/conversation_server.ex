@@ -14,7 +14,7 @@ defmodule WhisprMessaging.ConversationServer do
   require Logger
 
   alias WhisprMessaging.{Conversations, Messages}
-  alias WhisprMessaging.Moderation.Helpers, as: ModerationHelpers
+  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Services.NotificationService
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
@@ -269,35 +269,9 @@ defmodule WhisprMessaging.ConversationServer do
     broadcast_read_receipt(user_id, message_id, state)
 
     # WHISPR-1109 follow-up: decrement the reader's badge in notification-service.
-    publish_message_read_to_redis(user_id, message_id, state)
+    MessagingEvents.publish_message_read(state.conversation_id, user_id, message_id)
 
     {:noreply, state}
-  end
-
-  defp publish_message_read_to_redis(user_id, message_id, state) do
-    payload = %{
-      "conversation_id" => state.conversation_id,
-      "user_id" => user_id,
-      "message_id" => message_id,
-      "count" => 1
-    }
-
-    publish_redis_json("whispr:messaging:message_read", payload, state.conversation_id)
-  end
-
-  defp publish_redis_json(channel, payload, conversation_id) do
-    case Jason.encode(payload) do
-      {:ok, json} ->
-        ModerationHelpers.redis_publish(channel, json)
-
-      {:error, reason} ->
-        Logger.error("Failed to encode Redis pubsub payload",
-          reason: inspect(reason),
-          channel: channel,
-          conversation_id: conversation_id,
-          domain: :pubsub
-        )
-    end
   end
 
   # WHISPR-1058: watchdog fired — the client never sent `typing=false`.
@@ -511,26 +485,7 @@ defmodule WhisprMessaging.ConversationServer do
     # WHISPR-1109 follow-up: publish to Redis so notification-service can
     # increment unread badges for every recipient. Fire-and-forget — any
     # Redis error is logged but must never crash the GenServer.
-    publish_new_message_to_redis(message, state)
-  end
-
-  defp publish_new_message_to_redis(message, state) do
-    target_user_ids =
-      state.members
-      |> Enum.map(& &1.user_id)
-      |> Enum.reject(&(&1 == message.sender_id))
-
-    if target_user_ids != [] do
-      payload = %{
-        "conversation_id" => state.conversation_id,
-        "message_id" => message.id,
-        "sender_id" => message.sender_id,
-        "target_user_ids" => target_user_ids,
-        "count" => 1
-      }
-
-      publish_redis_json("whispr:messaging:new_message", payload, state.conversation_id)
-    end
+    MessagingEvents.publish_new_message(message, state.members)
   end
 
   defp notify_offline_members(message, state) do
