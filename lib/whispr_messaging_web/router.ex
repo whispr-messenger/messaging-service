@@ -142,6 +142,11 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
 
+    # Group invite links (WHISPR-1046)
+    post "/conversations/:id/invite_link", InviteController, :create
+    delete "/conversations/:id/invite_link", InviteController, :delete
+    post "/invites/:token/join", InviteController, :join
+
     # Moderation reports (user-accessible)
     get "/reports", ReportController, :index
     post "/reports", ReportController, :create
