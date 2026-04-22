@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.hex \
 COPY ./docker/dev/entrypoint.sh /tmp/entrypoint.sh
 RUN chmod +x /tmp/entrypoint.sh
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl -f http://localhost:4000/metrics || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 CMD curl -f http://localhost:4010/ready || exit 1
 
 # Ajout d'un utilisateur non-root
 RUN useradd -m appuser && chown -R appuser /app

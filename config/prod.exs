@@ -18,11 +18,10 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
 
 # Production logging - JSON structured output for Grafana/Loki
 config :logger,
-  backends: [LoggerJSON],
   level: :info
 
-config :logger_json, :backend,
-  formatter: LoggerJSON.Formatters.BasicLogger,
+config :logger, :console,
+  format: {WhisprMessaging.JsonFormatter, :format},
   metadata: :all
 
 # Production conversation settings
