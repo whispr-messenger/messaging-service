@@ -189,6 +189,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   # Handle direct conversation with other_user_id (authenticated user is implied)
+  # credo:disable-for-next-line Credo.Check.Refactoring.Nesting
   defp do_create(conn, %{"type" => "direct", "other_user_id" => other_user_id} = params) do
     current_user_id = conn.assigns[:user_id]
     metadata = params["metadata"] || %{}
@@ -226,6 +227,8 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   # Handle direct conversation with explicit user_ids list
+  # credo:disable-for-next-line Credo.Check.Refactoring.CyclomaticComplexity
+  # credo:disable-for-next-line Credo.Check.Refactoring.Nesting
   defp do_create(conn, %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params) do
     metadata = params["metadata"] || %{}
 

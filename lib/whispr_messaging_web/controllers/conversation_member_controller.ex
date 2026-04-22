@@ -67,42 +67,43 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
     member_id = params["user_id"] || params["member_id"]
     current_user_id = conn.assigns[:user_id]
 
-    with {:ok, conversation} <- Conversations.get_conversation(id) do
-      cond do
-        conversation.type == "direct" ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{error: "Cannot add members to a direct conversation"})
+    case Conversations.get_conversation(id) do
+      {:ok, conversation} ->
+        cond do
+          conversation.type == "direct" ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "Cannot add members to a direct conversation"})
 
-        not admin?(conversation.id, current_user_id) ->
-          conn
-          |> put_status(:forbidden)
-          |> json(%{error: "Only admins can add members"})
+          not admin?(conversation.id, current_user_id) ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "Only admins can add members"})
 
-        true ->
-          case Conversations.add_conversation_member(id, member_id) do
-            {:ok, member} ->
-              broadcast_members_updated(id, "member_added", %{
-                user_id: member.user_id,
-                actor_id: current_user_id
-              })
+          true ->
+            case Conversations.add_conversation_member(id, member_id) do
+              {:ok, member} ->
+                broadcast_members_updated(id, "member_added", %{
+                  user_id: member.user_id,
+                  actor_id: current_user_id
+                })
 
-              conn
-              |> put_status(:created)
-              |> json(%{data: render_member(member)})
+                conn
+                |> put_status(:created)
+                |> json(%{data: render_member(member)})
 
-            {:error, :not_found} ->
-              conn
-              |> put_status(:not_found)
-              |> json(%{error: "Conversation not found"})
+              {:error, :not_found} ->
+                conn
+                |> put_status(:not_found)
+                |> json(%{error: "Conversation not found"})
 
-            {:error, reason} ->
-              conn
-              |> put_status(:unprocessable_entity)
-              |> json(%{error: "Failed to add member: #{inspect(reason)}"})
-          end
-      end
-    else
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "Failed to add member: #{inspect(reason)}"})
+            end
+        end
+
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
