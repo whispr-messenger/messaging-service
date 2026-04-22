@@ -242,25 +242,7 @@ defmodule WhisprMessaging.ConversationServer do
     {:noreply, new_state}
   end
 
-  # WHISPR-1058: watchdog fired — the client never sent `typing=false`.
-  # Clear the indicator as if a stop event had come in, but only if the
-  # user is still listed (they might have sent a legitimate stop that
-  # cancelled the timer milliseconds earlier).
-  def handle_info({:typing_timeout, user_id}, state) do
-    if MapSet.member?(state.typing_users, user_id) do
-      new_state =
-        state
-        |> Map.update!(:typing_timers, &Map.delete(&1, user_id))
-        |> update_typing_status_in(user_id, false)
-
-      broadcast_typing_status(user_id, false, new_state)
-
-      {:noreply, new_state}
-    else
-      {:noreply, Map.update!(state, :typing_timers, &Map.delete(&1, user_id))}
-    end
-  end
-
+  @impl true
   def handle_cast({:mark_read, user_id, message_id}, state) do
     # Update read status in database
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
@@ -288,7 +270,26 @@ defmodule WhisprMessaging.ConversationServer do
     {:noreply, state}
   end
 
+  # WHISPR-1058: watchdog fired — the client never sent `typing=false`.
+  # Clear the indicator as if a stop event had come in, but only if the
+  # user is still listed (they might have sent a legitimate stop that
+  # cancelled the timer milliseconds earlier).
   @impl true
+  def handle_info({:typing_timeout, user_id}, state) do
+    if MapSet.member?(state.typing_users, user_id) do
+      new_state =
+        state
+        |> Map.update!(:typing_timers, &Map.delete(&1, user_id))
+        |> update_typing_status_in(user_id, false)
+
+      broadcast_typing_status(user_id, false, new_state)
+
+      {:noreply, new_state}
+    else
+      {:noreply, Map.update!(state, :typing_timers, &Map.delete(&1, user_id))}
+    end
+  end
+
   def handle_info(:cleanup, state) do
     new_state = perform_cleanup(state)
     schedule_cleanup()
