@@ -1,12 +1,15 @@
 # Analytics
 
-## Métriques disponibles
+## Endpoints
 
-Les analytics sont accessibles via `GET /conversations/:id/analytics`.
+Les analytics sont sous `/messaging/api/v1/reports/analytics/` :
 
-| Métrique | Description |
-|----------|-------------|
-| messages_count | Nombre total de messages |
-| members_count | Nombre de membres actifs |
-| media_count | Nombre de médias partagés |
-| reactions_count | Nombre de réactions |
+```
+GET /messaging/api/v1/reports/analytics/dashboard
+GET /messaging/api/v1/reports/analytics/summary
+GET /messaging/api/v1/reports/analytics/trends
+GET /messaging/api/v1/reports/analytics/trends/hourly
+GET /messaging/api/v1/reports/analytics/top-reported
+GET /messaging/api/v1/reports/analytics/categories
+GET /messaging/api/v1/reports/analytics/resolution
+```
