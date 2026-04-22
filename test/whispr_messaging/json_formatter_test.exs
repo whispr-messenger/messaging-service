@@ -7,10 +7,10 @@ defmodule WhisprMessaging.JsonFormatterTest do
 
   test "emits a JSON line terminated by a newline" do
     output =
-      JsonFormatter.format(:info, "hello", @ts, [
+      JsonFormatter.format(:info, "hello", @ts,
         service: "messaging",
         request_id: "req-1"
-      ])
+      )
 
     raw = IO.iodata_to_binary(output)
     assert String.ends_with?(raw, "\n")
