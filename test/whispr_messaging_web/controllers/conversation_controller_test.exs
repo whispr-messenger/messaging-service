@@ -154,7 +154,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
                 [:passthrough],
                 check_users_are_contacts: fn ^user1_id, ^user2_id, _auth -> {:ok, false} end do
         response =
-          post(conn, ~p"/api/v1/conversations", attrs)
+          post(conn, ~p"/messaging/api/v1/conversations", attrs)
           |> json_response(403)
 
         assert response["error"] != nil
