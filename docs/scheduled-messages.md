@@ -1,15 +1,20 @@
 # Messages programmés
 
+## Endpoints
+
+```
+GET    /messaging/api/v1/messages/scheduled      — Lister ses messages programmés
+POST   /messaging/api/v1/messages/scheduled      — Créer un message programmé
+PATCH  /messaging/api/v1/messages/scheduled/:id  — Modifier
+DELETE /messaging/api/v1/messages/scheduled/:id  — Supprimer
+```
+
 ## Flux
 
 ```
-User ──▶ POST /scheduled-messages ──▶ Messaging Service
+User ──▶ POST /messages/scheduled ──▶ Messaging Service
                                            │
-                                     ┌─────▼──────┐
-                                     │ Scheduling  │
-                                     │ Service     │
-                                     │ (via gRPC)  │
-                                     └─────┬──────┘
+                                     Stockage en DB
                                            │
                                      À l'heure prévue
                                            │
@@ -19,4 +24,4 @@ User ──▶ POST /scheduled-messages ──▶ Messaging Service
                                      └────────────┘
 ```
 
-Le messaging-service crée un job dans le scheduling-service qui envoie le message à l'heure voulue.
+Le scheduling est géré en interne par le ScheduledMessageController.
