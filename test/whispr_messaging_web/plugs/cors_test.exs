@@ -24,7 +24,7 @@ defmodule WhisprMessagingWeb.Plugs.CorsTest do
     :ok
   end
 
-  defp call(method, headers \\ []) do
+  defp call(method, headers) do
     conn = conn(method, "/whatever")
 
     Enum.reduce(headers, conn, fn {k, v}, acc -> put_req_header(acc, k, v) end)

@@ -215,7 +215,12 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Searches messages by content across all conversations the user participates in.
+
   GET /api/messages/search?query=...&limit=50&offset=0
+       &conversation_id=...&from=ISO8601&to=ISO8601&message_type=text|media|system
+
+  (WHISPR-1061) Filters and a `match_preview` highlight are optional — the
+  response shape stays the same as before when no filters are provided.
   """
   def search(conn, params) do
     user_id = conn.assigns[:user_id]
@@ -226,10 +231,41 @@ defmodule WhisprMessagingWeb.MessageController do
     if String.trim(query) == "" do
       json(conn, [])
     else
-      messages = Messages.search_messages_global(user_id, query, limit, offset)
-      json(conn, Enum.map(messages, &render_message/1))
+      opts =
+        [limit: limit, offset: offset]
+        |> maybe_put_opt(:conversation_id, Map.get(params, "conversation_id"))
+        |> maybe_put_opt(:from_datetime, parse_iso8601(Map.get(params, "from")))
+        |> maybe_put_opt(:to_datetime, parse_iso8601(Map.get(params, "to")))
+        |> maybe_put_opt(:message_type, Map.get(params, "message_type"))
+
+      messages = Messages.search_messages_global(user_id, query, opts)
+
+      json(
+        conn,
+        Enum.map(messages, fn msg ->
+          msg
+          |> render_message()
+          |> Map.put(:match_preview, Messages.build_match_preview(msg.content, query))
+        end)
+      )
     end
   end
+
+  defp maybe_put_opt(opts, _key, nil), do: opts
+  defp maybe_put_opt(opts, _key, ""), do: opts
+  defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  defp parse_iso8601(nil), do: nil
+  defp parse_iso8601(""), do: nil
+
+  defp parse_iso8601(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, dt, _} -> dt
+      _ -> nil
+    end
+  end
+
+  defp parse_iso8601(_), do: nil
 
   defp parse_int(value, _default) when is_integer(value), do: value
 
