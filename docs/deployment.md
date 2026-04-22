@@ -3,7 +3,7 @@
 ## Flux
 
 ```
-mix release ──▶ Docker build ──▶ GHCR ──▶ ArgoCD ──▶ GKE
+mix release ──▶ Docker build ──▶ GHCR ──▶ ArgoCD ──▶ K8s
 ```
 
 ## Commandes
@@ -16,6 +16,10 @@ MIX_ENV=prod mix release
 docker build -t messaging-service .
 ```
 
-## Healthcheck
+## Health probes K8s
 
-Le pod expose `/health` pour les probes K8s.
+```
+GET /live   — Liveness probe
+GET /ready  — Readiness probe
+GET /messaging/api/v1/health — Health check détaillé
+```
