@@ -92,8 +92,12 @@ Thumbs.db
 # Dialyzer
 /priv/plts/
 
-# Sobelow
-.sobelow-*
+# Sobelow — WHISPR-979 : conf et skips sont committés pour partager la
+# baseline entre développeurs et CI. Ignorer uniquement les rapports
+# générés (JSON / SARIF / txt) qui ne doivent pas polluer le dépôt.
+*.sobelow-report.json
+sobelow-results.sarif
+sobelow-report.txt
 
 # Assets compilation
 /assets/node_modules/

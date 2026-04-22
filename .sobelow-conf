@@ -1,0 +1,17 @@
+# WHISPR-979 — configuration Sobelow. Exécuter `mix sobelow` pour scanner,
+# `mix sobelow.gen.config` pour régénérer ce fichier depuis les defaults.
+
+[
+  verbose: false,
+  private: false,
+  skip: true,
+  router: "lib/whispr_messaging_web/router.ex",
+  exit: "High",
+  format: "txt",
+  # Sobelow 0.14.1 crashe sur le pattern `socket "...", MySocket, @ws_opts`
+  # (module attribute dans options de socket — cf. endpoint.ex). La check
+  # Config.CSWH lit les options en s'attendant à une liste keyword inline,
+  # pas à un `{:@, ...}`. À réactiver dès qu'un fix upstream sort.
+  ignore: ["Config.CSWH"],
+  ignore_files: []
+]
