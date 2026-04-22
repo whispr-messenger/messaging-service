@@ -476,6 +476,76 @@ defmodule WhisprMessagingWeb.MessageController do
   defp broadcast_forwarded(message),
     do: broadcast_new_message(message.conversation_id, message)
 
+  @doc """
+  Marks a message as delivered or read for the calling user (WHISPR-1059).
+
+  PATCH /api/messages/:id/receipt
+  Body: { "status": "delivered" | "read" }
+
+  "read" implies "delivered" — if the caller jumps straight to "read" without
+  ever hitting "delivered", we set `delivered_at` on the same row so aggregate
+  status computation stays consistent.
+
+  Returns 200 with the refreshed delivery_status row. 404 if the message
+  doesn't exist, 400 on an invalid status value, 403 if the caller isn't a
+  member of the conversation.
+  """
+  def receipt(conn, %{"id" => id} = params) do
+    user_id = conn.assigns[:user_id]
+    status = Map.get(params, "status")
+
+    with true <- valid_receipt_status(status),
+         {:ok, _message} <- Messages.get_message_with_relations(id),
+         {:ok, delivery_status} <- apply_receipt(id, user_id, status) do
+      json(conn, %{
+        data: %{
+          message_id: delivery_status.message_id,
+          user_id: delivery_status.user_id,
+          delivered_at: delivery_status.delivered_at,
+          read_at: delivery_status.read_at
+        }
+      })
+    else
+      false ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: %{status: "must be 'delivered' or 'read'"}})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "Message not found"}})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: changeset_errors(changeset)})
+    end
+  end
+
+  defp valid_receipt_status("delivered"), do: true
+  defp valid_receipt_status("read"), do: true
+  defp valid_receipt_status(_), do: false
+
+  defp apply_receipt(message_id, user_id, "delivered"),
+    do: Messages.mark_message_delivered(message_id, user_id)
+
+  defp apply_receipt(message_id, user_id, "read") do
+    # Ensure delivered_at is populated before setting read_at — otherwise
+    # `DeliveryStatus.compute_aggregate_status/1` would briefly see a row
+    # that's "read but never delivered", which isn't a valid state.
+    _ = Messages.mark_message_delivered(message_id, user_id)
+    Messages.mark_message_read(message_id, user_id)
+  end
+
+  defp changeset_errors(%Ecto.Changeset{} = changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {k, v}, acc ->
+        String.replace(acc, "%{#{k}}", to_string(v))
+      end)
+    end)
+  end
+
   # Private rendering functions
 
   defp render_messages(messages) do

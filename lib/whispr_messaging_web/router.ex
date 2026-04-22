@@ -121,6 +121,9 @@ defmodule WhisprMessagingWeb.Router do
     # Message forward (WHISPR-1045)
     post "/messages/:id/forward", MessageController, :forward
 
+    # Per-message delivery receipt (WHISPR-1059)
+    patch "/messages/:id/receipt", MessageController, :receipt
+
     # Message reactions
     get "/messages/:id/reactions", ReactionController, :index
     post "/messages/:id/reactions", ReactionController, :create
