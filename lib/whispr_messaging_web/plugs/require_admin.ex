@@ -22,7 +22,7 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
   ## Configuration
 
   - `USER_SERVICE_HTTP_URL` — base URL of the user-service HTTP API
-    (default: `http://user-service:3002`)
+    (default: `http://user-service:3011`)
   - `ADMIN_USER_IDS` — comma-separated fallback admin user IDs
   """
 
@@ -163,7 +163,7 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
     # -------------------------------------------------------------------------
 
     defp user_service_url do
-      System.get_env("USER_SERVICE_HTTP_URL") || "http://user-service:3002"
+      System.get_env("USER_SERVICE_HTTP_URL") || "http://user-service:3011"
     end
 
     defp fallback_admin_ids do
