@@ -67,6 +67,9 @@ defmodule WhisprMessaging.Application do
       WhisprMessaging.Workers.SanctionExpiryWorker,
       WhisprMessaging.Workers.ModerationSubscriber,
 
+      # Calls relay — bridges calls-service Redis events to user channels
+      WhisprMessaging.Workers.CallsSubscriber,
+
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
     ]
