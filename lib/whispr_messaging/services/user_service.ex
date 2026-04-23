@@ -6,9 +6,20 @@ defmodule WhisprMessaging.Services.UserService do
 
   @max_pages 10
   @page_limit 200
+  # user-service's HTTP port is 3011 in the k8s Service (see
+  # infrastructure/k8s/whispr/preprod/user-service/service.yaml). Keep the
+  # fallback aligned with the cluster port — the messaging-service Deployment
+  # does not export USER_SERVICE_HTTP_URL, so this default is what is used in
+  # practice.
+  @default_user_service_url "http://user-service:3011/user/v1"
+
+  @doc false
+  def user_service_base_url do
+    System.get_env("USER_SERVICE_HTTP_URL", @default_user_service_url)
+  end
 
   def check_users_are_contacts(owner_id, other_user_id, authorization_header \\ nil) do
-    base_url = System.get_env("USER_SERVICE_HTTP_URL", "http://user-service:3002/user/v1")
+    base_url = user_service_base_url()
 
     do_check_users_are_contacts(
       String.trim(to_string(owner_id)),
