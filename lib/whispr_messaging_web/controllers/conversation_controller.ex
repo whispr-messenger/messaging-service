@@ -250,7 +250,7 @@ defmodule WhisprMessagingWeb.ConversationController do
 
       if is_nil(other_user_id) do
         Logger.warning(
-          "[WHISPR-1164-diag] Invalid participants: current=#{inspect(current_user_id)} user1=#{inspect(user1_id)} user2=#{inspect(user2_id)}"
+          "[WHISPR-1164-diag] Invalid participants : current=#{inspect(current_user_id)} user1=#{inspect(user1_id)} user2=#{inspect(user2_id)} params_keys=#{inspect(Map.keys(params))}"
         )
 
         conn
