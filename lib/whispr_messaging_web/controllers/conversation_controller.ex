@@ -7,8 +7,6 @@ defmodule WhisprMessagingWeb.ConversationController do
   use WhisprMessagingWeb, :controller
   use PhoenixSwagger
 
-  require Logger
-
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Services.UserService
 
@@ -249,10 +247,6 @@ defmodule WhisprMessagingWeb.ConversationController do
         end
 
       if is_nil(other_user_id) do
-        Logger.warning(
-          "[WHISPR-1164-diag] Invalid participants : current=#{inspect(current_user_id)} user1=#{inspect(user1_id)} user2=#{inspect(user2_id)} params_keys=#{inspect(Map.keys(params))}"
-        )
-
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Invalid participants"})
@@ -333,20 +327,12 @@ defmodule WhisprMessagingWeb.ConversationController do
           :ok
 
         {:ok, false} ->
-          Logger.warning(
-            "[WHISPR-1164-diag] Contacts check returned false: current=#{inspect(current_user_id)} other=#{inspect(other_user_id)}"
-          )
-
           {:error,
            conn
            |> put_status(:forbidden)
            |> json(%{error: "Users must be contacts to create a direct conversation"})}
 
-        {:error, reason} ->
-          Logger.warning(
-            "[WHISPR-1164-diag] Contacts check errored: #{inspect(reason)} current=#{inspect(current_user_id)} other=#{inspect(other_user_id)}"
-          )
-
+        {:error, _reason} ->
           {:error,
            conn
            |> put_status(:forbidden)
