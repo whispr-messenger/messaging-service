@@ -242,4 +242,3 @@ defmodule WhisprMessaging.Services.UserService do
     {:ok, false}
   end
 end
-
