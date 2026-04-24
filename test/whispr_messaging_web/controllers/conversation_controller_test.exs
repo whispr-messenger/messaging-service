@@ -656,7 +656,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["isActive"] == true
     end
 
-    test "returns 403 for non-admin trying to add member", %{
+    test "non-admin member can add a member (WHISPR-1169)", %{
       user1_id: user1_id,
       user2_id: user2_id,
       user3_id: user3_id
@@ -675,6 +675,41 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         "user_id" => user3_id
       }
 
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members",
+          add_attrs
+        )
+        |> json_response(201)
+
+      assert response["data"]["userId"] == user3_id
+    end
+
+    test "returns 403 when a non-member tries to add a member", %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      user3_id: user3_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Team"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      add_attrs = %{
+        "user_id" => user3_id
+      }
+
+      # user2 is not a member of the conversation
       conn =
         build_conn()
         |> authenticated_conn(user2_id)

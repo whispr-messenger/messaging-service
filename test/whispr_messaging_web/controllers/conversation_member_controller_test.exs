@@ -46,7 +46,7 @@ defmodule WhisprMessagingWeb.ConversationMemberControllerTest do
     }
   end
 
-  describe "POST /conversations/:id/members (admin gate)" do
+  describe "POST /conversations/:id/members (member gate)" do
     test "admin can add a new member", ctx do
       conn =
         build_conn()
@@ -63,17 +63,20 @@ defmodule WhisprMessagingWeb.ConversationMemberControllerTest do
       assert response["data"]["userId"] == ctx.new_user_id
     end
 
-    test "non-admin member cannot add members", ctx do
+    test "non-admin member can add a new member (WHISPR-1169)", ctx do
       conn =
         build_conn()
         |> authenticated_conn(ctx.member_id)
         |> json_conn()
 
-      conn
-      |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/members", %{
-        "user_id" => ctx.new_user_id
-      })
-      |> json_response(403)
+      response =
+        conn
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/members", %{
+          "user_id" => ctx.new_user_id
+        })
+        |> json_response(201)
+
+      assert response["data"]["userId"] == ctx.new_user_id
     end
 
     test "stranger cannot add members", ctx do
