@@ -41,17 +41,28 @@ defmodule WhisprMessaging.Events.MessagingEvents do
     if target_user_ids == [] do
       :ok
     else
-      payload = %{
-        "conversation_id" => message.conversation_id,
-        "message_id" => message.id,
-        "sender_id" => message.sender_id,
-        "target_user_ids" => target_user_ids,
-        "count" => Keyword.get(opts, :count, 1)
-      }
+      payload =
+        %{
+          "conversation_id" => message.conversation_id,
+          "message_id" => message.id,
+          "sender_id" => message.sender_id,
+          "target_user_ids" => target_user_ids,
+          "count" => Keyword.get(opts, :count, 1)
+        }
+        |> maybe_put("sent_at", encode_datetime(Map.get(message, :sent_at)))
+        |> maybe_put("message_type", Map.get(message, :message_type))
 
       publish_json(@new_message_channel, payload, message.conversation_id)
     end
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp encode_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp encode_datetime(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)
+  defp encode_datetime(value) when is_binary(value), do: value
+  defp encode_datetime(_), do: nil
 
   @doc """
   Publishes a `message_read` event for a single reader.
