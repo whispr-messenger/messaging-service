@@ -8,6 +8,9 @@ defmodule WhisprMessaging.Messages do
 
   import Ecto.Query, warn: false
 
+  alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Events.MessagingEvents
+
   alias WhisprMessaging.Messages.{
     DeliveryStatus,
     Message,
@@ -55,6 +58,7 @@ defmodule WhisprMessaging.Messages do
           {:ok, message} ->
             # Preload associations for channels
             message = Repo.preload(message, [:conversation, :reply_to])
+            publish_new_message_async(message)
             {:ok, message}
 
           error ->
@@ -62,6 +66,30 @@ defmodule WhisprMessaging.Messages do
         end
       end
     end
+  end
+
+  # Fire-and-forget Redis publish so a slow/broken Redis never blocks the
+  # message insert path. notification-service consumes this to bump
+  # unread badges and push FCM notifications. The dispatcher can be
+  # swapped via config (`:new_message_dispatcher`) so tests can run it
+  # synchronously and avoid sandbox leaks.
+  defp publish_new_message_async(%Message{} = message) do
+    dispatcher =
+      Application.get_env(
+        :whispr_messaging,
+        :new_message_dispatcher,
+        &default_new_message_dispatcher/1
+      )
+
+    dispatcher.(message)
+    :ok
+  end
+
+  defp default_new_message_dispatcher(%Message{conversation_id: conversation_id} = message) do
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      members = Conversations.list_conversation_members(conversation_id)
+      MessagingEvents.publish_new_message(message, members)
+    end)
   end
 
   @doc """

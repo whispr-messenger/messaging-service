@@ -83,6 +83,36 @@ defmodule WhisprMessaging.Events.MessagingEventsTest do
       assert_receive {:redis_publish, _channel, json}
       assert Jason.decode!(json)["count"] == 3
     end
+
+    test "includes sent_at (iso8601) and message_type when present on the message" do
+      sent_at = ~U[2026-04-24 00:00:00Z]
+
+      message = %{
+        id: "m",
+        conversation_id: "c",
+        sender_id: "s",
+        sent_at: sent_at,
+        message_type: "text"
+      }
+
+      assert :ok = MessagingEvents.publish_new_message(message, [%{user_id: "a"}])
+      assert_receive {:redis_publish, _channel, json}
+      payload = Jason.decode!(json)
+
+      assert payload["sent_at"] == DateTime.to_iso8601(sent_at)
+      assert payload["message_type"] == "text"
+    end
+
+    test "omits sent_at and message_type when absent on the message" do
+      message = %{id: "m", conversation_id: "c", sender_id: "s"}
+
+      assert :ok = MessagingEvents.publish_new_message(message, [%{user_id: "a"}])
+      assert_receive {:redis_publish, _channel, json}
+      payload = Jason.decode!(json)
+
+      refute Map.has_key?(payload, "sent_at")
+      refute Map.has_key?(payload, "message_type")
+    end
   end
 
   describe "publish_message_read/4" do
