@@ -40,7 +40,12 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   swagger_path :create do
     post("/conversations/{id}/members")
     summary("Add a member to a conversation")
-    description("Adds a user to an existing conversation. Requires admin role.")
+
+    description(
+      "Adds a user to an existing conversation. Any active member of the " <>
+        "conversation may invite new members."
+    )
+
     produces("application/json")
     consumes("application/json")
     parameter(:id, :path, :string, "Conversation UUID", required: true)
@@ -55,7 +60,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
     security([%{Bearer: []}])
     response(201, "Created", Schema.ref(:ConversationMemberResponse))
-    response(403, "Forbidden - Only admins can add members")
+    response(403, "Forbidden - You must be an active member of the conversation")
     response(404, "Conversation Not Found")
   end
 
@@ -75,10 +80,10 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
             |> put_status(:unprocessable_entity)
             |> json(%{error: "Cannot add members to a direct conversation"})
 
-          not admin?(conversation.id, current_user_id) ->
+          not active_member?(conversation.id, current_user_id) ->
             conn
             |> put_status(:forbidden)
-            |> json(%{error: "Only admins can add members"})
+            |> json(%{error: "You must be a member of the conversation to add new members"})
 
           true ->
             case Conversations.add_conversation_member(id, member_id) do
@@ -378,6 +383,15 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
       _ ->
         false
+    end
+  end
+
+  defp active_member?(_conversation_id, nil), do: false
+
+  defp active_member?(conversation_id, user_id) do
+    case Conversations.get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} -> true
+      _ -> false
     end
   end
 
