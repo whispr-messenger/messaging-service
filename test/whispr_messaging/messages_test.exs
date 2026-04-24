@@ -229,6 +229,105 @@ defmodule WhisprMessaging.MessagesTest do
     end
   end
 
+  describe "new_message redis publish (WHISPR-1158)" do
+    setup do
+      # Inject a synchronous dispatcher so the publish runs inline and
+      # doesn't outlive the test, leaking the sandboxed DB connection.
+      alias WhisprMessaging.Events.MessagingEvents, as: Events
+
+      sync_dispatcher = fn message ->
+        members = Conversations.list_conversation_members(message.conversation_id)
+        Events.publish_new_message(message, members)
+      end
+
+      previous_dispatcher = Application.get_env(:whispr_messaging, :new_message_dispatcher)
+      Application.put_env(:whispr_messaging, :new_message_dispatcher, sync_dispatcher)
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      sender_id = Ecto.UUID.generate()
+      other_id = Ecto.UUID.generate()
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, sender_id)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, other_id)
+
+      test_pid = self()
+
+      publisher = fn channel, payload ->
+        send(test_pid, {:redis_publish, channel, payload})
+        {:ok, 1}
+      end
+
+      previous = Application.get_env(:whispr_messaging, :messaging_events_publisher)
+      Application.put_env(:whispr_messaging, :messaging_events_publisher, publisher)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:whispr_messaging, :messaging_events_publisher, previous)
+        else
+          Application.delete_env(:whispr_messaging, :messaging_events_publisher)
+        end
+
+        if previous_dispatcher do
+          Application.put_env(:whispr_messaging, :new_message_dispatcher, previous_dispatcher)
+        else
+          Application.delete_env(:whispr_messaging, :new_message_dispatcher)
+        end
+      end)
+
+      %{conversation: conversation, sender_id: sender_id, other_id: other_id}
+    end
+
+    test "publishes on whispr:messaging:new_message with recipients excluding the sender", %{
+      conversation: conversation,
+      sender_id: sender_id,
+      other_id: other_id
+    } do
+      {:ok, _message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: sender_id,
+          message_type: "text",
+          content: "ciphertext",
+          client_random: 99
+        })
+
+      assert_receive {:redis_publish, "whispr:messaging:new_message", json}, 1_000
+      payload = Jason.decode!(json)
+
+      assert payload["conversation_id"] == conversation.id
+      assert payload["sender_id"] == sender_id
+      assert payload["target_user_ids"] == [other_id]
+      assert payload["message_type"] == "text"
+      assert is_binary(payload["sent_at"])
+    end
+
+    test "publishes nothing when the conversation has only the sender", %{
+      conversation: conversation,
+      sender_id: sender_id,
+      other_id: other_id
+    } do
+      # Remove the other member so the sender is alone in the conversation.
+      Conversations.remove_conversation_member(conversation.id, other_id)
+
+      {:ok, _message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: sender_id,
+          message_type: "text",
+          content: "ciphertext",
+          client_random: 101
+        })
+
+      refute_receive {:redis_publish, _channel, _json}, 200
+    end
+  end
+
   describe "reply threading validation" do
     setup do
       {:ok, conversation1} =
