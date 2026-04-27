@@ -36,6 +36,16 @@ defmodule WhisprMessagingWeb.UserSocket do
   @impl true
   def id(socket), do: "user_socket:#{socket.assigns.user_id}"
 
+  # WHISPR-1214 — audiences acceptées sur la socket :
+  #   * `nil` : access tokens HTTP actuels (pas d'aud claim côté auth-service)
+  #   * `"whispr"` : audience HTTP historique
+  #   * `"ws"` : token court-vivant (60 s) émis par /tokens/ws-token
+  # Toute autre valeur est rejetée. Public uniquement pour le unit test.
+  @doc false
+  def valid_aud?(nil), do: true
+  def valid_aud?(aud) when is_binary(aud), do: aud in ["whispr", "ws"]
+  def valid_aud?(_), do: false
+
   # JWT verification — same logic as WhisprMessagingWeb.Plugs.Authenticate
   if Mix.env() == :test do
     defp verify_jwt("test_token_" <> user_id) when user_id != "", do: {:ok, user_id}
@@ -64,10 +74,10 @@ defmodule WhisprMessagingWeb.UserSocket do
   end
 
   defp token_config do
-    # iss/aud must match the values the auth-service puts in its JWTs.
     iss = System.get_env("JWT_ISSUER") || "whispr-auth"
-    aud = System.get_env("JWT_AUDIENCE") || "whispr"
-    Joken.Config.default_claims(skip: [:iat, :nbf], iss: iss, aud: aud)
+
+    Joken.Config.default_claims(skip: [:iat, :nbf, :aud], iss: iss)
+    |> Joken.Config.add_claim("aud", nil, &__MODULE__.valid_aud?/1)
   end
 
   defp peek_kid(token) do
