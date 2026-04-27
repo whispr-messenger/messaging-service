@@ -227,9 +227,9 @@ jobs:
 
           # Build commit message based on trigger type
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${SHORT_SHA} (manual trigger)"
+            COMMIT_MSG="chore(deploy/messaging-service): update image to ${SHORT_SHA} (manual trigger)"
           else
-            COMMIT_MSG="🔧 chore(deploy/messaging-service): update image to ${SHORT_SHA}"
+            COMMIT_MSG="chore(deploy/messaging-service): update image to ${SHORT_SHA}"
           fi
 
           git add -A k8s/whispr/
