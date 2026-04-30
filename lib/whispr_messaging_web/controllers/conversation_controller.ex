@@ -521,12 +521,16 @@ defmodule WhisprMessagingWeb.ConversationController do
   @doc """
   Deletes (deactivates) a conversation.
   DELETE /api/v1/conversations/:id
+
+  Authorization (WHISPR-841):
+  - Group conversation: caller must be an admin of the group.
+  - Direct conversation: caller must be a member (no role concept here).
   """
   def delete(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- member?(conversation.id, user_id),
+         true <- can_delete_conversation?(conversation, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
         data:
@@ -1102,6 +1106,18 @@ defmodule WhisprMessagingWeb.ConversationController do
       _ ->
         false
     end
+  end
+
+  # WHISPR-841: deleting a group requires admin role; direct conversations
+  # have no admin concept, so any active member may deactivate the thread.
+  defp can_delete_conversation?(_conversation, nil), do: false
+
+  defp can_delete_conversation?(%{type: "direct"} = conversation, user_id) do
+    member?(conversation.id, user_id)
+  end
+
+  defp can_delete_conversation?(conversation, user_id) do
+    can_manage_members?(conversation, user_id)
   end
 
   # Swagger Schema Definitions
