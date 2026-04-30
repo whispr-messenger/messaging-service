@@ -8,6 +8,7 @@
 import Config
 
 config :whispr_messaging,
+  env: config_env(),
   ecto_repos: [WhisprMessaging.Repo],
   generators: [binary_id: true]
 
