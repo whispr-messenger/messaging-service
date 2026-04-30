@@ -559,7 +559,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   end
 
   describe "DELETE /messaging/api/v1/conversations/:id" do
-    test "deactivates a conversation", %{user1_id: user1_id} do
+    test "admin can deactivate a group conversation", %{user1_id: user1_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
@@ -567,7 +567,62 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
           is_active: true
         })
 
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["isActive"] == false
+    end
+
+    test "non-admin member cannot deactivate a group (WHISPR-841)", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Admin only"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
+      Conversations.add_conversation_member(conversation.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(403)
+
+      assert response["error"] == "Unauthorized"
+
+      {:ok, reloaded} = Conversations.get_conversation(conversation.id)
+      assert reloaded.is_active == true
+    end
+
+    test "any member can deactivate a direct conversation", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
       Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user2_id)
 
       conn =
         build_conn()
@@ -604,7 +659,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
           is_active: true
         })
 
-      Conversations.add_conversation_member(conversation.id, user2_id)
+      Conversations.add_conversation_member(conversation.id, user2_id, %{"role" => "admin"})
 
       conn =
         build_conn()
