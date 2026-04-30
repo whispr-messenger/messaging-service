@@ -85,21 +85,31 @@ defmodule WhisprMessagingWeb.Plugs.Cors do
   defp decide_origin_header(_origin, _allowed), do: :none
 
   defp allowed_origins do
-    case System.get_env("CORS_ALLOWED_ORIGINS") do
-      nil ->
+    case {prod?(), System.get_env("CORS_ALLOWED_ORIGINS")} do
+      {true, nil} ->
+        raise "CORS_ALLOWED_ORIGINS must be set in production (WHISPR-838)"
+
+      {true, ""} ->
+        raise "CORS_ALLOWED_ORIGINS cannot be empty in production (WHISPR-838)"
+
+      {false, nil} ->
         warn_missing_config()
         []
 
-      "" ->
+      {false, ""} ->
         warn_missing_config()
         []
 
-      value ->
+      {_, value} ->
         value
         |> String.split(",")
         |> Enum.map(&String.trim/1)
         |> Enum.reject(&(&1 == ""))
     end
+  end
+
+  defp prod? do
+    Application.get_env(:whispr_messaging, :env) == :prod
   end
 
   defp warn_missing_config do
