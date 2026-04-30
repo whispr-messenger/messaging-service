@@ -64,6 +64,15 @@ config :whispr_messaging, :services,
   scheduling_service:
     System.get_env("SCHEDULING_SERVICE_GRPC_URL", "grpc://scheduling-service:50013")
 
+# user-service internal HTTP API (service-to-service, not exposed via the public gateway).
+# WHISPR-1230: the messaging-service queries
+# `GET {USER_SERVICE_INTERNAL_URL}/contacts/check?ownerId=...&contactId=...`
+# to authorise direct-conversation creation. The optional bearer token is sent on
+# the `Authorization` header when set, for machine-to-machine auth.
+config :whispr_messaging, :user_service_internal,
+  url: System.get_env("USER_SERVICE_INTERNAL_URL", "http://user-service:3011/internal/v1"),
+  token: System.get_env("USER_SERVICE_INTERNAL_TOKEN")
+
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
 
