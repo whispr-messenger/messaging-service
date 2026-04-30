@@ -21,9 +21,14 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   @doc """
   Lists members of a conversation.
   GET /api/v1/conversations/:id/members
+
+  Authorization (WHISPR-842): caller must be a member of the conversation.
   """
   def index(conn, %{"id" => conversation_id}) do
-    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id) do
+    user_id = conn.assigns[:user_id]
+
+    with {:ok, _conversation} <- Conversations.get_conversation(conversation_id),
+         true <- Conversations.conversation_member?(conversation_id, user_id) do
       members = Conversations.list_conversation_members(conversation_id)
 
       json(conn, %{
@@ -34,6 +39,16 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
             count: length(members)
           })
       })
+    else
+      false ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "You must be a member of the conversation to list its members"})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Conversation not found"})
     end
   end
 
