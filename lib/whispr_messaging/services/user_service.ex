@@ -1,227 +1,82 @@
 defmodule WhisprMessaging.Services.UserService do
   @moduledoc """
-  Interface for interacting with the User Service via gRPC.
-  Currently a stub implementation.
+  Interface for interacting with the User Service.
+
+  Direct-conversation authorisation goes through the internal HTTP endpoint
+  `GET {USER_SERVICE_INTERNAL_URL}/contacts/check?ownerId=...&contactId=...`,
+  which returns `{ "isContact": bool, "isBlocked": bool }` in a single round
+  trip — no pagination, no client-side scan.
   """
 
-  @max_pages 10
-  @page_limit 200
-  # user-service's HTTP port is 3011 in the k8s Service (see
-  # infrastructure/k8s/whispr/preprod/user-service/service.yaml). Keep the
-  # fallback aligned with the cluster port — the messaging-service Deployment
-  # does not export USER_SERVICE_HTTP_URL, so this default is what is used in
-  # practice.
-  @default_user_service_url "http://user-service:3011/user/v1"
+  @default_internal_url "http://user-service:3011/internal/v1"
 
   @doc false
-  def user_service_base_url do
-    System.get_env("USER_SERVICE_HTTP_URL", @default_user_service_url)
+  def internal_base_url do
+    config = Application.get_env(:whispr_messaging, :user_service_internal, [])
+
+    Keyword.get(config, :url) ||
+      System.get_env("USER_SERVICE_INTERNAL_URL", @default_internal_url)
   end
 
-  def check_users_are_contacts(owner_id, other_user_id, authorization_header \\ nil) do
-    base_url = user_service_base_url()
-
-    do_check_users_are_contacts(
-      String.trim(to_string(owner_id)),
-      String.trim(to_string(other_user_id)),
-      authorization_header,
-      base_url,
-      nil,
-      0
-    )
+  @doc false
+  def internal_token do
+    config = Application.get_env(:whispr_messaging, :user_service_internal, [])
+    Keyword.get(config, :token) || System.get_env("USER_SERVICE_INTERNAL_TOKEN")
   end
 
-  defp do_check_users_are_contacts(_owner_id, _other_user_id, _auth, _base_url, _cursor, pages)
-       when pages >= @max_pages do
-    {:ok, false}
-  end
+  @doc """
+  Returns `{:ok, true}` when `owner_id` and `other_user_id` are mutual contacts
+  and neither has blocked the other, `{:ok, false}` otherwise. The
+  `_authorization_header` argument is kept for backwards compatibility with
+  existing call sites but is unused: the internal endpoint authenticates the
+  caller via a service token, not the end-user JWT.
+  """
+  def check_users_are_contacts(owner_id, other_user_id, _authorization_header \\ nil) do
+    owner = String.trim(to_string(owner_id))
+    other = String.trim(to_string(other_user_id))
 
-  defp do_check_users_are_contacts(
-         owner_id,
-         other_user_id,
-         authorization_header,
-         base_url,
-         cursor,
-         pages
-       ) do
-    url = build_contacts_url(base_url, cursor)
-    headers = build_headers(authorization_header)
-    req = Finch.build(:get, url, headers)
+    url =
+      internal_base_url() <>
+        "/contacts/check?ownerId=" <>
+        URI.encode_www_form(owner) <>
+        "&contactId=" <> URI.encode_www_form(other)
 
-    req
+    :get
+    |> Finch.build(url, build_headers())
     |> Finch.request(WhisprMessaging.Finch)
-    |> handle_contacts_response(
-      owner_id,
-      other_user_id,
-      authorization_header,
-      base_url,
-      pages
-    )
+    |> handle_check_response()
   end
 
-  defp build_contacts_url(base_url, nil) do
-    base_url <> "/contacts?limit=#{@page_limit}"
-  end
-
-  defp build_contacts_url(base_url, cursor) do
-    base_url <>
-      "/contacts?limit=#{@page_limit}&cursor=#{URI.encode_www_form(to_string(cursor))}"
-  end
-
-  defp build_headers(authorization_header) do
+  defp build_headers do
     base = [{"accept", "application/json"}]
 
-    if is_binary(authorization_header) and String.trim(authorization_header) != "" do
-      base ++ [{"authorization", authorization_header}]
-    else
-      base
+    case internal_token() do
+      token when is_binary(token) and token != "" ->
+        base ++ [{"authorization", "Bearer " <> token}]
+
+      _ ->
+        base
     end
   end
 
-  defp handle_contacts_response(
-         {:ok, %Finch.Response{status: 200, body: body}},
-         owner_id,
-         other_user_id,
-         authorization_header,
-         base_url,
-         pages
-       ) do
+  defp handle_check_response({:ok, %Finch.Response{status: 200, body: body}}) do
     case Jason.decode(body) do
-      {:ok, json} ->
-        process_contacts_page(
-          json,
-          owner_id,
-          other_user_id,
-          authorization_header,
-          base_url,
-          pages
-        )
+      {:ok, %{"isContact" => is_contact} = json} ->
+        is_blocked = Map.get(json, "isBlocked", false) == true
+        {:ok, is_contact == true and not is_blocked}
 
       _ ->
         {:error, :invalid_response}
     end
   end
 
-  defp handle_contacts_response(
-         {:ok, %Finch.Response{status: status}},
-         _owner_id,
-         _other_user_id,
-         _authorization_header,
-         _base_url,
-         _pages
-       )
+  defp handle_check_response({:ok, %Finch.Response{status: status}})
        when status in [401, 403] do
     {:error, :unauthorized}
   end
 
-  defp handle_contacts_response(
-         {:ok, %Finch.Response{status: 404}},
-         _owner_id,
-         _other_user_id,
-         _authorization_header,
-         _base_url,
-         _pages
-       ) do
-    {:ok, false}
-  end
-
-  defp handle_contacts_response({:ok, %Finch.Response{}}, _, _, _, _, _) do
-    {:error, :request_failed}
-  end
-
-  defp handle_contacts_response({:error, _reason}, _, _, _, _, _) do
-    {:error, :request_failed}
-  end
-
-  defp process_contacts_page(
-         json,
-         owner_id,
-         other_user_id,
-         authorization_header,
-         base_url,
-         pages
-       ) do
-    data = extract_data(json)
-    items = extract_items(data)
-
-    if contact_found?(items, other_user_id) do
-      {:ok, true}
-    else
-      maybe_fetch_next_page(
-        json,
-        data,
-        owner_id,
-        other_user_id,
-        authorization_header,
-        base_url,
-        pages
-      )
-    end
-  end
-
-  defp extract_data(json) when is_map(json) do
-    if Map.has_key?(json, "data"), do: json["data"], else: json
-  end
-
-  defp extract_data(json), do: json
-
-  defp extract_items(data) when is_list(data), do: data
-
-  defp extract_items(data) when is_map(data) do
-    cond do
-      is_list(data["contacts"]) -> data["contacts"]
-      is_list(data["data"]) -> data["data"]
-      true -> []
-    end
-  end
-
-  defp extract_items(_), do: []
-
-  defp contact_found?(items, other_user_id) do
-    Enum.any?(items, fn item -> item_matches?(item, other_user_id) end)
-  end
-
-  defp item_matches?(item, other_user_id) when is_map(item) do
-    contact_id = item["contactId"] || item["contact_id"] || item["id"]
-    to_string(contact_id || "") == other_user_id
-  end
-
-  defp item_matches?(_item, _other_user_id), do: false
-
-  defp maybe_fetch_next_page(
-         json,
-         data,
-         owner_id,
-         other_user_id,
-         authorization_header,
-         base_url,
-         pages
-       ) do
-    next_cursor = pick_field(json, data, ["nextCursor", "next_cursor"])
-    has_more = pick_field(json, data, ["hasMore", "has_more"]) || false
-
-    if next_cursor && has_more do
-      do_check_users_are_contacts(
-        owner_id,
-        other_user_id,
-        authorization_header,
-        base_url,
-        next_cursor,
-        pages + 1
-      )
-    else
-      {:ok, false}
-    end
-  end
-
-  defp pick_field(json, data, keys) do
-    from_json = if is_map(json), do: first_present(json, keys), else: nil
-    from_json || if(is_map(data), do: first_present(data, keys), else: nil)
-  end
-
-  defp first_present(map, keys) do
-    Enum.find_value(keys, fn key -> map[key] end)
-  end
+  defp handle_check_response({:ok, %Finch.Response{}}), do: {:error, :request_failed}
+  defp handle_check_response({:error, _reason}), do: {:error, :request_failed}
 
   @doc """
   Checks if a user exists.
