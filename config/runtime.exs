@@ -67,11 +67,19 @@ config :whispr_messaging, :services,
 # user-service internal HTTP API (service-to-service, not exposed via the public gateway).
 # WHISPR-1230: the messaging-service queries
 # `GET {USER_SERVICE_INTERNAL_URL}/contacts/check?ownerId=...&contactId=...`
-# to authorise direct-conversation creation. The optional bearer token is sent on
-# the `Authorization` header when set, for machine-to-machine auth.
+# to authorise direct-conversation creation. The shared secret is sent on the
+# `x-internal-token` header — must match `INTERNAL_API_TOKEN` on user-service.
+internal_api_token = System.get_env("INTERNAL_API_TOKEN")
+
+if config_env() == :prod and internal_api_token in [nil, ""] do
+  IO.warn(
+    "INTERNAL_API_TOKEN is not set — calls to user-service /internal/v1/contacts/check will be rejected with 401."
+  )
+end
+
 config :whispr_messaging, :user_service_internal,
   url: System.get_env("USER_SERVICE_INTERNAL_URL", "http://user-service:3011/internal/v1"),
-  token: System.get_env("USER_SERVICE_INTERNAL_TOKEN")
+  token: internal_api_token
 
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
