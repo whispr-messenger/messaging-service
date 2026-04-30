@@ -120,4 +120,44 @@ defmodule WhisprMessagingWeb.Plugs.CorsTest do
       assert get_resp_header(conn, "access-control-allow-credentials") == []
     end
   end
+
+  describe "production hard-fail (WHISPR-838)" do
+    setup do
+      original_env = Application.get_env(:whispr_messaging, :env)
+      Application.put_env(:whispr_messaging, :env, :prod)
+
+      on_exit(fn ->
+        case original_env do
+          nil -> Application.delete_env(:whispr_messaging, :env)
+          value -> Application.put_env(:whispr_messaging, :env, value)
+        end
+      end)
+
+      :ok
+    end
+
+    test "raises when CORS_ALLOWED_ORIGINS is unset in production" do
+      System.delete_env("CORS_ALLOWED_ORIGINS")
+
+      assert_raise RuntimeError, ~r/CORS_ALLOWED_ORIGINS must be set in production/, fn ->
+        call(:get, [{"origin", "https://app.example.com"}])
+      end
+    end
+
+    test "raises when CORS_ALLOWED_ORIGINS is empty in production" do
+      System.put_env("CORS_ALLOWED_ORIGINS", "")
+
+      assert_raise RuntimeError, ~r/CORS_ALLOWED_ORIGINS cannot be empty in production/, fn ->
+        call(:get, [{"origin", "https://app.example.com"}])
+      end
+    end
+
+    test "honors explicit allowlist in production" do
+      System.put_env("CORS_ALLOWED_ORIGINS", "https://app.example.com")
+
+      conn = call(:get, [{"origin", "https://app.example.com"}])
+
+      assert get_resp_header(conn, "access-control-allow-origin") == ["https://app.example.com"]
+    end
+  end
 end
