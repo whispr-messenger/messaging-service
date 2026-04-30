@@ -46,6 +46,61 @@ defmodule WhisprMessagingWeb.ConversationMemberControllerTest do
     }
   end
 
+  describe "GET /conversations/:id/members (membership gate, WHISPR-842)" do
+    test "member can list members", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.member_id)
+        |> json_conn()
+
+      response =
+        conn
+        |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/members")
+        |> json_response(200)
+
+      assert is_list(response["data"])
+      assert response["meta"]["count"] >= 1
+    end
+
+    test "admin can list members", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      conn
+      |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/members")
+      |> json_response(200)
+    end
+
+    test "stranger cannot list members", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.stranger_id)
+        |> json_conn()
+
+      response =
+        conn
+        |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/members")
+        |> json_response(403)
+
+      assert response["error"] =~ "must be a member"
+    end
+
+    test "returns 404 for non-existent conversation", ctx do
+      fake_id = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.member_id)
+        |> json_conn()
+
+      conn
+      |> get(~p"/messaging/api/v1/conversations/#{fake_id}/members")
+      |> json_response(404)
+    end
+  end
+
   describe "POST /conversations/:id/members (member gate)" do
     test "admin can add a new member", ctx do
       conn =
