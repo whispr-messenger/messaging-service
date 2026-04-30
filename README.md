@@ -94,7 +94,7 @@ mix coveralls
 | `PORT` | Port HTTP (défaut: 4000) |
 | `MODERATION_SERVICE_URL` | URL du service de modération |
 | `USER_SERVICE_INTERNAL_URL` | Base URL de l'API interne du user-service (par défaut `http://user-service:3011/internal/v1`). Utilisée pour vérifier la relation de contact via `GET /contacts/check?ownerId=…&contactId=…`. |
-| `USER_SERVICE_INTERNAL_TOKEN` | Token bearer optionnel pour l'authentification machine-to-machine sur l'API interne du user-service. |
+| `INTERNAL_API_TOKEN` | Secret partagé envoyé sur le header `x-internal-token` à chaque appel à l'API interne du user-service. La valeur doit être identique à `INTERNAL_API_TOKEN` côté user-service (provisionné via le même Secret Kubernetes). Sans ce token, le user-service répond `401`. |
 
 ## Déploiement
 

@@ -21,7 +21,7 @@ defmodule WhisprMessaging.Services.UserService do
   @doc false
   def internal_token do
     config = Application.get_env(:whispr_messaging, :user_service_internal, [])
-    Keyword.get(config, :token) || System.get_env("USER_SERVICE_INTERNAL_TOKEN")
+    Keyword.get(config, :token) || System.get_env("INTERNAL_API_TOKEN")
   end
 
   @doc """
@@ -29,7 +29,7 @@ defmodule WhisprMessaging.Services.UserService do
   and neither has blocked the other, `{:ok, false}` otherwise. The
   `_authorization_header` argument is kept for backwards compatibility with
   existing call sites but is unused: the internal endpoint authenticates the
-  caller via a service token, not the end-user JWT.
+  caller via the `x-internal-token` shared secret, not the end-user JWT.
   """
   def check_users_are_contacts(owner_id, other_user_id, _authorization_header \\ nil) do
     owner = String.trim(to_string(owner_id))
@@ -52,7 +52,7 @@ defmodule WhisprMessaging.Services.UserService do
 
     case internal_token() do
       token when is_binary(token) and token != "" ->
-        base ++ [{"authorization", "Bearer " <> token}]
+        base ++ [{"x-internal-token", token}]
 
       _ ->
         base
