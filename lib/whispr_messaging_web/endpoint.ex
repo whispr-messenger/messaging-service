@@ -18,13 +18,14 @@ defmodule WhisprMessagingWeb.Endpoint do
   ]
 
   # Shared WebSocket options — single source of truth for both mounts.
+  # `check_origin` is resolved at runtime via {Mod, Fun, Args} so prod can
+  # reuse the CORS allowlist (WHISPR-839) while dev/test stay permissive.
   @ws_opts [
     websocket: [
       timeout: 45_000,
       transport_log: false,
       compress: true,
-      # Configure appropriately for production
-      check_origin: false
+      check_origin: {__MODULE__, :ws_check_origin, []}
     ],
     longpoll: false
   ]
@@ -32,6 +33,65 @@ defmodule WhisprMessagingWeb.Endpoint do
   socket "/socket", WhisprMessagingWeb.UserSocket, @ws_opts
   # Ingress-prefixed path so clients behind /messaging can reach the socket.
   socket "/messaging/socket", WhisprMessagingWeb.UserSocket, @ws_opts
+
+  @doc """
+  WebSocket origin check (WHISPR-839).
+
+  Invoked by Phoenix as an MFA per-connection with the request `%URI{}`.
+
+  - In `:prod`, only origins listed in `CORS_ALLOWED_ORIGINS` (comma-separated)
+    are accepted. An unset/empty value or a wildcard raises — we refuse to
+    boot a permissive WebSocket transport in production.
+  - In `:dev`/`:test`, returns `true` (permissive) to keep local tooling
+    and tests working without extra configuration.
+  """
+  @spec ws_check_origin(URI.t()) :: boolean()
+  def ws_check_origin(%URI{} = uri) do
+    case Application.get_env(:whispr_messaging, :env) do
+      :prod ->
+        prod_origin_allowed?(uri)
+
+      _ ->
+        true
+    end
+  end
+
+  defp prod_origin_allowed?(%URI{} = uri) do
+    case System.get_env("CORS_ALLOWED_ORIGINS") do
+      nil ->
+        raise "CORS_ALLOWED_ORIGINS must be set in production for WebSocket origin check (WHISPR-839)"
+
+      "" ->
+        raise "CORS_ALLOWED_ORIGINS cannot be empty in production for WebSocket origin check (WHISPR-839)"
+
+      "*" ->
+        raise "CORS_ALLOWED_ORIGINS=* is not allowed for WebSocket origin check in production (WHISPR-839)"
+
+      value ->
+        origins =
+          value
+          |> String.split(",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+
+        origin_string = build_origin_string(uri)
+        origin_string in origins
+    end
+  end
+
+  defp build_origin_string(%URI{scheme: scheme, host: host, port: port})
+       when is_binary(scheme) and is_binary(host) do
+    base = "#{scheme}://#{host}"
+
+    cond do
+      is_nil(port) -> base
+      scheme == "https" and port == 443 -> base
+      scheme == "http" and port == 80 -> base
+      true -> "#{base}:#{port}"
+    end
+  end
+
+  defp build_origin_string(_), do: ""
 
   # Serve static files from the "priv/static" directory
   plug Plug.Static,
