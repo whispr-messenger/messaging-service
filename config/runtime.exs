@@ -79,7 +79,18 @@ end
 
 config :whispr_messaging, :user_service_internal,
   url: System.get_env("USER_SERVICE_INTERNAL_URL", "http://user-service:3011/internal/v1"),
-  token: internal_api_token
+  token: internal_api_token,
+  timeout_ms: String.to_integer(System.get_env("USER_SERVICE_INTERNAL_TIMEOUT_MS", "5000"))
+
+# WHISPR-840: replaces the in-process stub that always returned
+# {:ok, true} / {:ok, false}. The HTTP client talks to user-service
+# /internal/v1/contacts/check (cf. WHISPR-1230 contract). Skip in :test so
+# the in-process mock configured in config/test.exs keeps the upper hand.
+if config_env() != :test do
+  config :whispr_messaging,
+         :user_service_client,
+         WhisprMessaging.Services.HttpUserServiceClient
+end
 
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
