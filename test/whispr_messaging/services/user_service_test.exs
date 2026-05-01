@@ -45,4 +45,64 @@ defmodule WhisprMessaging.Services.UserServiceTest do
       assert UserService.internal_base_url() == "http://env-user:1234/internal/v1"
     end
   end
+
+  describe "client/0 dispatcher" do
+    setup do
+      previous = Application.get_env(:whispr_messaging, :user_service_client)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:whispr_messaging, :user_service_client, previous)
+        else
+          Application.delete_env(:whispr_messaging, :user_service_client)
+        end
+      end)
+
+      :ok
+    end
+
+    test "returns the configured client module" do
+      Application.put_env(
+        :whispr_messaging,
+        :user_service_client,
+        WhisprMessaging.Services.MockUserServiceClient
+      )
+
+      assert UserService.client() == WhisprMessaging.Services.MockUserServiceClient
+    end
+
+    test "falls back to the HTTP client when nothing is configured" do
+      Application.delete_env(:whispr_messaging, :user_service_client)
+
+      assert UserService.client() == WhisprMessaging.Services.HttpUserServiceClient
+    end
+
+    test "delegates check_user_exists/1 to the configured client" do
+      Application.put_env(
+        :whispr_messaging,
+        :user_service_client,
+        WhisprMessaging.Services.MockUserServiceClient
+      )
+
+      Process.put(:mock_user_service_client, %{
+        check_user_exists: fn "missing" -> {:ok, false} end
+      })
+
+      assert UserService.check_user_exists("missing") == {:ok, false}
+    end
+
+    test "delegates check_user_blocked/2 to the configured client" do
+      Application.put_env(
+        :whispr_messaging,
+        :user_service_client,
+        WhisprMessaging.Services.MockUserServiceClient
+      )
+
+      Process.put(:mock_user_service_client, %{
+        check_user_blocked: fn "a", "b" -> {:ok, true} end
+      })
+
+      assert UserService.check_user_blocked("a", "b") == {:ok, true}
+    end
+  end
 end
