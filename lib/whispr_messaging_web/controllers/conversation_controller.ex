@@ -650,6 +650,9 @@ defmodule WhisprMessagingWeb.ConversationController do
         {:error, :not_member} ->
           conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
 
+        {:error, :conversation_inactive} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
         {:error, :already_archived} ->
           conn
           |> put_status(:unprocessable_entity)
@@ -691,6 +694,9 @@ defmodule WhisprMessagingWeb.ConversationController do
           json(conn, %{data: %{conversation_id: conversation_id, archived: false}})
 
         {:error, :not_member} ->
+          conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+        {:error, :conversation_inactive} ->
           conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
 
         {:error, :not_archived} ->
