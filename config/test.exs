@@ -53,3 +53,9 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :whispr_messaging, :enforce_direct_contact, false
+
+# WHISPR-840: tests use the in-process mock to avoid hitting Finch / network.
+# Per-test overrides are stored under the process dict (`:mock_user_service_client`).
+config :whispr_messaging,
+       :user_service_client,
+       WhisprMessaging.Services.MockUserServiceClient
