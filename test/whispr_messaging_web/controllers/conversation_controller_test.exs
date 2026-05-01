@@ -107,6 +107,124 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["error"] != nil
     end
+
+    # WHISPR-1256: media URLs stored in conversation metadata (group_icon_url,
+    # picture_url, …) must be swapped for presigned S3 URLs so the web client
+    # can render them in `<img src>` without an Authorization header.
+    test "presigns group_icon_url stored in conversation metadata", %{user1_id: user1_id} do
+      previous = Application.get_env(:whispr_messaging, :media_service_internal)
+
+      Application.put_env(:whispr_messaging, :media_service_internal,
+        url: "http://media-service.test",
+        timeout_ms: 1_500,
+        cache_ttl_ms: 60_000
+      )
+
+      WhisprMessaging.Services.MediaClient.reset_cache()
+
+      on_exit(fn ->
+        WhisprMessaging.Services.MediaClient.reset_cache()
+
+        if previous do
+          Application.put_env(:whispr_messaging, :media_service_internal, previous)
+        else
+          Application.delete_env(:whispr_messaging, :media_service_internal)
+        end
+      end)
+
+      media_id = "94d20166-adb5-4f88-9319-06a531898116"
+      blob_url = "https://whispr-preprod.roadmvn.com/media/v1/#{media_id}/blob"
+      presigned = "https://minio.roadmvn.com/whispr-media/avatars/#{media_id}?X-Amz-Signature=abc"
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "WHISPR TEAM", "group_icon_url" => blob_url},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      with_mock Finch,
+        build: fn :get, url, _headers ->
+          assert String.ends_with?(url, "/media/v1/#{media_id}/blob")
+          :req
+        end,
+        request: fn :req, WhisprMessaging.Finch, _opts ->
+          {:ok, %Finch.Response{status: 200, body: ~s({"url":"#{presigned}"}), headers: []}}
+        end do
+        conn =
+          build_conn()
+          |> authenticated_conn(user1_id)
+          |> json_conn()
+
+        response =
+          get(conn, ~p"/messaging/api/v1/conversations")
+          |> json_response(200)
+
+        rendered =
+          Enum.find(response["data"], fn c -> c["id"] == conversation.id end)
+
+        assert rendered != nil
+        assert rendered["metadata"]["groupIconUrl"] == presigned
+        assert rendered["metadata"]["name"] == "WHISPR TEAM"
+      end
+    end
+
+    test "leaves metadata untouched when media-service is unreachable", %{user1_id: user1_id} do
+      previous = Application.get_env(:whispr_messaging, :media_service_internal)
+
+      Application.put_env(:whispr_messaging, :media_service_internal,
+        url: "http://media-service.test",
+        timeout_ms: 100,
+        cache_ttl_ms: 60_000
+      )
+
+      WhisprMessaging.Services.MediaClient.reset_cache()
+
+      on_exit(fn ->
+        WhisprMessaging.Services.MediaClient.reset_cache()
+
+        if previous do
+          Application.put_env(:whispr_messaging, :media_service_internal, previous)
+        else
+          Application.delete_env(:whispr_messaging, :media_service_internal)
+        end
+      end)
+
+      media_id = "c1593a9f-39c0-4da4-8c40-2bfa12ccaba5"
+      blob_url = "https://whispr-preprod.roadmvn.com/media/v1/#{media_id}/blob"
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "CyberOps Team", "group_icon_url" => blob_url},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      with_mock Finch,
+        build: fn :get, _url, _headers -> :req end,
+        request: fn :req, WhisprMessaging.Finch, _opts ->
+          {:error, %Mint.TransportError{reason: :timeout}}
+        end do
+        conn =
+          build_conn()
+          |> authenticated_conn(user1_id)
+          |> json_conn()
+
+        response =
+          get(conn, ~p"/messaging/api/v1/conversations")
+          |> json_response(200)
+
+        rendered =
+          Enum.find(response["data"], fn c -> c["id"] == conversation.id end)
+
+        # Fail-safe: keep the original blob URL when presign fails.
+        assert rendered["metadata"]["groupIconUrl"] == blob_url
+      end
+    end
   end
 
   describe "POST /messaging/api/v1/conversations (direct)" do
