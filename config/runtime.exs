@@ -82,6 +82,15 @@ config :whispr_messaging, :user_service_internal,
   token: internal_api_token,
   timeout_ms: String.to_integer(System.get_env("USER_SERVICE_INTERNAL_TIMEOUT_MS", "5000"))
 
+# WHISPR-1256: messaging-service forwards the caller's JWT to media-service
+# `GET /media/v1/:id/blob` to swap bare blob URLs (stored in conversation
+# metadata under group_icon_url, picture_url, …) for presigned S3 URLs the
+# web client can render without an Authorization header.
+config :whispr_messaging, :media_service_internal,
+  url: System.get_env("MEDIA_SERVICE_HTTP_URL", "http://media-service:3013"),
+  timeout_ms: String.to_integer(System.get_env("MEDIA_SERVICE_HTTP_TIMEOUT_MS", "5000")),
+  cache_ttl_ms: String.to_integer(System.get_env("MEDIA_SERVICE_PRESIGN_CACHE_TTL_MS", "60000"))
+
 # WHISPR-840: replaces the in-process stub that always returned
 # {:ok, true} / {:ok, false}. The HTTP client talks to user-service
 # /internal/v1/contacts/check (cf. WHISPR-1230 contract). Skip in :test so
