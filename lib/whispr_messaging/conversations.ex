@@ -887,6 +887,10 @@ defmodule WhisprMessaging.Conversations do
   @doc """
   Lists archived conversations for a user.
 
+  Each conversation is enriched with `:member_info`, `:last_message`, and
+  `:unread_count` so the listing can be rendered without follow-up queries.
+  Enrichment is batched to avoid N+1 even at the maximum page size of 100.
+
   Accepts the following options:
 
     * `:limit` (default: 50) — page size
@@ -910,10 +914,59 @@ defmodule WhisprMessaging.Conversations do
         select: {m, c}
 
     results = Repo.all(query)
+    conversation_ids = Enum.map(results, fn {_m, c} -> c.id end)
+
+    last_messages = batch_last_messages(conversation_ids)
+    unread_counts = batch_unread_counts(results, user_id)
 
     Enum.map(results, fn {member, conversation} ->
       conversation
       |> Map.put(:member_info, member)
+      |> Map.put(:last_message, Map.get(last_messages, conversation.id))
+      |> Map.put(:unread_count, Map.get(unread_counts, conversation.id, 0))
     end)
+  end
+
+  # Loads the most recent non-deleted message for each conversation in one
+  # query, using `DISTINCT ON (conversation_id)` so PostgreSQL keeps only the
+  # newest row per conversation.
+  defp batch_last_messages([]), do: %{}
+
+  defp batch_last_messages(conversation_ids) do
+    query =
+      from m in Message,
+        where: m.conversation_id in ^conversation_ids,
+        where: m.is_deleted == false,
+        distinct: [asc: m.conversation_id],
+        order_by: [asc: m.conversation_id, desc: m.sent_at]
+
+    query
+    |> Repo.all()
+    |> Map.new(fn message -> {message.conversation_id, message} end)
+  end
+
+  # Counts unread messages per conversation in a single aggregated query.
+  # Joining `conversation_members` lets PostgreSQL apply each member's own
+  # `last_read_at` as the cutoff (NULL means everything counts as unread)
+  # without round-tripping per conversation.
+  defp batch_unread_counts([], _user_id), do: %{}
+
+  defp batch_unread_counts(member_conversations, user_id) do
+    conversation_ids = Enum.map(member_conversations, fn {_m, c} -> c.id end)
+
+    query =
+      from m in Message,
+        join: cm in ConversationMember,
+        on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+        where: m.conversation_id in ^conversation_ids,
+        where: m.sender_id != ^user_id,
+        where: m.is_deleted == false,
+        where: is_nil(cm.last_read_at) or m.sent_at > cm.last_read_at,
+        group_by: m.conversation_id,
+        select: {m.conversation_id, count(m.id)}
+
+    query
+    |> Repo.all()
+    |> Map.new()
   end
 end

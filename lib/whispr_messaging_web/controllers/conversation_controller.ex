@@ -1091,6 +1091,8 @@ defmodule WhisprMessagingWeb.ConversationController do
             isArchived(:boolean, "Whether archived for the authenticated user")
             isPinned(:boolean, "Whether pinned for the authenticated user")
             isMuted(:boolean, "Whether muted for the authenticated user")
+            unreadCount(:integer, "Number of unread messages for the authenticated user")
+            lastMessage(:object, "Most recent non-deleted message in the conversation, or null")
             insertedAt(:string, "Creation timestamp", format: :datetime)
             updatedAt(:string, "Last update timestamp", format: :datetime)
           end

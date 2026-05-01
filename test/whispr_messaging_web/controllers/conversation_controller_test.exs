@@ -1120,6 +1120,62 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["error"] == "Unauthorized"
     end
+
+    test "exposes lastMessage and unreadCount on each archived item", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user2_id)
+
+      {:ok, _} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: user2_id,
+          message_type: "text",
+          content: "hello",
+          client_random: 999
+        })
+
+      {:ok, _} = Conversations.archive_conversation(conv.id, user1_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      enriched = Enum.find(response["data"], fn c -> c["id"] == conv.id end)
+
+      assert enriched["unreadCount"] == 1
+      assert enriched["lastMessage"]["content"] == "hello"
+      assert enriched["lastMessage"]["sender_id"] == user2_id
+    end
+
+    test "returns lastMessage=null and unreadCount=0 for empty archived conversations", %{
+      archived_conversations: [conv | _],
+      user1_id: user1_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      enriched = Enum.find(response["data"], fn c -> c["id"] == conv.id end)
+
+      assert enriched["lastMessage"] == nil
+      assert enriched["unreadCount"] == 0
+    end
   end
 
   # ---------------------------------------------------------------------------
