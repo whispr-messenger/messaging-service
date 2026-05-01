@@ -886,8 +886,16 @@ defmodule WhisprMessaging.Conversations do
 
   @doc """
   Lists archived conversations for a user.
+
+  Accepts the following options:
+
+    * `:limit` (default: 50) — page size
+    * `:offset` (default: 0) — number of rows to skip
   """
-  def list_archived_conversations(user_id, limit \\ 50) do
+  def list_archived_conversations(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
+
     query =
       from m in ConversationMember,
         join: c in Conversation,
@@ -898,6 +906,7 @@ defmodule WhisprMessaging.Conversations do
         where: fragment("(?->>'is_archived')::boolean = true", m.settings),
         order_by: [desc: c.updated_at],
         limit: ^limit,
+        offset: ^offset,
         select: {m, c}
 
     results = Repo.all(query)

@@ -600,17 +600,24 @@ defmodule WhisprMessagingWeb.ConversationController do
     if is_nil(user_id) do
       conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
     else
-      limit =
-        case Integer.parse(params["limit"] || "50") do
-          {n, ""} when n > 0 -> min(n, 100)
-          _ -> 50
-        end
+      limit = parse_int(params["limit"], 50, 100)
+      offset = parse_int(params["offset"], 0, 10_000)
 
-      conversations = Conversations.list_archived_conversations(user_id, limit)
+      conversations =
+        Conversations.list_archived_conversations(user_id, limit: limit, offset: offset)
+
+      has_more = length(conversations) == limit
 
       json(conn, %{
         data: render_conversations(conversations),
-        meta: camelize_keys(%{count: length(conversations), user_id: user_id})
+        meta:
+          camelize_keys(%{
+            count: length(conversations),
+            limit: limit,
+            offset: offset,
+            has_more: has_more,
+            user_id: user_id
+          })
       })
     end
   end
@@ -1182,4 +1189,17 @@ defmodule WhisprMessagingWeb.ConversationController do
       end)
     end)
   end
+
+  # Parse a query string integer, clamping to [0, max] and falling back to a
+  # default on missing or malformed input.
+  defp parse_int(nil, default, _max), do: default
+
+  defp parse_int(value, default, max) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, ""} when n >= 0 -> min(n, max)
+      _ -> default
+    end
+  end
+
+  defp parse_int(_value, default, _max), do: default
 end
