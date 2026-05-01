@@ -8,7 +8,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
-  alias WhisprMessaging.Services.UserService
+  alias WhisprMessaging.Services.{MediaClient, UserService}
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -64,7 +64,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> filter_by_type(conversation_type)
 
       json(conn, %{
-        data: render_conversations(conversations),
+        data: render_conversations(conversations, authorization_header(conn)),
         meta:
           camelize_keys(%{
             count: length(conversations),
@@ -134,7 +134,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         conversations = Conversations.search_user_conversations(user_id, query_term, limit: limit)
 
         json(conn, %{
-          data: render_conversations(conversations),
+          data: render_conversations(conversations, authorization_header(conn)),
           meta: %{
             count: length(conversations),
             query: query_term
@@ -206,7 +206,7 @@ defmodule WhisprMessagingWeb.ConversationController do
               conn
               |> put_status(:created)
               |> json(%{
-                data: render_conversation(conversation)
+                data: render_conversation(conversation, authorization_header(conn))
               })
 
             {:error, %Ecto.Changeset{} = changeset} ->
@@ -262,7 +262,7 @@ defmodule WhisprMessagingWeb.ConversationController do
                 conn
                 |> put_status(:created)
                 |> json(%{
-                  data: render_conversation(conversation)
+                  data: render_conversation(conversation, authorization_header(conn))
                 })
 
               {:error, %Ecto.Changeset{} = changeset} ->
@@ -364,7 +364,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       {:ok, conversation} ->
         conn
         |> put_status(:created)
-        |> json(%{data: render_conversation(conversation)})
+        |> json(%{data: render_conversation(conversation, authorization_header(conn))})
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
@@ -403,7 +403,12 @@ defmodule WhisprMessagingWeb.ConversationController do
         member_info = Map.get(conversation, :member_info)
 
         json(conn, %{
-          data: render_conversation_with_members(conversation, member_info)
+          data:
+            render_conversation_with_members(
+              conversation,
+              member_info,
+              authorization_header(conn)
+            )
         })
       else
         false ->
@@ -421,7 +426,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       # For now keeping legacy behavior but handling 404
       with {:ok, conversation} <- Conversations.get_conversation(id) do
         json(conn, %{
-          data: render_conversation(conversation)
+          data: render_conversation(conversation, authorization_header(conn))
         })
       end
     end
@@ -481,7 +486,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       case Conversations.update_conversation(conversation, conversation_params) do
         {:ok, updated_conversation} ->
           json(conn, %{
-            data: render_conversation(updated_conversation)
+            data: render_conversation(updated_conversation, authorization_header(conn))
           })
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -681,7 +686,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       conversations = Conversations.list_archived_conversations(user_id, limit)
 
       json(conn, %{
-        data: render_conversations(conversations),
+        data: render_conversations(conversations, authorization_header(conn)),
         meta: camelize_keys(%{count: length(conversations), user_id: user_id})
       })
     end
@@ -966,11 +971,11 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   # Private rendering functions
 
-  defp render_conversations(conversations) do
-    Enum.map(conversations, &render_conversation/1)
+  defp render_conversations(conversations, authorization) do
+    Enum.map(conversations, &render_conversation(&1, authorization))
   end
 
-  defp render_conversation(conversation) do
+  defp render_conversation(conversation, authorization) do
     member_info = Map.get(conversation, :member_info)
 
     settings =
@@ -980,12 +985,17 @@ defmodule WhisprMessagingWeb.ConversationController do
         %{}
       end
 
+    # WHISPR-1256: rewrite media URLs (group_icon_url, picture_url, …) stored
+    # in conversation metadata to presigned S3 URLs the web client can render
+    # without an Authorization header.
+    metadata = MediaClient.presign_metadata_urls(conversation.metadata, authorization)
+
     camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
-      name: Map.get(conversation.metadata || %{}, "name"),
+      name: Map.get(metadata || %{}, "name"),
       external_group_id: conversation.external_group_id,
-      metadata: conversation.metadata,
+      metadata: metadata,
       is_active: conversation.is_active,
       is_pinned: Map.get(settings, "is_pinned", false),
       is_archived: Map.get(settings, "is_archived", false),
@@ -1033,12 +1043,12 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  defp render_conversation_with_members(conversation, member_info) do
+  defp render_conversation_with_members(conversation, member_info, authorization) do
     member_user_ids = Enum.map(conversation.members, & &1.user_id)
 
     base =
       conversation
-      |> render_conversation()
+      |> render_conversation(authorization)
       |> Map.put("members", Enum.map(conversation.members, &render_member/1))
       |> Map.put("memberCount", length(conversation.members))
       |> Map.put("memberUserIds", member_user_ids)
@@ -1076,6 +1086,10 @@ defmodule WhisprMessagingWeb.ConversationController do
       joined_at: member.joined_at,
       is_active: member.is_active
     })
+  end
+
+  defp authorization_header(conn) do
+    conn |> get_req_header("authorization") |> List.first()
   end
 
   defp filter_by_type(conversations, nil), do: conversations
