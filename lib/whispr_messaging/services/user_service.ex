@@ -80,20 +80,33 @@ defmodule WhisprMessaging.Services.UserService do
 
   @doc """
   Checks if a user exists.
+
+  Delegates to the module configured under
+  `:whispr_messaging, :user_service_client` (defaults to
+  `WhisprMessaging.Services.HttpUserServiceClient`). See the behaviour
+  `WhisprMessaging.Services.UserServiceBehaviour` for the contract.
   """
-  def check_user_exists(_user_id) do
-    # Stub: returns true until gRPC integration with user service is done
-    # For now, assume user exists
-    {:ok, true}
+  def check_user_exists(user_id) do
+    client().check_user_exists(user_id)
   end
 
   @doc """
   Checks if a user is blocked by another user.
-  Returns {:ok, boolean} where boolean is true if blocked.
+
+  Returns `{:ok, true}` when blocked, `{:ok, false}` otherwise. On transient
+  errors callers must fail-closed (assume blocked) — this function returns
+  `{:error, _}` in that case so the surrounding `with` chain short-circuits.
   """
-  def check_user_blocked(_blocker_id, _blocked_id) do
-    # Stub: returns false until gRPC integration with user service is done
-    # For now, assume not blocked
-    {:ok, false}
+  def check_user_blocked(blocker_id, blocked_id) do
+    client().check_user_blocked(blocker_id, blocked_id)
+  end
+
+  @doc false
+  def client do
+    Application.get_env(
+      :whispr_messaging,
+      :user_service_client,
+      WhisprMessaging.Services.HttpUserServiceClient
+    )
   end
 end
