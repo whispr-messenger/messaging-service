@@ -2,7 +2,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   use WhisprMessagingWeb.ConnCase, async: true
 
   alias WhisprMessaging.Conversations
-  alias WhisprMessaging.Services.UserService
+  alias WhisprMessaging.Services.{MediaClient, UserService}
 
   import Mock
 
@@ -120,10 +120,10 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         cache_ttl_ms: 60_000
       )
 
-      WhisprMessaging.Services.MediaClient.reset_cache()
+      MediaClient.reset_cache()
 
       on_exit(fn ->
-        WhisprMessaging.Services.MediaClient.reset_cache()
+        MediaClient.reset_cache()
 
         if previous do
           Application.put_env(:whispr_messaging, :media_service_internal, previous)
@@ -180,10 +180,10 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         cache_ttl_ms: 60_000
       )
 
-      WhisprMessaging.Services.MediaClient.reset_cache()
+      MediaClient.reset_cache()
 
       on_exit(fn ->
-        WhisprMessaging.Services.MediaClient.reset_cache()
+        MediaClient.reset_cache()
 
         if previous do
           Application.put_env(:whispr_messaging, :media_service_internal, previous)
