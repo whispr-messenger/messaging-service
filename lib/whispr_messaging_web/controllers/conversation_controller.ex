@@ -1083,11 +1083,14 @@ defmodule WhisprMessagingWeb.ConversationController do
             id(:string, "Conversation UUID", format: :uuid)
             type(:string, "Conversation type (direct or group)", enum: [:direct, :group])
             name(:string, "Conversation name (from metadata)")
-            external_group_id(:string, "External group identifier")
+            externalGroupId(:string, "External group identifier")
             metadata(:object, "Additional metadata")
-            is_active(:boolean, "Whether the conversation is active")
-            inserted_at(:string, "Creation timestamp", format: :datetime)
-            updated_at(:string, "Last update timestamp", format: :datetime)
+            isActive(:boolean, "Whether the conversation is active")
+            isArchived(:boolean, "Whether archived for the authenticated user")
+            isPinned(:boolean, "Whether pinned for the authenticated user")
+            isMuted(:boolean, "Whether muted for the authenticated user")
+            insertedAt(:string, "Creation timestamp", format: :datetime)
+            updatedAt(:string, "Last update timestamp", format: :datetime)
           end
         end,
       ConversationWithMembers:
@@ -1099,13 +1102,16 @@ defmodule WhisprMessagingWeb.ConversationController do
             id(:string, "Conversation UUID", format: :uuid)
             type(:string, "Conversation type (direct or group)", enum: [:direct, :group])
             name(:string, "Conversation name (from metadata)")
-            external_group_id(:string, "External group identifier")
+            externalGroupId(:string, "External group identifier")
             metadata(:object, "Additional metadata")
-            is_active(:boolean, "Whether the conversation is active")
+            isActive(:boolean, "Whether the conversation is active")
+            isArchived(:boolean, "Whether archived for the authenticated user")
+            isPinned(:boolean, "Whether pinned for the authenticated user")
+            isMuted(:boolean, "Whether muted for the authenticated user")
             members(Schema.array(:ConversationMember), "List of conversation members")
-            member_count(:integer, "Number of members in the conversation")
-            inserted_at(:string, "Creation timestamp", format: :datetime)
-            updated_at(:string, "Last update timestamp", format: :datetime)
+            memberCount(:integer, "Number of members in the conversation")
+            insertedAt(:string, "Creation timestamp", format: :datetime)
+            updatedAt(:string, "Last update timestamp", format: :datetime)
           end
         end,
       ConversationMember:
@@ -1114,10 +1120,10 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("A member of a conversation")
 
           properties do
-            user_id(:string, "User UUID", format: :uuid)
+            userId(:string, "User UUID", format: :uuid)
             role(:string, "Member role (e.g. member, admin)")
-            joined_at(:string, "Timestamp when the member joined", format: :datetime)
-            is_active(:boolean, "Whether the member is active")
+            joinedAt(:string, "Timestamp when the member joined", format: :datetime)
+            isActive(:boolean, "Whether the member is active")
           end
         end,
       ConversationsIndexMeta:
@@ -1126,8 +1132,11 @@ defmodule WhisprMessagingWeb.ConversationController do
           description("Metadata for conversations list response")
 
           properties do
-            count(:integer, "Total number of conversations")
-            user_id(:string, "The user ID used for the query", format: :uuid)
+            count(:integer, "Number of conversations returned in this page")
+            limit(:integer, "Page size requested")
+            offset(:integer, "Page offset (number of items skipped)")
+            hasMore(:boolean, "Whether more results are available beyond this page")
+            userId(:string, "The user ID used for the query", format: :uuid)
           end
         end,
       ConversationsResponse:
@@ -1165,8 +1174,8 @@ defmodule WhisprMessagingWeb.ConversationController do
 
           properties do
             id(:string, "Conversation UUID", format: :uuid)
-            is_active(:boolean, "Whether the conversation is active (false after deletion)")
-            deleted_at(:string, "Deletion timestamp", format: :datetime)
+            isActive(:boolean, "Whether the conversation is active (false after deletion)")
+            deletedAt(:string, "Deletion timestamp", format: :datetime)
           end
         end,
       ConversationDeleteResponse:
