@@ -811,7 +811,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         post(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/archive")
         |> json_response(400)
 
-      assert response["error"] == "Invalid conversation id"
+      assert response["error"] == "Invalid id format"
     end
 
     test "does not broadcast when archive fails", %{
@@ -947,7 +947,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         delete(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/archive")
         |> json_response(400)
 
-      assert response["error"] == "Invalid conversation id"
+      assert response["error"] == "Invalid id format"
     end
 
     test "does not broadcast when unarchive fails", %{
@@ -1080,6 +1080,35 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["meta"]["offset"] == 0
     end
 
+    test "falls back to defaults on out-of-range limit (limit=0)", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=0")
+        |> json_response(200)
+
+      assert response["meta"]["limit"] == 50
+    end
+
+    test "reports hasMore=false when total equals limit exactly", %{user1_id: user1_id} do
+      # Setup creates 3 archived conversations. Asking for exactly 3 must not
+      # incorrectly signal hasMore=true.
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=3")
+        |> json_response(200)
+
+      assert length(response["data"]) == 3
+      assert response["meta"]["hasMore"] == false
+    end
+
     test "returns 401 without authentication" do
       conn =
         build_conn()
@@ -1094,10 +1123,10 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   end
 
   # ---------------------------------------------------------------------------
-  # ValidateConversationId plug coverage on sibling routes (WHISPR-1252 Fix 7)
+  # ValidatePathUuid plug coverage on sibling routes (WHISPR-1252 Fix 7)
   # ---------------------------------------------------------------------------
 
-  describe "ValidateConversationId plug applies to all /conversations/:id/* routes" do
+  describe "ValidatePathUuid plug applies to all /conversations/:id/* routes" do
     test "returns 400 on GET /conversations/:id with malformed UUID", %{user1_id: user1_id} do
       conn =
         build_conn()
@@ -1108,7 +1137,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         get(conn, ~p"/messaging/api/v1/conversations/not-a-uuid")
         |> json_response(400)
 
-      assert response["error"] == "Invalid conversation id"
+      assert response["error"] == "Invalid id format"
     end
 
     test "returns 400 on POST /conversations/:id/pin with malformed UUID", %{user1_id: user1_id} do
@@ -1121,7 +1150,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         post(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/pin")
         |> json_response(400)
 
-      assert response["error"] == "Invalid conversation id"
+      assert response["error"] == "Invalid id format"
     end
 
     test "returns 400 on PUT /conversations/:id/settings with malformed UUID", %{
@@ -1136,7 +1165,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         put(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/settings", %{})
         |> json_response(400)
 
-      assert response["error"] == "Invalid conversation id"
+      assert response["error"] == "Invalid id format"
     end
   end
 end

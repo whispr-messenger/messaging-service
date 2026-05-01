@@ -13,6 +13,6 @@ defmodule WhisprMessaging.Repo.Migrations.AddPartialIndexArchivedConversationMem
   end
 
   def down do
-    execute("DROP INDEX IF EXISTS conversation_members_user_archived_idx")
+    execute("DROP INDEX CONCURRENTLY IF EXISTS conversation_members_user_archived_idx")
   end
 end

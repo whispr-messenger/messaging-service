@@ -600,13 +600,15 @@ defmodule WhisprMessagingWeb.ConversationController do
     if is_nil(user_id) do
       conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
     else
-      limit = parse_int(params["limit"], 50, 100)
-      offset = parse_int(params["offset"], 0, 10_000)
+      limit = parse_int(params["limit"], 50, min: 1, max: 100)
+      offset = parse_int(params["offset"], 0, min: 0, max: 10_000)
 
-      conversations =
-        Conversations.list_archived_conversations(user_id, limit: limit, offset: offset)
+      # Fetch one extra row so we can answer hasMore without a separate count.
+      fetched =
+        Conversations.list_archived_conversations(user_id, limit: limit + 1, offset: offset)
 
-      has_more = length(conversations) == limit
+      has_more = length(fetched) > limit
+      conversations = Enum.take(fetched, limit)
 
       json(conn, %{
         data: render_conversations(conversations),
@@ -1199,16 +1201,27 @@ defmodule WhisprMessagingWeb.ConversationController do
     end)
   end
 
-  # Parse a query string integer, clamping to [0, max] and falling back to a
-  # default on missing or malformed input.
-  defp parse_int(nil, default, _max), do: default
+  # Parse a query string integer, clamping to [min, max] and falling back to a
+  # default on missing, malformed, or out-of-range input.
+  defp parse_int(value, default, opts) do
+    min_v = Keyword.get(opts, :min, 0)
+    max_v = Keyword.get(opts, :max, 1_000_000)
 
-  defp parse_int(value, default, max) when is_binary(value) do
-    case Integer.parse(value) do
-      {n, ""} when n >= 0 -> min(n, max)
+    case parse_int_value(value) do
+      {:ok, n} when n >= min_v -> min(n, max_v)
       _ -> default
     end
   end
 
-  defp parse_int(_value, default, _max), do: default
+  defp parse_int_value(nil), do: :error
+  defp parse_int_value(n) when is_integer(n), do: {:ok, n}
+
+  defp parse_int_value(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, ""} -> {:ok, n}
+      _ -> :error
+    end
+  end
+
+  defp parse_int_value(_), do: :error
 end

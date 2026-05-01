@@ -904,7 +904,7 @@ defmodule WhisprMessaging.Conversations do
         where: m.is_active == true,
         where: c.is_active == true,
         where: fragment("(?->>'is_archived')::boolean = true", m.settings),
-        order_by: [desc: c.updated_at],
+        order_by: [desc: c.updated_at, desc: c.id],
         limit: ^limit,
         offset: ^offset,
         select: {m, c}
