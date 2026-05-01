@@ -11,12 +11,14 @@ defmodule WhisprMessagingWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug WhisprMessagingWeb.Plugs.Authenticate
+    plug WhisprMessagingWeb.Plugs.ValidatePathUuid
   end
 
   pipeline :admin_api do
     plug :accepts, ["json"]
     plug WhisprMessagingWeb.Plugs.Authenticate
     plug WhisprMessagingWeb.Plugs.RequireAdmin
+    plug WhisprMessagingWeb.Plugs.ValidatePathUuid
   end
 
   scope "/messaging/api/swagger" do
