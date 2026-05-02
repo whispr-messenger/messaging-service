@@ -933,12 +933,15 @@ defmodule WhisprMessaging.Conversations do
   defp batch_last_messages([]), do: %{}
 
   defp batch_last_messages(conversation_ids) do
+    # `sent_at` is stored at second precision, so two messages inserted in the
+    # same second can collide. Adding `inserted_at` and `id` as tiebreakers
+    # keeps the "most recent" pick deterministic.
     query =
       from m in Message,
         where: m.conversation_id in ^conversation_ids,
         where: m.is_deleted == false,
         distinct: [asc: m.conversation_id],
-        order_by: [asc: m.conversation_id, desc: m.sent_at]
+        order_by: [asc: m.conversation_id, desc: m.sent_at, desc: m.inserted_at, desc: m.id]
 
     query
     |> Repo.all()
