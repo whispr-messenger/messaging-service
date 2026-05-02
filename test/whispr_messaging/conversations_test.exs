@@ -2,6 +2,7 @@ defmodule WhisprMessaging.ConversationsTest do
   use WhisprMessaging.DataCase, async: true
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Repo
 
   describe "create_conversation/1" do
     test "creates a direct conversation" do
@@ -180,6 +181,122 @@ defmodule WhisprMessaging.ConversationsTest do
 
       assert conv1.id in ids
       refute conv2.id in ids
+    end
+
+    test "enriches archived conversation with last_message and unread_count" do
+      user_id = Ecto.UUID.generate()
+      other_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
+      {:ok, _} = Conversations.archive_conversation(conv.id, user_id)
+
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      {:ok, _m1} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: other_id,
+          message_type: "text",
+          content: "first",
+          client_random: 1,
+          sent_at: DateTime.add(now, -10, :second)
+        })
+
+      {:ok, last} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: other_id,
+          message_type: "text",
+          content: "second",
+          client_random: 2,
+          sent_at: now
+        })
+
+      [enriched] = Conversations.list_archived_conversations(user_id)
+
+      assert enriched.last_message.id == last.id
+      assert enriched.unread_count == 2
+    end
+
+    test "returns nil last_message and zero unread_count for empty archived conversation" do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+      {:ok, _} = Conversations.archive_conversation(conv.id, user_id)
+
+      [enriched] = Conversations.list_archived_conversations(user_id)
+
+      assert enriched.last_message == nil
+      assert enriched.unread_count == 0
+    end
+
+    test "returns zero unread_count when last_read_at is past the latest message" do
+      user_id = Ecto.UUID.generate()
+      other_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
+
+      {:ok, _} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: other_id,
+          message_type: "text",
+          content: "old",
+          client_random: 10
+        })
+
+      future = DateTime.utc_now() |> DateTime.add(60, :second) |> DateTime.truncate(:second)
+
+      member = Conversations.get_conversation_member(conv.id, user_id)
+
+      {:ok, _} =
+        member
+        |> Ecto.Changeset.change(%{last_read_at: future})
+        |> Repo.update()
+
+      {:ok, _} = Conversations.archive_conversation(conv.id, user_id)
+
+      [enriched] = Conversations.list_archived_conversations(user_id)
+
+      assert enriched.unread_count == 0
+      assert enriched.last_message != nil
+    end
+
+    test "ignores messages sent by the user itself in unread_count" do
+      user_id = Ecto.UUID.generate()
+      other_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
+
+      {:ok, _} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "self",
+          client_random: 20
+        })
+
+      {:ok, _} = Conversations.archive_conversation(conv.id, user_id)
+
+      [enriched] = Conversations.list_archived_conversations(user_id)
+
+      assert enriched.unread_count == 0
     end
   end
 
