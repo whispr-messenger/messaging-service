@@ -954,4 +954,551 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["error"] != nil
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Archive / Unarchive (WHISPR-1252)
+  # ---------------------------------------------------------------------------
+
+  describe "POST /messaging/api/v1/conversations/:id/archive" do
+    setup %{user1_id: user1_id} do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user1_id)
+
+      %{conversation: conversation}
+    end
+
+    test "archives the conversation and broadcasts the event", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      conversation_id = conversation.id
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation_id}/archive")
+        |> json_response(200)
+
+      assert response["data"]["archived"] == true
+      assert response["data"]["conversation_id"] == conversation_id
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> _,
+                       event: "conversation_archived",
+                       payload: %{archived: true, conversation_id: ^conversation_id}
+                     },
+                     1_000
+    end
+
+    test "returns 401 without authentication", %{conversation: conversation} do
+      conn =
+        build_conn()
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+
+    test "returns 404 if user is not a member", %{
+      user2_id: user2_id,
+      conversation: conversation
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(404)
+
+      assert response["error"] == "Conversation not found"
+    end
+
+    test "returns 404 if conversation does not exist", %{user1_id: user1_id} do
+      missing_id = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{missing_id}/archive")
+        |> json_response(404)
+
+      assert response["error"] == "Conversation not found"
+    end
+
+    test "returns 404 if conversation has been soft-deleted", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Conversations.deactivate_conversation(conversation)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(404)
+
+      assert response["error"] == "Conversation not found"
+    end
+
+    test "returns 422 when conversation is already archived", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Conversations.archive_conversation(conversation.id, user1_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(422)
+
+      assert response["error"] == "Conversation is already archived"
+    end
+
+    test "returns 400 when the conversation id is not a UUID", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/archive")
+        |> json_response(400)
+
+      assert response["error"] == "Invalid id format"
+    end
+
+    test "does not broadcast when archive fails", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Conversations.archive_conversation(conversation.id, user1_id)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      _ =
+        post(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(422)
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "conversation_archived"}, 200
+    end
+  end
+
+  describe "DELETE /messaging/api/v1/conversations/:id/archive" do
+    setup %{user1_id: user1_id} do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _member} = Conversations.add_conversation_member(conversation.id, user1_id)
+
+      %{conversation: conversation}
+    end
+
+    test "unarchives the conversation and broadcasts the event", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      conversation_id = conversation.id
+      {:ok, _} = Conversations.archive_conversation(conversation_id, user1_id)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation_id}/archive")
+        |> json_response(200)
+
+      assert response["data"]["archived"] == false
+      assert response["data"]["conversation_id"] == conversation_id
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> _,
+                       event: "conversation_archived",
+                       payload: %{archived: false, conversation_id: ^conversation_id}
+                     },
+                     1_000
+    end
+
+    test "returns 401 without authentication", %{conversation: conversation} do
+      conn =
+        build_conn()
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+
+    test "returns 404 if user is not a member", %{
+      user2_id: user2_id,
+      conversation: conversation
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(404)
+
+      assert response["error"] == "Conversation not found"
+    end
+
+    test "returns 404 if conversation has been soft-deleted", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      {:ok, _} = Conversations.archive_conversation(conversation.id, user1_id)
+      {:ok, _} = Conversations.deactivate_conversation(conversation)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(404)
+
+      assert response["error"] == "Conversation not found"
+    end
+
+    test "returns 422 when conversation is not archived", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(422)
+
+      assert response["error"] == "Conversation is not archived"
+    end
+
+    test "returns 400 when the conversation id is not a UUID", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/archive")
+        |> json_response(400)
+
+      assert response["error"] == "Invalid id format"
+    end
+
+    test "does not broadcast when unarchive fails", %{
+      user1_id: user1_id,
+      conversation: conversation
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      _ =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}/archive")
+        |> json_response(422)
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "conversation_archived"}, 200
+    end
+  end
+
+  describe "GET /messaging/api/v1/conversations/archived" do
+    setup %{user1_id: user1_id} do
+      conversations =
+        for _ <- 1..3 do
+          {:ok, conv} =
+            Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+          {:ok, _} = Conversations.add_conversation_member(conv.id, user1_id)
+          {:ok, _} = Conversations.archive_conversation(conv.id, user1_id)
+          conv
+        end
+
+      %{archived_conversations: conversations}
+    end
+
+    test "returns archived conversations with pagination meta", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      assert is_list(response["data"])
+      assert length(response["data"]) == 3
+      assert response["meta"]["count"] == 3
+      assert response["meta"]["limit"] == 50
+      assert response["meta"]["offset"] == 0
+      assert response["meta"]["hasMore"] == false
+      assert response["meta"]["userId"] == user1_id
+      assert Enum.all?(response["data"], fn c -> c["isArchived"] == true end)
+    end
+
+    test "respects limit query parameter and reports hasMore=true", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=2")
+        |> json_response(200)
+
+      assert length(response["data"]) == 2
+      assert response["meta"]["limit"] == 2
+      assert response["meta"]["hasMore"] == true
+    end
+
+    test "respects offset query parameter", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      first_page =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=2&offset=0")
+        |> json_response(200)
+
+      second_page =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=2&offset=2")
+        |> json_response(200)
+
+      assert length(first_page["data"]) == 2
+      assert length(second_page["data"]) == 1
+      assert second_page["meta"]["offset"] == 2
+      assert second_page["meta"]["hasMore"] == false
+
+      first_ids = Enum.map(first_page["data"], & &1["id"])
+      second_ids = Enum.map(second_page["data"], & &1["id"])
+      assert MapSet.disjoint?(MapSet.new(first_ids), MapSet.new(second_ids))
+    end
+
+    test "isolates archived conversations between users", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user2_id)
+      {:ok, _} = Conversations.archive_conversation(conv.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      ids = Enum.map(response["data"], & &1["id"])
+      refute conv.id in ids
+    end
+
+    test "falls back to defaults on malformed limit/offset", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=abc&offset=-5")
+        |> json_response(200)
+
+      assert response["meta"]["limit"] == 50
+      assert response["meta"]["offset"] == 0
+    end
+
+    test "falls back to defaults on out-of-range limit (limit=0)", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=0")
+        |> json_response(200)
+
+      assert response["meta"]["limit"] == 50
+    end
+
+    test "reports hasMore=false when total equals limit exactly", %{user1_id: user1_id} do
+      # Setup creates 3 archived conversations. Asking for exactly 3 must not
+      # incorrectly signal hasMore=true.
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived?limit=3")
+        |> json_response(200)
+
+      assert length(response["data"]) == 3
+      assert response["meta"]["hasMore"] == false
+    end
+
+    test "returns 401 without authentication" do
+      conn =
+        build_conn()
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+
+    test "exposes lastMessage and unreadCount on each archived item", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user2_id)
+
+      {:ok, _} =
+        WhisprMessaging.Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: user2_id,
+          message_type: "text",
+          content: "hello",
+          client_random: 999
+        })
+
+      {:ok, _} = Conversations.archive_conversation(conv.id, user1_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      enriched = Enum.find(response["data"], fn c -> c["id"] == conv.id end)
+
+      assert enriched["unreadCount"] == 1
+      assert enriched["lastMessage"]["content"] == "hello"
+      assert enriched["lastMessage"]["senderId"] == user2_id
+      assert enriched["lastMessage"]["messageType"] == "text"
+      assert is_binary(enriched["lastMessage"]["sentAt"])
+      assert enriched["lastMessage"]["isDeleted"] == false
+    end
+
+    test "returns lastMessage=null and unreadCount=0 for empty archived conversations", %{
+      archived_conversations: [conv | _],
+      user1_id: user1_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/archived")
+        |> json_response(200)
+
+      enriched = Enum.find(response["data"], fn c -> c["id"] == conv.id end)
+
+      assert enriched["lastMessage"] == nil
+      assert enriched["unreadCount"] == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # ValidatePathUuid plug coverage on sibling routes (WHISPR-1252 Fix 7)
+  # ---------------------------------------------------------------------------
+
+  describe "ValidatePathUuid plug applies to all /conversations/:id/* routes" do
+    test "returns 400 on GET /conversations/:id with malformed UUID", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/not-a-uuid")
+        |> json_response(400)
+
+      assert response["error"] == "Invalid id format"
+    end
+
+    test "returns 400 on POST /conversations/:id/pin with malformed UUID", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/pin")
+        |> json_response(400)
+
+      assert response["error"] == "Invalid id format"
+    end
+
+    test "returns 400 on PUT /conversations/:id/settings with malformed UUID", %{
+      user1_id: user1_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        put(conn, ~p"/messaging/api/v1/conversations/not-a-uuid/settings", %{})
+        |> json_response(400)
+
+      assert response["error"] == "Invalid id format"
+    end
+  end
 end
