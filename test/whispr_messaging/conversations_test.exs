@@ -194,13 +194,16 @@ defmodule WhisprMessaging.ConversationsTest do
       {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
       {:ok, _} = Conversations.archive_conversation(conv.id, user_id)
 
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
       {:ok, _m1} =
         WhisprMessaging.Messages.create_message(%{
           conversation_id: conv.id,
           sender_id: other_id,
           message_type: "text",
           content: "first",
-          client_random: 1
+          client_random: 1,
+          sent_at: DateTime.add(now, -10, :second)
         })
 
       {:ok, last} =
@@ -209,7 +212,8 @@ defmodule WhisprMessaging.ConversationsTest do
           sender_id: other_id,
           message_type: "text",
           content: "second",
-          client_random: 2
+          client_random: 2,
+          sent_at: now
         })
 
       [enriched] = Conversations.list_archived_conversations(user_id)

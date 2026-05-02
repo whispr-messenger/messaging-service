@@ -61,6 +61,18 @@ shell:
 test:
     docker compose -f docker/test/compose.yml up --abort-on-container-exit --exit-code-from test-runner --build
 
+# Fast iteration loop: starts postgres/redis if needed, then runs `mix test`
+# in a one-shot test-runner container without the coverage pipeline (which
+# requires the host `cover/` directory to be writable by the container user
+# and is overkill when iterating). An optional argument is forwarded to
+# `mix test`, e.g. `just test-fast test/whispr_messaging/conversations_test.exs:186`.
+test-fast ARGS="":
+    #!/bin/bash
+    set -euo pipefail
+    docker compose -f docker/test/compose.yml up -d postgres redis
+    docker compose -f docker/test/compose.yml run --rm -e MIX_ENV=test test-runner \
+        /bin/bash -c "mix local.hex --force >/dev/null && mix local.rebar --force >/dev/null && mix deps.get --only test && mix ecto.create --quiet && mix ecto.migrate --quiet && mix test {{ARGS}}"
+
 # Install git hooks manually (alternative to the automatic busybox container).
 # Useful for contributors who don't use the Docker dev stack.
 setup-hooks:
