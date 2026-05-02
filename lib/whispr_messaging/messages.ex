@@ -8,6 +8,9 @@ defmodule WhisprMessaging.Messages do
 
   import Ecto.Query, warn: false
 
+  alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Events.MessagingEvents
+
   alias WhisprMessaging.Messages.{
     DeliveryStatus,
     Message,
@@ -55,6 +58,7 @@ defmodule WhisprMessaging.Messages do
           {:ok, message} ->
             # Preload associations for channels
             message = Repo.preload(message, [:conversation, :reply_to])
+            publish_new_message_async(message)
             {:ok, message}
 
           error ->
@@ -62,6 +66,30 @@ defmodule WhisprMessaging.Messages do
         end
       end
     end
+  end
+
+  # Fire-and-forget Redis publish so a slow/broken Redis never blocks the
+  # message insert path. notification-service consumes this to bump
+  # unread badges and push FCM notifications. The dispatcher can be
+  # swapped via config (`:new_message_dispatcher`) so tests can run it
+  # synchronously and avoid sandbox leaks.
+  defp publish_new_message_async(%Message{} = message) do
+    dispatcher =
+      Application.get_env(
+        :whispr_messaging,
+        :new_message_dispatcher,
+        &default_new_message_dispatcher/1
+      )
+
+    dispatcher.(message)
+    :ok
+  end
+
+  defp default_new_message_dispatcher(%Message{conversation_id: conversation_id} = message) do
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      members = Conversations.list_conversation_members(conversation_id)
+      MessagingEvents.publish_new_message(message, members)
+    end)
   end
 
   @doc """
@@ -86,26 +114,107 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Searches messages by content across conversations the user participates in.
+
+  Options (WHISPR-1061):
+    * `:limit` — default 50, max 100 (enforced upstream)
+    * `:offset` — default 0
+    * `:conversation_id` — restrict results to a single conversation
+    * `:from_datetime` — only messages `sent_at >= from_datetime`
+    * `:to_datetime` — only messages `sent_at <= to_datetime`
+    * `:message_type` — "text" | "media" | "system"
   """
-  def search_messages_global(user_id, query, limit \\ 50, offset \\ 0) do
+  def search_messages_global(user_id, query, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
+    conversation_id = Keyword.get(opts, :conversation_id)
+    from_dt = Keyword.get(opts, :from_datetime)
+    to_dt = Keyword.get(opts, :to_datetime)
+    message_type = Keyword.get(opts, :message_type)
+
     escaped = query |> to_string() |> String.replace(~r/[\\%_]/, "\\\\\\0")
     like_query = "%#{escaped}%"
 
-    from(m in Message,
-      join: cm in WhisprMessaging.Conversations.ConversationMember,
-      on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
-      left_join: umd in UserMessageDeletion,
-      on: umd.message_id == m.id and umd.user_id == ^user_id,
-      where:
-        ilike(fragment("encode(?, 'escape')", m.content), ^like_query) and m.is_deleted == false,
-      where: is_nil(umd.id),
-      order_by: [desc: m.inserted_at],
-      limit: ^limit,
-      offset: ^offset,
-      preload: [:reply_to, :attachments, :reactions, :delivery_statuses]
-    )
+    base =
+      from(m in Message,
+        join: cm in WhisprMessaging.Conversations.ConversationMember,
+        on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+        left_join: umd in UserMessageDeletion,
+        on: umd.message_id == m.id and umd.user_id == ^user_id,
+        where:
+          ilike(fragment("encode(?, 'escape')", m.content), ^like_query) and
+            m.is_deleted == false,
+        where: is_nil(umd.id),
+        order_by: [desc: m.inserted_at],
+        limit: ^limit,
+        offset: ^offset,
+        preload: [:reply_to, :attachments, :reactions, :delivery_statuses]
+      )
+
+    base
+    |> maybe_filter_conversation(conversation_id)
+    |> maybe_filter_from(from_dt)
+    |> maybe_filter_to(to_dt)
+    |> maybe_filter_message_type(message_type)
     |> Repo.all()
   end
+
+  defp maybe_filter_conversation(query, nil), do: query
+
+  defp maybe_filter_conversation(query, conversation_id) do
+    from(m in query, where: m.conversation_id == ^conversation_id)
+  end
+
+  defp maybe_filter_from(query, nil), do: query
+
+  defp maybe_filter_from(query, %DateTime{} = from_dt) do
+    from(m in query, where: m.inserted_at >= ^from_dt)
+  end
+
+  defp maybe_filter_to(query, nil), do: query
+
+  defp maybe_filter_to(query, %DateTime{} = to_dt) do
+    from(m in query, where: m.inserted_at <= ^to_dt)
+  end
+
+  defp maybe_filter_message_type(query, nil), do: query
+
+  defp maybe_filter_message_type(query, type) when type in ["text", "media", "system"] do
+    from(m in query, where: m.message_type == ^type)
+  end
+
+  defp maybe_filter_message_type(query, _), do: query
+
+  @doc """
+  Builds a short highlight preview around the first case-insensitive match of
+  `query` in `content`. Returns `{excerpt, match_start_within_excerpt,
+  match_length}` or `nil` if the match can't be located (can happen when the
+  match is in a byte-encoded fragment the client decodes differently).
+
+  Kept lightweight — we don't try to score relevance or merge multi-match
+  excerpts. The client already displays the raw `content`; this is just a
+  shortcut for list-view rendering.
+  """
+  @radius 40
+  def build_match_preview(content, query) when is_binary(content) and is_binary(query) do
+    trimmed = String.trim(query)
+
+    if trimmed == "" do
+      nil
+    else
+      case :binary.match(String.downcase(content), String.downcase(trimmed)) do
+        {start, length} ->
+          from = max(0, start - @radius)
+          to = min(byte_size(content), start + length + @radius)
+          excerpt = binary_part(content, from, to - from)
+          %{excerpt: excerpt, match_start: start - from, match_length: length}
+
+        :nomatch ->
+          nil
+      end
+    end
+  end
+
+  def build_match_preview(_, _), do: nil
 
   @doc """
   Gets the sender ID of a message.
@@ -258,11 +367,20 @@ defmodule WhisprMessaging.Messages do
 
     case Repo.query(sql, [message_id, conversation_id, sender_id]) do
       {:ok, %{num_rows: count}} ->
-        Logger.debug("Created #{count} delivery statuses for message #{message_id}")
+        Logger.debug("Delivery statuses created",
+          count: count,
+          message_id: message_id,
+          domain: :messages
+        )
+
         {:ok, count}
 
       {:error, reason} ->
-        Logger.error("Failed to create delivery statuses: #{inspect(reason)}")
+        Logger.error("Failed to create delivery statuses",
+          reason: inspect(reason),
+          domain: :messages
+        )
+
         {:error, reason}
     end
   end
@@ -615,6 +733,60 @@ defmodule WhisprMessaging.Messages do
       {:ok, attachment} -> Repo.delete(attachment)
       error -> error
     end
+  end
+
+  @doc """
+  Forwards a source message to one or more target conversations.
+
+  The caller must be a member of the source conversation and of every
+  target conversation. Returns `{:ok, messages}` where `messages` is the
+  list of created messages (one per target), or `{:error, reason}` on the
+  first failure.
+  """
+  def forward_message(source_message_id, target_conversation_ids, user_id)
+      when is_list(target_conversation_ids) do
+    with {:ok, source} <- get_message(source_message_id),
+         true <- user_can_access_message?(source.conversation_id, user_id) || :forbidden_source do
+      do_forward(source, target_conversation_ids, user_id)
+    else
+      :forbidden_source -> {:error, :forbidden}
+      other -> other
+    end
+  end
+
+  defp do_forward(%Message{} = source, target_ids, user_id) do
+    target_ids
+    |> Enum.uniq()
+    |> Enum.reduce_while({:ok, []}, fn target_id, acc ->
+      forward_to_target(source, target_id, user_id, acc)
+    end)
+    |> case do
+      {:ok, messages} -> {:ok, Enum.reverse(messages)}
+      error -> error
+    end
+  end
+
+  defp forward_to_target(source, target_id, user_id, {:ok, acc}) do
+    if user_can_access_message?(target_id, user_id) do
+      wrap_forward_insert(create_message(forward_attrs(source, target_id, user_id)), acc)
+    else
+      {:halt, {:error, :forbidden}}
+    end
+  end
+
+  defp wrap_forward_insert({:ok, message}, acc), do: {:cont, {:ok, [message | acc]}}
+  defp wrap_forward_insert({:error, reason}, _acc), do: {:halt, {:error, reason}}
+
+  defp forward_attrs(source, target_id, user_id) do
+    %{
+      "conversation_id" => target_id,
+      "sender_id" => user_id,
+      "message_type" => source.message_type,
+      "content" => source.content,
+      "metadata" => Map.put(source.metadata || %{}, "forwarded", true),
+      "client_random" => :erlang.unique_integer([:positive]) |> rem(2_147_483_647),
+      "forwarded_from_id" => source.id
+    }
   end
 
   @doc """

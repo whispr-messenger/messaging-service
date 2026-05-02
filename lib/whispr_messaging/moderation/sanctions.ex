@@ -21,8 +21,11 @@ defmodule WhisprMessaging.Moderation.Sanctions do
     |> ConversationSanction.changeset(attrs)
     |> Repo.insert()
     |> tap_ok(fn sanction ->
-      Logger.info(
-        "Sanction #{sanction.type} applied to #{sanction.user_id} in conversation #{sanction.conversation_id}"
+      Logger.info("Sanction applied",
+        sanction_type: sanction.type,
+        user_id: sanction.user_id,
+        conversation_id: sanction.conversation_id,
+        domain: :moderation
       )
 
       broadcast_sanction_event(sanction)
@@ -59,7 +62,12 @@ defmodule WhisprMessaging.Moderation.Sanctions do
       |> ConversationSanction.lift_changeset()
       |> Repo.update()
       |> tap_ok(fn lifted ->
-        Logger.info("Sanction #{lifted.id} lifted for user #{lifted.user_id}")
+        Logger.info("Sanction lifted",
+          sanction_id: lifted.id,
+          user_id: lifted.user_id,
+          domain: :moderation
+        )
+
         broadcast_sanction_lifted(lifted)
       end)
     end
@@ -85,7 +93,7 @@ defmodule WhisprMessaging.Moderation.Sanctions do
       |> Repo.update_all(set: [active: false])
 
     if count > 0 do
-      Logger.info("Expired #{count} conversation sanctions")
+      Logger.info("Conversation sanctions expired", count: count, domain: :moderation)
     end
 
     {:ok, count}

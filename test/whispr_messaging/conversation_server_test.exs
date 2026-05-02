@@ -176,6 +176,79 @@ defmodule WhisprMessaging.ConversationServerTest do
       state = :sys.get_state(pid)
       refute MapSet.member?(state.typing_users, user1_id)
     end
+
+    # WHISPR-1058
+    test "registers a watchdog timer when typing starts", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      state = :sys.get_state(pid)
+
+      assert is_reference(Map.get(state.typing_timers, user1_id))
+      assert MapSet.member?(state.typing_users, user1_id)
+    end
+
+    test "clears the watchdog timer when typing explicitly stops", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      ConversationServer.update_typing(conversation.id, user1_id, false)
+
+      state = :sys.get_state(pid)
+      refute Map.has_key?(state.typing_timers, user1_id)
+    end
+
+    test "simulating the timeout fires clears the indicator and removes the ref", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      send(pid, {:typing_timeout, user1_id})
+      # Let the GenServer process the message.
+      :sys.get_state(pid)
+
+      state = :sys.get_state(pid)
+      refute MapSet.member?(state.typing_users, user1_id)
+      refute Map.has_key?(state.typing_timers, user1_id)
+    end
+
+    test "a new typing=true resets (replaces) the previous watchdog", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      first_ref = :sys.get_state(pid).typing_timers[user1_id]
+
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      second_ref = :sys.get_state(pid).typing_timers[user1_id]
+
+      assert is_reference(first_ref)
+      assert is_reference(second_ref)
+      refute first_ref == second_ref
+    end
+
+    test "a late timeout for a user who already stopped typing is a no-op", %{
+      pid: pid,
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      ConversationServer.update_typing(conversation.id, user1_id, true)
+      ConversationServer.update_typing(conversation.id, user1_id, false)
+
+      # Simulate the obsolete timeout arriving late.
+      send(pid, {:typing_timeout, user1_id})
+      :sys.get_state(pid)
+
+      state = :sys.get_state(pid)
+      refute MapSet.member?(state.typing_users, user1_id)
+      refute Map.has_key?(state.typing_timers, user1_id)
+    end
   end
 
   describe "read receipts" do

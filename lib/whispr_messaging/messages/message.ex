@@ -36,6 +36,7 @@ defmodule WhisprMessaging.Messages.Message do
 
     belongs_to :conversation, Conversation, foreign_key: :conversation_id
     belongs_to :reply_to, __MODULE__, foreign_key: :reply_to_id
+    belongs_to :forwarded_from, __MODULE__, foreign_key: :forwarded_from_id
     has_many :delivery_statuses, DeliveryStatus, foreign_key: :message_id
     has_many :reactions, MessageReaction, foreign_key: :message_id
     has_many :attachments, MessageAttachment, foreign_key: :message_id
@@ -53,6 +54,7 @@ defmodule WhisprMessaging.Messages.Message do
       :conversation_id,
       :sender_id,
       :reply_to_id,
+      :forwarded_from_id,
       :message_type,
       :content,
       :metadata,

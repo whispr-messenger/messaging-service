@@ -1,0 +1,11 @@
+
+Traversal.FileModule: Directory Traversal in `File.cp`,lib/whispr_messaging_web/controllers/attachment_controller.ex:337,15240BE
+Config.HTTPS: HTTPS Not Enabled,config/prod.exs:0,2B5C077
+XSS.ContentType: XSS in `put_resp_content_type`,lib/whispr_messaging_web/controllers/attachment_controller.ex:191,314F116
+Traversal.FileModule: Directory Traversal in `File.rm`,lib/whispr_messaging_web/controllers/attachment_controller.ex:366,36EAF7D
+SQL.Query: SQL injection,lib/whispr_messaging/messages.ex:340,37DC5A2
+XSS.SendResp: XSS in `send_resp`,lib/whispr_messaging_web/plugs/rate_limiter.ex:39,3D07DED
+SQL.Query: SQL injection,lib/whispr_messaging/repo.ex:72,6455322
+Traversal.FileModule: Directory Traversal in `File.read`,lib/whispr_messaging_web/controllers/attachment_controller.ex:358,657A273
+DOS.BinToAtom: Unsafe atom interpolation,lib/whispr_messaging/messages/signature_verifier.ex:153,6A5FFFE
+XSS.SendResp: XSS in `send_resp`,lib/whispr_messaging_web/controllers/attachment_controller.ex:197,72E1918

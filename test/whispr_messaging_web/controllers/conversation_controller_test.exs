@@ -2,6 +2,9 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   use WhisprMessagingWeb.ConnCase, async: true
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Services.{MediaClient, UserService}
+
+  import Mock
 
   setup do
     user1_id = Ecto.UUID.generate()
@@ -104,6 +107,124 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["error"] != nil
     end
+
+    # WHISPR-1256: media URLs stored in conversation metadata (group_icon_url,
+    # picture_url, …) must be swapped for presigned S3 URLs so the web client
+    # can render them in `<img src>` without an Authorization header.
+    test "presigns group_icon_url stored in conversation metadata", %{user1_id: user1_id} do
+      previous = Application.get_env(:whispr_messaging, :media_service_internal)
+
+      Application.put_env(:whispr_messaging, :media_service_internal,
+        url: "http://media-service.test",
+        timeout_ms: 1_500,
+        cache_ttl_ms: 60_000
+      )
+
+      MediaClient.reset_cache()
+
+      on_exit(fn ->
+        MediaClient.reset_cache()
+
+        if previous do
+          Application.put_env(:whispr_messaging, :media_service_internal, previous)
+        else
+          Application.delete_env(:whispr_messaging, :media_service_internal)
+        end
+      end)
+
+      media_id = "94d20166-adb5-4f88-9319-06a531898116"
+      blob_url = "https://whispr-preprod.roadmvn.com/media/v1/#{media_id}/blob"
+      presigned = "https://minio.roadmvn.com/whispr-media/avatars/#{media_id}?X-Amz-Signature=abc"
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "WHISPR TEAM", "group_icon_url" => blob_url},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      with_mock Finch,
+        build: fn :get, url, _headers ->
+          assert String.ends_with?(url, "/media/v1/#{media_id}/blob")
+          :req
+        end,
+        request: fn :req, WhisprMessaging.Finch, _opts ->
+          {:ok, %Finch.Response{status: 200, body: ~s({"url":"#{presigned}"}), headers: []}}
+        end do
+        conn =
+          build_conn()
+          |> authenticated_conn(user1_id)
+          |> json_conn()
+
+        response =
+          get(conn, ~p"/messaging/api/v1/conversations")
+          |> json_response(200)
+
+        rendered =
+          Enum.find(response["data"], fn c -> c["id"] == conversation.id end)
+
+        assert rendered != nil
+        assert rendered["metadata"]["groupIconUrl"] == presigned
+        assert rendered["metadata"]["name"] == "WHISPR TEAM"
+      end
+    end
+
+    test "leaves metadata untouched when media-service is unreachable", %{user1_id: user1_id} do
+      previous = Application.get_env(:whispr_messaging, :media_service_internal)
+
+      Application.put_env(:whispr_messaging, :media_service_internal,
+        url: "http://media-service.test",
+        timeout_ms: 100,
+        cache_ttl_ms: 60_000
+      )
+
+      MediaClient.reset_cache()
+
+      on_exit(fn ->
+        MediaClient.reset_cache()
+
+        if previous do
+          Application.put_env(:whispr_messaging, :media_service_internal, previous)
+        else
+          Application.delete_env(:whispr_messaging, :media_service_internal)
+        end
+      end)
+
+      media_id = "c1593a9f-39c0-4da4-8c40-2bfa12ccaba5"
+      blob_url = "https://whispr-preprod.roadmvn.com/media/v1/#{media_id}/blob"
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "CyberOps Team", "group_icon_url" => blob_url},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      with_mock Finch,
+        build: fn :get, _url, _headers -> :req end,
+        request: fn :req, WhisprMessaging.Finch, _opts ->
+          {:error, %Mint.TransportError{reason: :timeout}}
+        end do
+        conn =
+          build_conn()
+          |> authenticated_conn(user1_id)
+          |> json_conn()
+
+        response =
+          get(conn, ~p"/messaging/api/v1/conversations")
+          |> json_response(200)
+
+        rendered =
+          Enum.find(response["data"], fn c -> c["id"] == conversation.id end)
+
+        # Fail-safe: keep the original blob URL when presign fails.
+        assert rendered["metadata"]["groupIconUrl"] == blob_url
+      end
+    end
   end
 
   describe "POST /messaging/api/v1/conversations (direct)" do
@@ -126,6 +247,36 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["id"] != nil
       assert response["data"]["type"] == "direct"
       assert response["data"]["isActive"] == true
+    end
+
+    test "returns 403 when users are not contacts", %{user1_id: user1_id, user2_id: user2_id} do
+      previous = Application.get_env(:whispr_messaging, :enforce_direct_contact, false)
+      Application.put_env(:whispr_messaging, :enforce_direct_contact, true)
+
+      on_exit(fn ->
+        Application.put_env(:whispr_messaging, :enforce_direct_contact, previous)
+      end)
+
+      attrs = %{
+        "type" => "direct",
+        "other_user_id" => user2_id,
+        "metadata" => %{}
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      with_mock UserService,
+                [:passthrough],
+                check_users_are_contacts: fn ^user1_id, ^user2_id, _auth -> {:ok, false} end do
+        response =
+          post(conn, ~p"/messaging/api/v1/conversations", attrs)
+          |> json_response(403)
+
+        assert response["error"] != nil
+      end
     end
 
     test "returns error when trying to create conversation with self", %{user1_id: user1_id} do
@@ -324,6 +475,39 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert Enum.count(response["data"]["members"]) == 2
     end
 
+    test "includes memberUserIds in group conversation response", %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      user3_id: user3_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Test Group"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user2_id)
+      Conversations.add_conversation_member(conversation.id, user3_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      member_user_ids = response["data"]["memberUserIds"]
+      assert is_list(member_user_ids)
+      assert length(member_user_ids) == 3
+      assert user1_id in member_user_ids
+      assert user2_id in member_user_ids
+      assert user3_id in member_user_ids
+    end
+
     test "returns is_muted, is_pinned, is_archived for the authenticated user (default false)", %{
       user1_id: user1_id,
       user2_id: user2_id
@@ -493,7 +677,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
   end
 
   describe "DELETE /messaging/api/v1/conversations/:id" do
-    test "deactivates a conversation", %{user1_id: user1_id} do
+    test "admin can deactivate a group conversation", %{user1_id: user1_id} do
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "group",
@@ -501,7 +685,62 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
           is_active: true
         })
 
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["isActive"] == false
+    end
+
+    test "non-admin member cannot deactivate a group (WHISPR-841)", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Admin only"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id, %{"role" => "admin"})
+      Conversations.add_conversation_member(conversation.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        delete(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(403)
+
+      assert response["error"] == "Unauthorized"
+
+      {:ok, reloaded} = Conversations.get_conversation(conversation.id)
+      assert reloaded.is_active == true
+    end
+
+    test "any member can deactivate a direct conversation", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
       Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user2_id)
 
       conn =
         build_conn()
@@ -538,7 +777,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
           is_active: true
         })
 
-      Conversations.add_conversation_member(conversation.id, user2_id)
+      Conversations.add_conversation_member(conversation.id, user2_id, %{"role" => "admin"})
 
       conn =
         build_conn()
@@ -590,7 +829,7 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["isActive"] == true
     end
 
-    test "returns 403 for non-admin trying to add member", %{
+    test "non-admin member can add a member (WHISPR-1169)", %{
       user1_id: user1_id,
       user2_id: user2_id,
       user3_id: user3_id
@@ -609,6 +848,41 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
         "user_id" => user3_id
       }
 
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        post(
+          conn,
+          ~p"/messaging/api/v1/conversations/#{conversation.id}/members",
+          add_attrs
+        )
+        |> json_response(201)
+
+      assert response["data"]["userId"] == user3_id
+    end
+
+    test "returns 403 when a non-member tries to add a member", %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      user3_id: user3_id
+    } do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Team"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      add_attrs = %{
+        "user_id" => user3_id
+      }
+
+      # user2 is not a member of the conversation
       conn =
         build_conn()
         |> authenticated_conn(user2_id)

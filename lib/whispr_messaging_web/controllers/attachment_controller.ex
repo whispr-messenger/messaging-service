@@ -120,7 +120,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
          :ok <- validate_user_permission(message, user_id),
          {:ok, file_path, file_url} <- save_file(upload),
          {:ok, attachment} <- create_attachment_record(message_id, upload, file_path, file_url) do
-      Logger.info("File uploaded successfully: #{attachment.id}")
+      Logger.info("File uploaded", attachment_id: attachment.id, domain: :attachment)
 
       conn
       |> put_status(:created)
@@ -145,7 +145,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
         |> json(%{error: "You don't have permission to upload to this message"})
 
       {:error, reason} ->
-        Logger.error("Upload failed: #{inspect(reason)}")
+        Logger.error("Upload failed", reason: inspect(reason), domain: :attachment)
 
         conn
         |> put_status(:internal_server_error)
@@ -185,7 +185,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
          {:ok, file_content} <- read_file(attachment.file_path) do
-      Logger.info("File downloaded: #{attachment.id} by user #{user_id}")
+      Logger.info("File downloaded", attachment_id: attachment.id, domain: :attachment)
 
       conn
       |> put_resp_content_type(attachment.mime_type)
@@ -212,7 +212,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
         |> json(%{error: "File not found on server"})
 
       {:error, reason} ->
-        Logger.error("Download failed: #{inspect(reason)}")
+        Logger.error("Download failed", reason: inspect(reason), domain: :attachment)
 
         conn
         |> put_status(:internal_server_error)
@@ -273,7 +273,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
          :ok <- validate_user_permission(message, user_id),
          :ok <- delete_file(attachment.file_path),
          {:ok, _} <- Messages.delete_attachment(attachment_id) do
-      Logger.info("Attachment deleted: #{attachment_id}")
+      Logger.info("Attachment deleted", attachment_id: attachment_id, domain: :attachment)
 
       json(conn, %{
         data: %{
@@ -288,7 +288,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
         |> json(%{error: "You don't have permission to delete this attachment"})
 
       {:error, reason} ->
-        Logger.error("Delete failed: #{inspect(reason)}")
+        Logger.error("Delete failed", reason: inspect(reason), domain: :attachment)
 
         conn
         |> put_status(:internal_server_error)
@@ -447,7 +447,10 @@ defmodule WhisprMessagingWeb.AttachmentController do
         |> json(%{data: render_attachment(attachment)})
 
       {:error, changeset} ->
-        Logger.error("create_from_metadata failed: #{inspect(changeset.errors)}")
+        Logger.error("Create from metadata failed",
+          errors: inspect(changeset.errors),
+          domain: :attachment
+        )
 
         conn
         |> put_status(:unprocessable_entity)

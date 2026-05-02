@@ -7,12 +7,6 @@ on:
       - '**.md'
       - 'documentation/**'
       - '.github/workflows/cd.yml'
-  pull_request:
-    branches: [main, develop, deploy/preprod]
-    paths-ignore:
-      - '**.md'
-      - 'documentation/**'
-      - '.github/workflows/cd.yml'
 
 permissions:
   contents: read
@@ -53,12 +47,20 @@ jobs:
       ref: ${{ github.ref }}
       should_deploy: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/preprod') && github.event_name == 'push' }}
 
+  # WHISPR-979 : SAST spécifique Elixir (Sobelow + mix_audit) en complément
+  # de Trivy filesystem, qui ne connaît pas les patterns Phoenix.
+  elixir-sast:
+    name: 🛡️ Elixir SAST
+    uses: ./.github/workflows/elixir-sast.yml
+    with:
+      ref: ${{ github.ref }}
+
   # ================================
   # Docker Build
   # ================================
   docker:
     name: 📦 Container Registry
-    needs: [tests, security]
+    needs: [tests, security, elixir-sast]
     if: success()
     uses: ./.github/workflows/docker.yml
     with:

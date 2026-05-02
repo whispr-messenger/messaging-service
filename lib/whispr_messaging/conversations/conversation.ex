@@ -23,6 +23,8 @@ defmodule WhisprMessaging.Conversations.Conversation do
     field :external_group_id, :binary_id
     field :metadata, :map, default: %{}
     field :is_active, :boolean, default: true
+    field :invite_token, :binary_id
+    field :invite_expires_at, :utc_datetime
 
     has_many :members, ConversationMember, foreign_key: :conversation_id
     has_many :messages, Message, foreign_key: :conversation_id
@@ -38,11 +40,28 @@ defmodule WhisprMessaging.Conversations.Conversation do
   """
   def changeset(conversation, attrs) do
     conversation
-    |> cast(attrs, [:type, :external_group_id, :metadata, :is_active])
+    |> cast(attrs, [
+      :type,
+      :external_group_id,
+      :metadata,
+      :is_active,
+      :invite_token,
+      :invite_expires_at
+    ])
     |> validate_required([:type])
     |> validate_inclusion(:type, @conversation_types)
     |> validate_metadata()
     |> unique_constraint(:external_group_id, name: :conversations_external_group_id_index)
+    |> unique_constraint(:invite_token, name: :conversations_invite_token_index)
+  end
+
+  @doc """
+  Changeset used to set or revoke an invite token.
+  """
+  def invite_changeset(conversation, attrs) do
+    conversation
+    |> cast(attrs, [:invite_token, :invite_expires_at])
+    |> unique_constraint(:invite_token, name: :conversations_invite_token_index)
   end
 
   @doc """

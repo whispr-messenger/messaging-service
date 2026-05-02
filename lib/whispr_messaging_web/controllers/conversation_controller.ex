@@ -8,6 +8,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Services.{MediaClient, UserService}
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -63,7 +64,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> filter_by_type(conversation_type)
 
       json(conn, %{
-        data: render_conversations(conversations),
+        data: render_conversations(conversations, authorization_header(conn)),
         meta:
           camelize_keys(%{
             count: length(conversations),
@@ -133,7 +134,7 @@ defmodule WhisprMessagingWeb.ConversationController do
         conversations = Conversations.search_user_conversations(user_id, query_term, limit: limit)
 
         json(conn, %{
-          data: render_conversations(conversations),
+          data: render_conversations(conversations, authorization_header(conn)),
           meta: %{
             count: length(conversations),
             query: query_term
@@ -188,6 +189,7 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   # Handle direct conversation with other_user_id (authenticated user is implied)
+  # credo:disable-for-next-line Credo.Check.Refactoring.Nesting
   defp do_create(conn, %{"type" => "direct", "other_user_id" => other_user_id} = params) do
     current_user_id = conn.assigns[:user_id]
     metadata = params["metadata"] || %{}
@@ -197,48 +199,87 @@ defmodule WhisprMessagingWeb.ConversationController do
       |> put_status(:unauthorized)
       |> json(%{error: "Authentication required"})
     else
-      case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
-        {:ok, conversation} ->
-          conn
-          |> put_status(:created)
-          |> json(%{
-            data: render_conversation(conversation)
-          })
+      case ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+        :ok ->
+          case Conversations.create_direct_conversation(current_user_id, other_user_id, metadata) do
+            {:ok, conversation} ->
+              conn
+              |> put_status(:created)
+              |> json(%{
+                data: render_conversation(conversation, authorization_header(conn))
+              })
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: translate_errors(changeset)})
+            {:error, %Ecto.Changeset{} = changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{errors: translate_errors(changeset)})
 
-        {:error, reason} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{error: inspect(reason)})
+            {:error, reason} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: inspect(reason)})
+          end
+
+        {:error, resp_conn} ->
+          resp_conn
       end
     end
   end
 
   # Handle direct conversation with explicit user_ids list
+  # credo:disable-for-next-line Credo.Check.Refactoring.CyclomaticComplexity
+  # credo:disable-for-next-line Credo.Check.Refactoring.Nesting
   defp do_create(conn, %{"type" => "direct", "user_ids" => [user1_id, user2_id]} = params) do
     metadata = params["metadata"] || %{}
 
-    case Conversations.create_direct_conversation(user1_id, user2_id, metadata) do
-      {:ok, conversation} ->
-        conn
-        |> put_status(:created)
-        |> json(%{
-          data: render_conversation(conversation)
-        })
+    current_user_id = conn.assigns[:user_id]
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: translate_errors(changeset)})
+    if is_nil(current_user_id) do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "Authentication required"})
+    else
+      other_user_id =
+        cond do
+          user1_id == current_user_id -> user2_id
+          user2_id == current_user_id -> user1_id
+          true -> nil
+        end
 
-      {:error, reason} ->
+      if is_nil(other_user_id) do
         conn
-        |> put_status(:bad_request)
-        |> json(%{error: reason})
+        |> put_status(:forbidden)
+        |> json(%{error: "Invalid participants"})
+      else
+        case ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+          :ok ->
+            case Conversations.create_direct_conversation(
+                   current_user_id,
+                   other_user_id,
+                   metadata
+                 ) do
+              {:ok, conversation} ->
+                conn
+                |> put_status(:created)
+                |> json(%{
+                  data: render_conversation(conversation, authorization_header(conn))
+                })
+
+              {:error, %Ecto.Changeset{} = changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{errors: translate_errors(changeset)})
+
+              {:error, reason} ->
+                conn
+                |> put_status(:bad_request)
+                |> json(%{error: reason})
+            end
+
+          {:error, resp_conn} ->
+            resp_conn
+        end
+      end
     end
   end
 
@@ -275,6 +316,33 @@ defmodule WhisprMessagingWeb.ConversationController do
     |> json(%{error: "creator_id is required for group conversations"})
   end
 
+  defp ensure_direct_contact_allowed(conn, current_user_id, other_user_id) do
+    enforce? = Application.get_env(:whispr_messaging, :enforce_direct_contact, true)
+
+    if enforce? do
+      authorization = conn |> get_req_header("authorization") |> List.first()
+
+      case UserService.check_users_are_contacts(current_user_id, other_user_id, authorization) do
+        {:ok, true} ->
+          :ok
+
+        {:ok, false} ->
+          {:error,
+           conn
+           |> put_status(:forbidden)
+           |> json(%{error: "Users must be contacts to create a direct conversation"})}
+
+        {:error, _reason} ->
+          {:error,
+           conn
+           |> put_status(:forbidden)
+           |> json(%{error: "Unable to verify contact relationship"})}
+      end
+    else
+      :ok
+    end
+  end
+
   defp validate_and_create_group(conn, creator_id, member_ids, name, external_group_id, metadata) do
     if length(member_ids) < 1 do
       conn
@@ -296,7 +364,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       {:ok, conversation} ->
         conn
         |> put_status(:created)
-        |> json(%{data: render_conversation(conversation)})
+        |> json(%{data: render_conversation(conversation, authorization_header(conn))})
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
@@ -335,7 +403,12 @@ defmodule WhisprMessagingWeb.ConversationController do
         member_info = Map.get(conversation, :member_info)
 
         json(conn, %{
-          data: render_conversation_with_members(conversation, member_info)
+          data:
+            render_conversation_with_members(
+              conversation,
+              member_info,
+              authorization_header(conn)
+            )
         })
       else
         false ->
@@ -353,7 +426,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       # For now keeping legacy behavior but handling 404
       with {:ok, conversation} <- Conversations.get_conversation(id) do
         json(conn, %{
-          data: render_conversation(conversation)
+          data: render_conversation(conversation, authorization_header(conn))
         })
       end
     end
@@ -413,7 +486,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       case Conversations.update_conversation(conversation, conversation_params) do
         {:ok, updated_conversation} ->
           json(conn, %{
-            data: render_conversation(updated_conversation)
+            data: render_conversation(updated_conversation, authorization_header(conn))
           })
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -453,12 +526,16 @@ defmodule WhisprMessagingWeb.ConversationController do
   @doc """
   Deletes (deactivates) a conversation.
   DELETE /api/v1/conversations/:id
+
+  Authorization (WHISPR-841):
+  - Group conversation: caller must be an admin of the group.
+  - Direct conversation: caller must be a member (no role concept here).
   """
   def delete(conn, %{"id" => id}) do
     user_id = conn.assigns[:user_id]
 
     with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- member?(conversation.id, user_id),
+         true <- can_delete_conversation?(conversation, user_id),
          {:ok, deactivated_conversation} <- Conversations.deactivate_conversation(conversation) do
       json(conn, %{
         data:
@@ -611,7 +688,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       conversations = Enum.take(fetched, limit)
 
       json(conn, %{
-        data: render_conversations(conversations),
+        data: render_conversations(conversations, authorization_header(conn)),
         meta:
           camelize_keys(%{
             count: length(conversations),
@@ -724,20 +801,27 @@ defmodule WhisprMessagingWeb.ConversationController do
     member_id = params["user_id"] || params["member_id"]
     current_user_id = conn.assigns[:user_id]
 
-    with {:ok, conversation} <- Conversations.get_conversation(id),
-         true <- can_manage_members?(conversation, current_user_id),
-         {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
-      conn
-      |> put_status(:created)
-      |> json(%{data: render_member(member)})
-    else
-      false ->
+    with {:ok, conversation} <- Conversations.get_conversation(id) do
+      if conversation.type == "direct" do
         conn
-        |> put_status(:forbidden)
-        |> json(%{error: "Not authorized to add members"})
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Cannot add members to a direct conversation"})
+      else
+        with true <- can_manage_members?(conversation, current_user_id),
+             {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
+          conn
+          |> put_status(:created)
+          |> json(%{data: render_member(member)})
+        else
+          false ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "Not authorized to add members"})
 
-      error ->
-        error
+          error ->
+            error
+        end
+      end
     end
   end
 
@@ -902,11 +986,11 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   # Private rendering functions
 
-  defp render_conversations(conversations) do
-    Enum.map(conversations, &render_conversation/1)
+  defp render_conversations(conversations, authorization) do
+    Enum.map(conversations, &render_conversation(&1, authorization))
   end
 
-  defp render_conversation(conversation) do
+  defp render_conversation(conversation, authorization) do
     member_info = Map.get(conversation, :member_info)
 
     settings =
@@ -916,12 +1000,17 @@ defmodule WhisprMessagingWeb.ConversationController do
         %{}
       end
 
+    # WHISPR-1256: rewrite media URLs (group_icon_url, picture_url, …) stored
+    # in conversation metadata to presigned S3 URLs the web client can render
+    # without an Authorization header.
+    metadata = MediaClient.presign_metadata_urls(conversation.metadata, authorization)
+
     camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
-      name: Map.get(conversation.metadata || %{}, "name"),
+      name: Map.get(metadata || %{}, "name"),
       external_group_id: conversation.external_group_id,
-      metadata: conversation.metadata,
+      metadata: metadata,
       is_active: conversation.is_active,
       is_pinned: Map.get(settings, "is_pinned", false),
       is_archived: Map.get(settings, "is_archived", false),
@@ -969,12 +1058,15 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  defp render_conversation_with_members(conversation, member_info) do
+  defp render_conversation_with_members(conversation, member_info, authorization) do
+    member_user_ids = Enum.map(conversation.members, & &1.user_id)
+
     base =
       conversation
-      |> render_conversation()
+      |> render_conversation(authorization)
       |> Map.put("members", Enum.map(conversation.members, &render_member/1))
       |> Map.put("memberCount", length(conversation.members))
+      |> Map.put("memberUserIds", member_user_ids)
 
     if member_info do
       settings = member_info.settings || %{}
@@ -1011,6 +1103,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     })
   end
 
+  defp authorization_header(conn) do
+    conn |> get_req_header("authorization") |> List.first()
+  end
+
   defp filter_by_type(conversations, nil), do: conversations
 
   defp filter_by_type(conversations, type) do
@@ -1039,6 +1135,18 @@ defmodule WhisprMessagingWeb.ConversationController do
       _ ->
         false
     end
+  end
+
+  # WHISPR-841: deleting a group requires admin role; direct conversations
+  # have no admin concept, so any active member may deactivate the thread.
+  defp can_delete_conversation?(_conversation, nil), do: false
+
+  defp can_delete_conversation?(%{type: "direct"} = conversation, user_id) do
+    member?(conversation.id, user_id)
+  end
+
+  defp can_delete_conversation?(conversation, user_id) do
+    can_manage_members?(conversation, user_id)
   end
 
   # Swagger Schema Definitions

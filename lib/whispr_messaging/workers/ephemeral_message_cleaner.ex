@@ -34,6 +34,7 @@ defmodule WhisprMessaging.Workers.EphemeralMessageCleaner do
 
   @impl true
   def init(opts) do
+    Logger.metadata(domain: :ephemeral_message_cleaner)
     interval = Keyword.get(opts, :interval_ms, @default_interval_ms)
     schedule_cleanup(interval)
     {:ok, %{interval_ms: interval}}
@@ -44,7 +45,7 @@ defmodule WhisprMessaging.Workers.EphemeralMessageCleaner do
     deleted_count = delete_expired_messages()
 
     if deleted_count > 0 do
-      Logger.info("[EphemeralMessageCleaner] Deleted #{deleted_count} expired message(s)")
+      Logger.info("Expired messages deleted", count: deleted_count)
     end
 
     schedule_cleanup(state.interval_ms)
