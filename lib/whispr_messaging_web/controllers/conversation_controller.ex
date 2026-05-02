@@ -937,14 +937,14 @@ defmodule WhisprMessagingWeb.ConversationController do
   defp render_last_message(nil), do: nil
 
   defp render_last_message(message) do
-    %{
+    camelize_keys(%{
       id: message.id,
       sender_id: message.sender_id,
       content: safe_binary_content(message.content),
       message_type: message.message_type,
       sent_at: message.sent_at,
       is_deleted: message.is_deleted
-    }
+    })
   end
 
   # Ensure binary content is safe for JSON encoding.
@@ -1092,7 +1092,12 @@ defmodule WhisprMessagingWeb.ConversationController do
             isPinned(:boolean, "Whether pinned for the authenticated user")
             isMuted(:boolean, "Whether muted for the authenticated user")
             unreadCount(:integer, "Number of unread messages for the authenticated user")
-            lastMessage(:object, "Most recent non-deleted message in the conversation, or null")
+
+            lastMessage(
+              Schema.ref(:ConversationLastMessage),
+              "Most recent non-deleted message in the conversation, or null"
+            )
+
             insertedAt(:string, "Creation timestamp", format: :datetime)
             updatedAt(:string, "Last update timestamp", format: :datetime)
           end
@@ -1128,6 +1133,20 @@ defmodule WhisprMessagingWeb.ConversationController do
             role(:string, "Member role (e.g. member, admin)")
             joinedAt(:string, "Timestamp when the member joined", format: :datetime)
             isActive(:boolean, "Whether the member is active")
+          end
+        end,
+      ConversationLastMessage:
+        swagger_schema do
+          title("Conversation Last Message")
+          description("Compact representation of a conversation's most recent message")
+
+          properties do
+            id(:string, "Message UUID", format: :uuid)
+            senderId(:string, "Sender UUID", format: :uuid)
+            content(:string, "Encrypted message content (UTF-8 or base64)")
+            messageType(:string, "Message type", enum: [:text, :media, :system])
+            sentAt(:string, "Timestamp when the message was sent", format: :datetime)
+            isDeleted(:boolean, "Whether the message has been deleted")
           end
         end,
       ConversationsIndexMeta:

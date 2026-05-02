@@ -1155,7 +1155,10 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert enriched["unreadCount"] == 1
       assert enriched["lastMessage"]["content"] == "hello"
-      assert enriched["lastMessage"]["sender_id"] == user2_id
+      assert enriched["lastMessage"]["senderId"] == user2_id
+      assert enriched["lastMessage"]["messageType"] == "text"
+      assert is_binary(enriched["lastMessage"]["sentAt"])
+      assert enriched["lastMessage"]["isDeleted"] == false
     end
 
     test "returns lastMessage=null and unreadCount=0 for empty archived conversations", %{
