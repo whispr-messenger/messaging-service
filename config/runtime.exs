@@ -64,6 +64,43 @@ config :whispr_messaging, :services,
   scheduling_service:
     System.get_env("SCHEDULING_SERVICE_GRPC_URL", "grpc://scheduling-service:50013")
 
+# user-service internal HTTP API (service-to-service, not exposed via the public gateway).
+# WHISPR-1230: the messaging-service queries
+# `GET {USER_SERVICE_INTERNAL_URL}/contacts/check?ownerId=...&contactId=...`
+# to authorise direct-conversation creation. The shared secret is sent on the
+# `x-internal-token` header — must match `INTERNAL_API_TOKEN` on user-service.
+internal_api_token = System.get_env("INTERNAL_API_TOKEN")
+
+if config_env() == :prod and internal_api_token in [nil, ""] do
+  IO.warn(
+    "INTERNAL_API_TOKEN is not set — calls to user-service /internal/v1/contacts/check will be rejected with 401."
+  )
+end
+
+config :whispr_messaging, :user_service_internal,
+  url: System.get_env("USER_SERVICE_INTERNAL_URL", "http://user-service:3011/internal/v1"),
+  token: internal_api_token,
+  timeout_ms: String.to_integer(System.get_env("USER_SERVICE_INTERNAL_TIMEOUT_MS", "5000"))
+
+# WHISPR-1256: messaging-service forwards the caller's JWT to media-service
+# `GET /media/v1/:id/blob` to swap bare blob URLs (stored in conversation
+# metadata under group_icon_url, picture_url, …) for presigned S3 URLs the
+# web client can render without an Authorization header.
+config :whispr_messaging, :media_service_internal,
+  url: System.get_env("MEDIA_SERVICE_HTTP_URL", "http://media-service:3013"),
+  timeout_ms: String.to_integer(System.get_env("MEDIA_SERVICE_HTTP_TIMEOUT_MS", "5000")),
+  cache_ttl_ms: String.to_integer(System.get_env("MEDIA_SERVICE_PRESIGN_CACHE_TTL_MS", "60000"))
+
+# WHISPR-840: replaces the in-process stub that always returned
+# {:ok, true} / {:ok, false}. The HTTP client talks to user-service
+# /internal/v1/contacts/check (cf. WHISPR-1230 contract). Skip in :test so
+# the in-process mock configured in config/test.exs keeps the upper hand.
+if config_env() != :test do
+  config :whispr_messaging,
+         :user_service_client,
+         WhisprMessaging.Services.HttpUserServiceClient
+end
+
 # Redis Configuration
 redis_mode = System.get_env("REDIS_MODE", "direct")
 
@@ -127,3 +164,26 @@ config :whispr_messaging, :jwks,
       "http://auth-service/auth/.well-known/jwks.json"
     ),
   refresh_ms: System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
+
+# ---------------------------------------------------------------------------
+# Logger runtime configuration
+# ---------------------------------------------------------------------------
+
+# LOG_LEVEL env var: "debug" (preprod) or "info" (prod, default)
+if log_level = System.get_env("LOG_LEVEL") do
+  config :logger, level: String.to_existing_atom(log_level)
+end
+
+# Global metadata: service name + Kubernetes pod (HOSTNAME)
+pod = System.get_env("HOSTNAME")
+
+config :logger,
+  metadata: [service: "whispr-messaging"] ++ if(pod, do: [pod: pod], else: [])
+
+# WHISPR-1068 : LOG_FORMAT=json → formatter JSON unifié avec les services
+# NestJS. Sinon on garde la sortie texte native pour `mix phx.server`.
+if System.get_env("LOG_FORMAT") == "json" do
+  config :logger, :console,
+    format: {WhisprMessaging.JsonFormatter, :format},
+    metadata: :all
+end

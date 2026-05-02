@@ -14,6 +14,7 @@ defmodule WhisprMessaging.ConversationServer do
   require Logger
 
   alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Services.NotificationService
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
@@ -101,7 +102,8 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def init(conversation_id) do
-    Logger.info("Starting ConversationServer for conversation #{conversation_id}")
+    Logger.metadata(conversation_id: conversation_id, domain: :conversation_server)
+    Logger.info("ConversationServer starting")
 
     case load_conversation_data(conversation_id) do
       {:ok, conversation, members, settings} ->
@@ -111,6 +113,10 @@ defmodule WhisprMessaging.ConversationServer do
           members: members,
           active_members: MapSet.new(),
           typing_users: MapSet.new(),
+          # WHISPR-1058: per-user timer refs so we can auto-expire a typing
+          # indicator if the client never sends `typing=false` (app killed,
+          # socket dropped, tab closed). Key: user_id, value: timer ref.
+          typing_timers: %{},
           message_queue: :queue.new(),
           settings: settings,
           last_activity: DateTime.utc_now(),
@@ -123,9 +129,7 @@ defmodule WhisprMessaging.ConversationServer do
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error(
-          "Failed to initialize ConversationServer for #{conversation_id}: #{inspect(reason)}"
-        )
+        Logger.error("ConversationServer init failed", reason: inspect(reason))
 
         {:stop, reason}
     end
@@ -147,9 +151,7 @@ defmodule WhisprMessaging.ConversationServer do
         {:reply, {:ok, message}, updated_state}
 
       {:error, reason} ->
-        Logger.warning(
-          "Failed to process message in conversation #{state.conversation_id}: #{inspect(reason)}"
-        )
+        Logger.warning("Message processing failed", reason: inspect(reason))
 
         {:reply, {:error, reason}, state}
     end
@@ -216,7 +218,24 @@ defmodule WhisprMessaging.ConversationServer do
 
   @impl true
   def handle_cast({:typing, user_id, typing}, state) do
-    new_state = update_typing_status(user_id, typing, state)
+    # WHISPR-1058: maintain a per-user watchdog so a zombie `typing=true`
+    # (client died mid-session) auto-expires and the indicator clears on
+    # the other side.
+    cleared_timers = cancel_typing_timer(state.typing_timers, user_id)
+
+    new_typing_timers =
+      if typing do
+        # Reset the watchdog on every new `typing=true` — the client will
+        # re-send it periodically as long as the user is actually typing.
+        Map.put(cleared_timers, user_id, schedule_typing_timeout(user_id))
+      else
+        cleared_timers
+      end
+
+    new_state =
+      state
+      |> Map.put(:typing_timers, new_typing_timers)
+      |> update_typing_status_in(user_id, typing)
 
     # Broadcast typing status
     broadcast_typing_status(user_id, typing, new_state)
@@ -224,6 +243,7 @@ defmodule WhisprMessaging.ConversationServer do
     {:noreply, new_state}
   end
 
+  @impl true
   def handle_cast({:mark_read, user_id, message_id}, state) do
     # Update read status in database
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
@@ -248,10 +268,32 @@ defmodule WhisprMessaging.ConversationServer do
     # Broadcast read receipt
     broadcast_read_receipt(user_id, message_id, state)
 
+    # WHISPR-1109 follow-up: decrement the reader's badge in notification-service.
+    MessagingEvents.publish_message_read(state.conversation_id, user_id, message_id)
+
     {:noreply, state}
   end
 
+  # WHISPR-1058: watchdog fired — the client never sent `typing=false`.
+  # Clear the indicator as if a stop event had come in, but only if the
+  # user is still listed (they might have sent a legitimate stop that
+  # cancelled the timer milliseconds earlier).
   @impl true
+  def handle_info({:typing_timeout, user_id}, state) do
+    if MapSet.member?(state.typing_users, user_id) do
+      new_state =
+        state
+        |> Map.update!(:typing_timers, &Map.delete(&1, user_id))
+        |> update_typing_status_in(user_id, false)
+
+      broadcast_typing_status(user_id, false, new_state)
+
+      {:noreply, new_state}
+    else
+      {:noreply, Map.update!(state, :typing_timers, &Map.delete(&1, user_id))}
+    end
+  end
+
   def handle_info(:cleanup, state) do
     new_state = perform_cleanup(state)
     schedule_cleanup()
@@ -262,30 +304,37 @@ defmodule WhisprMessaging.ConversationServer do
     new_active_members = MapSet.put(state.active_members, user_id)
     new_state = %{state | active_members: new_active_members}
 
-    Logger.debug("Member #{user_id} joined conversation #{state.conversation_id}")
+    Logger.debug("Member joined", user_id: user_id)
     {:noreply, new_state}
   end
 
   def handle_info({:member_left, user_id}, state) do
     new_active_members = MapSet.delete(state.active_members, user_id)
     new_typing_users = MapSet.delete(state.typing_users, user_id)
+    # WHISPR-1058: cancel the typing watchdog too, otherwise we'd end up
+    # sending a {:typing_timeout, user_id} message for a user that already
+    # left.
+    new_typing_timers = cancel_typing_timer(state.typing_timers, user_id)
 
-    new_state = %{state | active_members: new_active_members, typing_users: new_typing_users}
+    new_state = %{
+      state
+      | active_members: new_active_members,
+        typing_users: new_typing_users,
+        typing_timers: new_typing_timers
+    }
 
-    Logger.debug("Member #{user_id} left conversation #{state.conversation_id}")
+    Logger.debug("Member left", user_id: user_id)
     {:noreply, new_state}
   end
 
   def handle_info(msg, state) do
-    Logger.debug("Unhandled message in ConversationServer: #{inspect(msg)}")
+    Logger.debug("Unhandled message", msg: inspect(msg))
     {:noreply, state}
   end
 
   @impl true
-  def terminate(reason, state) do
-    Logger.debug(
-      "ConversationServer terminating for #{state.conversation_id}, reason: #{inspect(reason)}"
-    )
+  def terminate(reason, _state) do
+    Logger.debug("ConversationServer terminating", reason: inspect(reason))
 
     # The Registry will be automatically cleaned up when the process exits
     :ok
@@ -369,12 +418,16 @@ defmodule WhisprMessaging.ConversationServer do
         new_members = Enum.reject(state.members, &(&1.user_id == user_id))
         new_active_members = MapSet.delete(state.active_members, user_id)
         new_typing_users = MapSet.delete(state.typing_users, user_id)
+        # WHISPR-1058: cancel the watchdog so the removed member doesn't
+        # keep getting auto-expired after they're gone.
+        new_typing_timers = cancel_typing_timer(state.typing_timers, user_id)
 
         new_state = %{
           state
           | members: new_members,
             active_members: new_active_members,
-            typing_users: new_typing_users
+            typing_users: new_typing_users,
+            typing_timers: new_typing_timers
         }
 
         {:ok, new_state}
@@ -406,6 +459,12 @@ defmodule WhisprMessaging.ConversationServer do
     %{state | typing_users: new_typing_users}
   end
 
+  # Same body as update_typing_status/3 but invoked through the pipe-friendly
+  # argument order needed by the WHISPR-1058 handler. Kept separate so the
+  # original private function stays untouched for other call sites.
+  defp update_typing_status_in(state, user_id, typing),
+    do: update_typing_status(user_id, typing, state)
+
   defp broadcast_message(message, state) do
     serialized = serialize_message(message)
 
@@ -422,6 +481,11 @@ defmodule WhisprMessaging.ConversationServer do
         })
       end
     end)
+
+    # WHISPR-1109 follow-up: publish to Redis so notification-service can
+    # increment unread badges for every recipient. Fire-and-forget — any
+    # Redis error is logged but must never crash the GenServer.
+    MessagingEvents.publish_new_message(message, state.members)
   end
 
   defp notify_offline_members(message, state) do
@@ -613,7 +677,7 @@ defmodule WhisprMessaging.ConversationServer do
 
     # Update last activity if conversation has been idle
     if DateTime.diff(DateTime.utc_now(), state.last_activity, :minute) > 5 do
-      Logger.debug("Conversation #{state.conversation_id} has been idle for 5+ minutes")
+      Logger.debug("Conversation idle for 5+ minutes")
     end
 
     new_state
@@ -622,5 +686,27 @@ defmodule WhisprMessaging.ConversationServer do
   defp schedule_cleanup do
     # Every 30 seconds
     Process.send_after(self(), :cleanup, 30_000)
+  end
+
+  # WHISPR-1058: how long a single `typing=true` stays valid before the
+  # server auto-expires it. Must be ≥ the client's keep-alive interval
+  # (the mobile app re-sends typing every ~3s as long as the user types).
+  # 6s gives room for one missed ping without flapping the indicator off
+  # during a legitimately-typing burst.
+  @typing_timeout_ms 6_000
+
+  defp schedule_typing_timeout(user_id) do
+    Process.send_after(self(), {:typing_timeout, user_id}, @typing_timeout_ms)
+  end
+
+  defp cancel_typing_timer(typing_timers, user_id) do
+    case Map.get(typing_timers, user_id) do
+      nil ->
+        typing_timers
+
+      ref ->
+        Process.cancel_timer(ref)
+        Map.delete(typing_timers, user_id)
+    end
   end
 end

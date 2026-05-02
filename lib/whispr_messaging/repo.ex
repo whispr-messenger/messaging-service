@@ -21,7 +21,7 @@ defmodule WhisprMessaging.Repo do
     :ok
   rescue
     exception ->
-      Logger.error("Database health check failed: #{inspect(exception)}")
+      Logger.error("Database health check failed", error: inspect(exception), domain: :repo)
       {:error, exception}
   end
 
@@ -42,7 +42,7 @@ defmodule WhisprMessaging.Repo do
     )
   rescue
     exception ->
-      Logger.error("Failed to get connection info: #{inspect(exception)}")
+      Logger.error("Failed to get connection info", error: inspect(exception), domain: :repo)
       {:error, exception}
   end
 
@@ -55,7 +55,7 @@ defmodule WhisprMessaging.Repo do
         fun.()
       rescue
         exception ->
-          Logger.error("Transaction failed: #{inspect(exception)}")
+          Logger.error("Transaction failed", error: inspect(exception), domain: :repo)
           rollback(exception)
       end
     end)
@@ -72,7 +72,13 @@ defmodule WhisprMessaging.Repo do
       {:ok, query!(query, params, merged_opts)}
     rescue
       exception ->
-        Logger.error("Query failed: #{inspect(exception)}", query: query, params: params)
+        Logger.error("Query failed",
+          error: inspect(exception),
+          query: query,
+          params: params,
+          domain: :repo
+        )
+
         {:error, exception}
     end
   end

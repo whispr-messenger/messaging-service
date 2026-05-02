@@ -9,6 +9,7 @@ defmodule WhisprMessagingWeb.MessageController do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.ConversationServer
+  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Messages
   alias WhisprMessagingWeb.Endpoint
 
@@ -193,13 +194,20 @@ defmodule WhisprMessagingWeb.MessageController do
 
     # Diffuse aussi sur le canal `user:*` pour les membres hors expéditeur,
     # ce qui alimente ConversationsListScreen sans nécessiter que l'écran soit ouvert.
-    Enum.each(Conversations.list_conversation_members(conversation_id), fn member ->
+    members = Conversations.list_conversation_members(conversation_id)
+
+    Enum.each(members, fn member ->
       if member.user_id != message.sender_id do
         Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
           message: serialized
         })
       end
     end)
+
+    # WHISPR-1109: publish on Redis so notification-service can bump the
+    # badge counter of every recipient. The REST path never hits the
+    # GenServer, so the publish has to live here too.
+    MessagingEvents.publish_new_message(message, members)
   end
 
   swagger_path :show do
@@ -215,7 +223,12 @@ defmodule WhisprMessagingWeb.MessageController do
 
   @doc """
   Searches messages by content across all conversations the user participates in.
+
   GET /api/messages/search?query=...&limit=50&offset=0
+       &conversation_id=...&from=ISO8601&to=ISO8601&message_type=text|media|system
+
+  (WHISPR-1061) Filters and a `match_preview` highlight are optional — the
+  response shape stays the same as before when no filters are provided.
   """
   def search(conn, params) do
     user_id = conn.assigns[:user_id]
@@ -226,10 +239,41 @@ defmodule WhisprMessagingWeb.MessageController do
     if String.trim(query) == "" do
       json(conn, [])
     else
-      messages = Messages.search_messages_global(user_id, query, limit, offset)
-      json(conn, Enum.map(messages, &render_message/1))
+      opts =
+        [limit: limit, offset: offset]
+        |> maybe_put_opt(:conversation_id, Map.get(params, "conversation_id"))
+        |> maybe_put_opt(:from_datetime, parse_iso8601(Map.get(params, "from")))
+        |> maybe_put_opt(:to_datetime, parse_iso8601(Map.get(params, "to")))
+        |> maybe_put_opt(:message_type, Map.get(params, "message_type"))
+
+      messages = Messages.search_messages_global(user_id, query, opts)
+
+      json(
+        conn,
+        Enum.map(messages, fn msg ->
+          msg
+          |> render_message()
+          |> Map.put(:match_preview, Messages.build_match_preview(msg.content, query))
+        end)
+      )
     end
   end
+
+  defp maybe_put_opt(opts, _key, nil), do: opts
+  defp maybe_put_opt(opts, _key, ""), do: opts
+  defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  defp parse_iso8601(nil), do: nil
+  defp parse_iso8601(""), do: nil
+
+  defp parse_iso8601(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, dt, _} -> dt
+      _ -> nil
+    end
+  end
+
+  defp parse_iso8601(_), do: nil
 
   defp parse_int(value, _default) when is_integer(value), do: value
 
@@ -391,6 +435,145 @@ defmodule WhisprMessagingWeb.MessageController do
     end
   end
 
+  @doc """
+  Forwards a message to one or more conversations.
+  POST /messaging/api/v1/messages/:id/forward
+  Body: `{ "conversation_ids": ["<uuid>", ...] }`
+  """
+  def forward(conn, %{"id" => source_id} = params) do
+    user_id = conn.assigns[:user_id]
+    target_ids = params["conversation_ids"] || []
+
+    cond do
+      is_nil(user_id) ->
+        conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+
+      not is_list(target_ids) or target_ids == [] ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "conversation_ids must be a non-empty list"})
+
+      true ->
+        handle_forward_result(conn, Messages.forward_message(source_id, target_ids, user_id))
+    end
+  end
+
+  defp handle_forward_result(conn, {:ok, messages}) do
+    Enum.each(messages, &broadcast_forwarded/1)
+
+    conn
+    |> put_status(:created)
+    |> json(%{data: Enum.map(messages, &render_message/1)})
+  end
+
+  defp handle_forward_result(conn, {:error, :not_found}),
+    do: conn |> put_status(:not_found) |> json(%{error: "Message not found"})
+
+  defp handle_forward_result(conn, {:error, :forbidden}),
+    do: conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+  defp handle_forward_result(conn, {:error, %Ecto.Changeset{} = cs}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: translate_errors(cs)})
+  end
+
+  defp handle_forward_result(conn, {:error, reason}),
+    do: conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+
+  defp broadcast_forwarded(message),
+    do: broadcast_new_message(message.conversation_id, message)
+
+  @doc """
+  Marks a message as delivered or read for the calling user (WHISPR-1059).
+
+  PATCH /api/messages/:id/receipt
+  Body: { "status": "delivered" | "read" }
+
+  "read" implies "delivered" — if the caller jumps straight to "read" without
+  ever hitting "delivered", we set `delivered_at` on the same row so aggregate
+  status computation stays consistent.
+
+  Returns 200 with the refreshed delivery_status row. 404 if the message
+  doesn't exist, 400 on an invalid status value, 403 if the caller isn't a
+  member of the conversation.
+  """
+  def receipt(conn, %{"id" => id} = params) do
+    user_id = conn.assigns[:user_id]
+    status = Map.get(params, "status")
+
+    with true <- valid_receipt_status(status),
+         :ok <- ensure_receipt_user(user_id),
+         {:ok, message} <- Messages.get_message_with_relations(id),
+         true <-
+           Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
+         {:ok, delivery_status} <- apply_receipt(id, user_id, status) do
+      # WHISPR-1109: notify notification-service so the reader's badge
+      # decrements. Only the "read" transition matters for unread counts.
+      if status == "read" do
+        MessagingEvents.publish_message_read(message.conversation_id, user_id, id)
+      end
+
+      json(conn, %{
+        data: %{
+          message_id: delivery_status.message_id,
+          user_id: delivery_status.user_id,
+          delivered_at: delivery_status.delivered_at,
+          read_at: delivery_status.read_at
+        }
+      })
+    else
+      false ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: %{status: "must be 'delivered' or 'read'"}})
+
+      :unauthorized ->
+        conn |> put_status(:unauthorized) |> json(%{errors: %{detail: "Unauthorized"}})
+
+      :forbidden ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "Not a member of the conversation"}})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "Message not found"}})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: changeset_errors(changeset)})
+    end
+  end
+
+  defp ensure_receipt_user(nil), do: :unauthorized
+  defp ensure_receipt_user(_user_id), do: :ok
+
+  defp valid_receipt_status("delivered"), do: true
+  defp valid_receipt_status("read"), do: true
+  defp valid_receipt_status(_), do: false
+
+  defp apply_receipt(message_id, user_id, "delivered"),
+    do: Messages.mark_message_delivered(message_id, user_id)
+
+  defp apply_receipt(message_id, user_id, "read") do
+    # Ensure delivered_at is populated before setting read_at — otherwise
+    # `DeliveryStatus.compute_aggregate_status/1` would briefly see a row
+    # that's "read but never delivered", which isn't a valid state.
+    _ = Messages.mark_message_delivered(message_id, user_id)
+    Messages.mark_message_read(message_id, user_id)
+  end
+
+  defp changeset_errors(%Ecto.Changeset{} = changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {k, v}, acc ->
+        String.replace(acc, "%{#{k}}", to_string(v))
+      end)
+    end)
+  end
+
   # Private rendering functions
 
   defp render_messages(messages) do
@@ -408,6 +591,7 @@ defmodule WhisprMessagingWeb.MessageController do
       message_type: message.message_type,
       metadata: message.metadata,
       reply_to_id: message.reply_to_id,
+      forwarded_from_id: Map.get(message, :forwarded_from_id),
       is_edited: message.edited_at != nil,
       edited_at: message.edited_at,
       is_deleted: message.is_deleted,

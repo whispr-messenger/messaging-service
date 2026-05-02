@@ -31,8 +31,11 @@ defmodule WhisprMessaging.Moderation.Reports do
       |> Report.changeset(attrs)
       |> Repo.insert()
       |> tap_ok(fn report ->
-        Logger.info(
-          "Report #{report.id} created by #{report.reporter_id} against #{report.reported_user_id}"
+        Logger.info("Report created",
+          report_id: report.id,
+          reporter_id: report.reporter_id,
+          reported_user_id: report.reported_user_id,
+          domain: :moderation
         )
 
         publish_report_created(report)
@@ -106,7 +109,12 @@ defmodule WhisprMessaging.Moderation.Reports do
       |> Report.resolve_changeset(%{status: status, resolution: resolution})
       |> Repo.update()
       |> tap_ok(fn resolved ->
-        Logger.info("Report #{resolved.id} resolved by #{admin_id}: #{status}")
+        Logger.info("Report resolved",
+          report_id: resolved.id,
+          admin_id: admin_id,
+          status: status,
+          domain: :moderation
+        )
       end)
     end
   end
@@ -218,10 +226,16 @@ defmodule WhisprMessaging.Moderation.Reports do
   # ---------------------------------------------------------------------------
 
   defp check_escalation_thresholds(reported_user_id) do
-    # These are checked async to not block the report creation response
-    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+    # Async in prod to avoid blocking the report response.
+    # Sync in test so the check runs under the caller's sandbox connection
+    # instead of leaking a DB connection that outlives the test owner.
+    if escalation_config(:async, true) do
+      Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+        do_check_escalation(reported_user_id)
+      end)
+    else
       do_check_escalation(reported_user_id)
-    end)
+    end
   end
 
   defp do_check_escalation(reported_user_id) do
@@ -285,8 +299,11 @@ defmodule WhisprMessaging.Moderation.Reports do
 
     redis_publish("whispr:moderation:threshold_reached", payload)
 
-    Logger.warning(
-      "Moderation threshold #{level} reached for user #{reported_user_id} (#{count} unique reporters)"
+    Logger.warning("Moderation threshold reached",
+      level: level,
+      reported_user_id: reported_user_id,
+      unique_reporters: count,
+      domain: :moderation
     )
   end
 

@@ -1,7 +1,7 @@
 defmodule WhisprMessaging.Moderation.ReportsTest do
   use WhisprMessaging.DataCase, async: false
 
-  alias WhisprMessaging.Moderation.{Report, Reports}
+  alias WhisprMessaging.Moderation.Reports
 
   setup do
     reporter_id = create_test_user_id()
@@ -84,6 +84,35 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
 
       assert {:ok, _} = Reports.create_report(attrs)
       assert {:error, :cooldown_active} = Reports.create_report(attrs)
+    end
+
+    test "runs escalation check synchronously in test env (no sandbox leak)", ctx do
+      prev_cfg = Application.get_env(:whispr_messaging, :moderation, [])
+
+      Application.put_env(
+        :whispr_messaging,
+        :moderation,
+        Keyword.put(prev_cfg, :mute_threshold, 1)
+      )
+
+      on_exit(fn -> Application.put_env(:whispr_messaging, :moderation, prev_cfg) end)
+
+      attrs = %{
+        reporter_id: ctx.reporter_id,
+        reported_user_id: ctx.reported_user_id,
+        conversation_id: ctx.conversation.id,
+        message_id: ctx.message.id,
+        category: "spam"
+      }
+
+      log =
+        ExUnit.CaptureLog.capture_log([level: :warning], fn ->
+          assert {:ok, _report} = Reports.create_report(attrs)
+        end)
+
+      assert log =~ "Moderation threshold reached"
+      assert log =~ "level=auto_mute"
+      assert log =~ ctx.reported_user_id
     end
   end
 

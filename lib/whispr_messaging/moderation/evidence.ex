@@ -52,7 +52,10 @@ defmodule WhisprMessaging.Moderation.Evidence do
   @spec capture_full_context(String.t(), String.t()) ::
           {:ok, evidence_snapshot()} | {:error, term()}
   def capture_full_context(message_id, conversation_id) do
-    Logger.info("[Evidence] Capturing full context for message #{message_id}")
+    Logger.info("Capturing evidence context",
+      message_id: message_id,
+      domain: :moderation_evidence
+    )
 
     with {:ok, reported_msg} <- fetch_message(message_id),
          surrounding <- fetch_surrounding_messages(message_id, conversation_id),
@@ -284,7 +287,10 @@ defmodule WhisprMessaging.Moderation.Evidence do
   """
   @spec batch_capture([Report.t()]) :: [{String.t(), {:ok, map()} | {:error, term()}}]
   def batch_capture(reports) when is_list(reports) do
-    Logger.info("[Evidence] Batch capturing evidence for #{Enum.count(reports)} reports")
+    Logger.info("Batch capturing evidence",
+      count: Enum.count(reports),
+      domain: :moderation_evidence
+    )
 
     reports
     |> Enum.map(fn report ->

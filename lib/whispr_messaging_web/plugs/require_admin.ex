@@ -22,7 +22,7 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
   ## Configuration
 
   - `USER_SERVICE_HTTP_URL` — base URL of the user-service HTTP API
-    (default: `http://user-service:3002`)
+    (default: `http://user-service:3011`)
   - `ADMIN_USER_IDS` — comma-separated fallback admin user IDs
   """
 
@@ -121,17 +121,24 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
               {:ok, role}
 
             _ ->
-              Logger.warning("[RequireAdmin] Unexpected response body from user-service: #{body}")
+              Logger.warning("Unexpected response body from user-service",
+                body: body,
+                domain: :admin_check
+              )
 
               :error
           end
 
         {:ok, %Finch.Response{status: status}} ->
-          Logger.warning("[RequireAdmin] user-service returned status #{status}")
+          Logger.warning("User-service returned unexpected status",
+            status: status,
+            domain: :admin_check
+          )
+
           :error
 
         {:error, reason} ->
-          Logger.error("[RequireAdmin] user-service unreachable: #{inspect(reason)}")
+          Logger.error("User-service unreachable", reason: inspect(reason), domain: :admin_check)
           :error
       end
     end
@@ -140,8 +147,9 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
       admin_ids = fallback_admin_ids()
 
       if user_id in admin_ids do
-        Logger.info(
-          "[RequireAdmin] Granted access via ADMIN_USER_IDS fallback for user #{user_id}"
+        Logger.info("Admin access granted via fallback",
+          user_id: user_id,
+          domain: :admin_check
         )
 
         {:ok, "admin"}
@@ -155,7 +163,7 @@ defmodule WhisprMessagingWeb.Plugs.RequireAdmin do
     # -------------------------------------------------------------------------
 
     defp user_service_url do
-      System.get_env("USER_SERVICE_HTTP_URL") || "http://user-service:3002"
+      System.get_env("USER_SERVICE_HTTP_URL") || "http://user-service:3011"
     end
 
     defp fallback_admin_ids do

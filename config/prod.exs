@@ -16,14 +16,13 @@ config :whispr_messaging, WhisprMessagingWeb.Endpoint,
 # environment variables (including REDIS_MODE / REDIS_SENTINELS) are always
 # resolved from the live process environment rather than at compile time.
 
-# Production logging - JSON format for structured logging
-config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id, :conversation_id, :user_id],
-  level: :info
-
+# Production logging - JSON structured output for Grafana/Loki
 config :logger,
   level: :info
+
+config :logger, :console,
+  format: {WhisprMessaging.JsonFormatter, :format},
+  metadata: :all
 
 # Production conversation settings
 # Handled dynamically in config/runtime.exs
@@ -31,9 +30,6 @@ config :logger,
 
 # Disable dev routes in production
 config :whispr_messaging, dev_routes: false
-
-# Do not print debug messages in production
-config :logger, level: :info
 
 # Runtime production configuration
 # The config/runtime.exs is executed after compilation

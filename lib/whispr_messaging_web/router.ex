@@ -74,6 +74,14 @@ defmodule WhisprMessagingWeb.Router do
     post "/conversations/:id/members", ConversationMemberController, :create
     delete "/conversations/:id/members/:user_id", ConversationMemberController, :delete
 
+    # Role management (WHISPR-965)
+    patch "/conversations/:id/members/:user_id/role",
+          ConversationMemberController,
+          :update_role
+
+    # Leave conversation (WHISPR-965 — handles auto-promote)
+    post "/conversations/:id/leave", ConversationMemberController, :leave
+
     # Per-user conversation settings (WHISPR-467)
     get "/conversations/:id/settings", ConversationController, :get_member_settings
     put "/conversations/:id/settings", ConversationController, :update_member_settings
@@ -112,6 +120,12 @@ defmodule WhisprMessagingWeb.Router do
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
 
+    # Message forward (WHISPR-1045)
+    post "/messages/:id/forward", MessageController, :forward
+
+    # Per-message delivery receipt (WHISPR-1059)
+    patch "/messages/:id/receipt", MessageController, :receipt
+
     # Message reactions
     get "/messages/:id/reactions", ReactionController, :index
     post "/messages/:id/reactions", ReactionController, :create
@@ -132,6 +146,11 @@ defmodule WhisprMessagingWeb.Router do
     get "/attachments/:id", AttachmentController, :show
     get "/attachments/:id/download", AttachmentController, :download
     delete "/attachments/:id", AttachmentController, :delete
+
+    # Group invite links (WHISPR-1046)
+    post "/conversations/:id/invite_link", InviteController, :create
+    delete "/conversations/:id/invite_link", InviteController, :delete
+    post "/invites/:token/join", InviteController, :join
 
     # Moderation reports (user-accessible)
     get "/reports", ReportController, :index

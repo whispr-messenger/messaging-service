@@ -358,7 +358,7 @@ defmodule WhisprMessaging.Moderation.Analytics do
   """
   @spec dashboard_stats() :: map()
   def dashboard_stats do
-    Logger.info("[Analytics] Generating dashboard stats")
+    Logger.info("Generating dashboard stats", domain: :moderation_analytics)
 
     %{
       daily_counts: daily_report_counts(14),

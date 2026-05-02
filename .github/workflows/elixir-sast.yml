@@ -1,0 +1,116 @@
+name: 🛡️ Elixir SAST
+
+# WHISPR-979 : CodeQL ne supporte pas Elixir/BEAM. Ce workflow exécute
+# Sobelow (patterns de sécurité Phoenix) et mix_audit (CVE sur les deps Hex)
+# en complément du scan Trivy filesystem. Les deux tools sont exécutés
+# avec --exit on critical finding pour bloquer le merge sur régression.
+
+on:
+  repository_dispatch:
+    types: [run-elixir-sast]
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  sobelow:
+    name: 🔍 Sobelow (Phoenix security)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.event.client_payload.ref }}
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.19'
+          otp-version: '27'
+
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-sast-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-sast-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile (required by Sobelow for AST resolution)
+        run: mix compile --warnings-as-errors=false
+
+      # Sobelow émet SARIF via --format sarif ; on upload dans l'onglet
+      # Security de GitHub pour tracker les findings dans le temps.
+      - name: Run Sobelow (SARIF)
+        run: mix sobelow --format sarif --out sobelow-results.sarif --skip
+        continue-on-error: true
+
+      - name: Upload Sobelow SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('sobelow-results.sarif') != ''
+        with:
+          sarif_file: 'sobelow-results.sarif'
+          category: sobelow
+
+      # Second run, sortie terminale lisible + exit-code non nul sur finding
+      # haute sévérité. `--threshold high` = on ne casse la CI que sur high.
+      - name: Run Sobelow (fail on high severity)
+        run: mix sobelow --exit --threshold high --skip
+
+  mix-audit:
+    name: 🔍 mix_audit (Hex CVE)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.event.client_payload.ref }}
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.19'
+          otp-version: '27'
+
+      - name: Cache deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-audit-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-audit-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      # mix_audit ne produit pas de SARIF nativement. On capture la sortie
+      # dans un fichier et on l'expose comme artefact pour l'auditeur ;
+      # le exit code non-nul bloque la CI en cas de CVE détectée.
+      - name: Run mix_audit
+        run: |
+          set -o pipefail
+          mix deps.audit 2>&1 | tee mix-audit-results.txt
+
+      - name: Upload mix_audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mix-audit-results
+          path: mix-audit-results.txt
+          retention-days: 30

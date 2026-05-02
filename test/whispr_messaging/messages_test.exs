@@ -229,6 +229,105 @@ defmodule WhisprMessaging.MessagesTest do
     end
   end
 
+  describe "new_message redis publish (WHISPR-1158)" do
+    setup do
+      # Inject a synchronous dispatcher so the publish runs inline and
+      # doesn't outlive the test, leaking the sandboxed DB connection.
+      alias WhisprMessaging.Events.MessagingEvents, as: Events
+
+      sync_dispatcher = fn message ->
+        members = Conversations.list_conversation_members(message.conversation_id)
+        Events.publish_new_message(message, members)
+      end
+
+      previous_dispatcher = Application.get_env(:whispr_messaging, :new_message_dispatcher)
+      Application.put_env(:whispr_messaging, :new_message_dispatcher, sync_dispatcher)
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      sender_id = Ecto.UUID.generate()
+      other_id = Ecto.UUID.generate()
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, sender_id)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, other_id)
+
+      test_pid = self()
+
+      publisher = fn channel, payload ->
+        send(test_pid, {:redis_publish, channel, payload})
+        {:ok, 1}
+      end
+
+      previous = Application.get_env(:whispr_messaging, :messaging_events_publisher)
+      Application.put_env(:whispr_messaging, :messaging_events_publisher, publisher)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:whispr_messaging, :messaging_events_publisher, previous)
+        else
+          Application.delete_env(:whispr_messaging, :messaging_events_publisher)
+        end
+
+        if previous_dispatcher do
+          Application.put_env(:whispr_messaging, :new_message_dispatcher, previous_dispatcher)
+        else
+          Application.delete_env(:whispr_messaging, :new_message_dispatcher)
+        end
+      end)
+
+      %{conversation: conversation, sender_id: sender_id, other_id: other_id}
+    end
+
+    test "publishes on whispr:messaging:new_message with recipients excluding the sender", %{
+      conversation: conversation,
+      sender_id: sender_id,
+      other_id: other_id
+    } do
+      {:ok, _message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: sender_id,
+          message_type: "text",
+          content: "ciphertext",
+          client_random: 99
+        })
+
+      assert_receive {:redis_publish, "whispr:messaging:new_message", json}, 1_000
+      payload = Jason.decode!(json)
+
+      assert payload["conversation_id"] == conversation.id
+      assert payload["sender_id"] == sender_id
+      assert payload["target_user_ids"] == [other_id]
+      assert payload["message_type"] == "text"
+      assert is_binary(payload["sent_at"])
+    end
+
+    test "publishes nothing when the conversation has only the sender", %{
+      conversation: conversation,
+      sender_id: sender_id,
+      other_id: other_id
+    } do
+      # Remove the other member so the sender is alone in the conversation.
+      Conversations.remove_conversation_member(conversation.id, other_id)
+
+      {:ok, _message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: sender_id,
+          message_type: "text",
+          content: "ciphertext",
+          client_random: 101
+        })
+
+      refute_receive {:redis_publish, _channel, _json}, 200
+    end
+  end
+
   describe "reply threading validation" do
     setup do
       {:ok, conversation1} =
@@ -802,8 +901,6 @@ defmodule WhisprMessaging.MessagesTest do
         }
       ])
 
-      import Ecto.Query
-
       messages =
         Message.recent_messages_query(c.id, 50)
         |> WhisprMessaging.Repo.all()
@@ -1206,6 +1303,63 @@ defmodule WhisprMessaging.MessagesTest do
     } do
       {:ok, _} = Messages.delete_message(hello.id, user_id, false)
       assert Messages.search_messages_global(user_id, "hello") == []
+    end
+
+    # WHISPR-1061
+    test "filters by conversation_id when provided", %{user_id: user_id, hello: hello} do
+      other_conv_id = Ecto.UUID.generate()
+
+      # Filter by a conversation the user isn't even in → empty
+      assert [] =
+               Messages.search_messages_global(user_id, "hello", conversation_id: other_conv_id)
+
+      # Filter by the conversation that actually holds the match → hit
+      results =
+        Messages.search_messages_global(user_id, "hello", conversation_id: hello.conversation_id)
+
+      assert Enum.count(results) == 1
+      assert hd(results).id == hello.id
+    end
+
+    test "filters by message_type when provided", %{user_id: user_id, hello: hello} do
+      assert [hit] = Messages.search_messages_global(user_id, "hello", message_type: "text")
+      assert hit.id == hello.id
+
+      assert [] = Messages.search_messages_global(user_id, "hello", message_type: "media")
+    end
+
+    test "respects limit and offset", %{user_id: user_id} do
+      page1 = Messages.search_messages_global(user_id, "world", limit: 1, offset: 0)
+      page2 = Messages.search_messages_global(user_id, "world", limit: 1, offset: 1)
+
+      assert Enum.count(page1) == 1
+      assert Enum.count(page2) == 1
+      refute hd(page1).id == hd(page2).id
+    end
+  end
+
+  describe "build_match_preview/2 (WHISPR-1061)" do
+    test "returns nil for an empty query" do
+      assert Messages.build_match_preview("hello world", "") == nil
+      assert Messages.build_match_preview("hello world", "   ") == nil
+    end
+
+    test "returns nil when the query isn't present in the content" do
+      assert Messages.build_match_preview("hello", "nope") == nil
+    end
+
+    test "matches case-insensitively and reports position within the excerpt" do
+      result = Messages.build_match_preview("Hello World", "WORLD")
+      assert result.match_length == 5
+      assert String.slice(result.excerpt, result.match_start, 5) == "World"
+    end
+
+    test "clips to a ~40-char radius around the match" do
+      content = String.duplicate("a", 100) <> "needle" <> String.duplicate("b", 100)
+      result = Messages.build_match_preview(content, "needle")
+      # Excerpt length is roughly 40 + len(needle) + 40 = 86
+      assert byte_size(result.excerpt) <= 86
+      assert String.slice(result.excerpt, result.match_start, result.match_length) == "needle"
     end
   end
 end

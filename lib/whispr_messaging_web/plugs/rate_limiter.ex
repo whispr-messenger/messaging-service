@@ -30,7 +30,7 @@ defmodule WhisprMessagingWeb.Plugs.RateLimiter do
         |> put_resp_header("x-ratelimit-reset", "#{get_reset_time(opts.window_seconds)}")
 
       {:error, :rate_limited, retry_after} ->
-        Logger.warning("Rate limit exceeded for key: #{key}")
+        Logger.warning("Rate limit exceeded", key: key, domain: :rate_limiter)
 
         conn
         |> put_resp_header("x-ratelimit-limit", "#{opts.limit}")
@@ -93,7 +93,11 @@ defmodule WhisprMessagingWeb.Plugs.RateLimiter do
         end
 
       {:error, reason} ->
-        Logger.error("Redis error in rate limiter: #{inspect(reason)}")
+        Logger.error("Redis error in rate limiter",
+          reason: inspect(reason),
+          domain: :rate_limiter
+        )
+
         # Fail open - allow request if Redis is down
         {:ok, 0, limit}
     end

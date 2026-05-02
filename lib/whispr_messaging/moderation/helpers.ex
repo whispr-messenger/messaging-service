@@ -24,7 +24,11 @@ defmodule WhisprMessaging.Moderation.Helpers do
     Redix.command(:redix, ["PUBLISH", channel, payload])
   rescue
     error ->
-      Logger.error("[Moderation] Redis publish failed on #{channel}: #{inspect(error)}")
+      Logger.error("Redis publish failed",
+        channel: channel,
+        error: inspect(error),
+        domain: :moderation
+      )
   end
 end
 
