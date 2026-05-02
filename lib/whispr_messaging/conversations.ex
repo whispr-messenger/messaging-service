@@ -920,55 +920,108 @@ defmodule WhisprMessaging.Conversations do
   Archives a conversation for a user.
 
   Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
-  not an active member, or `{:error, :already_archived}` if already archived.
+  not an active member, `{:error, :already_archived}` if already archived, or
+  `{:error, :conversation_inactive}` if the conversation has been soft-deleted.
   """
   def archive_conversation(conversation_id, user_id) do
-    case get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member ->
-        if Map.get(member.settings, "is_archived", false) do
-          {:error, :already_archived}
-        else
-          new_settings = Map.put(member.settings || %{}, "is_archived", true)
+    lock_key = :erlang.phash2(user_id, 2_147_483_647)
 
-          member
-          |> ConversationMember.update_settings_changeset(new_settings)
-          |> Repo.update()
-        end
+    Repo.transaction(fn ->
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-      _ ->
-        {:error, :not_member}
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_archive_member(conversation_id)
+    end)
+    |> unwrap_transaction_result()
+  end
+
+  defp do_archive_member(%ConversationMember{is_active: true} = member, conversation_id) do
+    settings = member.settings || %{}
+
+    cond do
+      not conversation_active?(conversation_id) ->
+        Repo.rollback(:conversation_inactive)
+
+      Map.get(settings, "is_archived", false) ->
+        Repo.rollback(:already_archived)
+
+      true ->
+        apply_archive_settings(member, settings, true)
     end
   end
+
+  defp do_archive_member(_member, _conversation_id), do: Repo.rollback(:not_member)
 
   @doc """
   Unarchives a conversation for a user.
 
   Returns `{:ok, member}` on success, `{:error, :not_member}` if the user is
-  not an active member, or `{:error, :not_archived}` if the conversation is
-  not currently archived.
+  not an active member, `{:error, :not_archived}` if the conversation is not
+  currently archived, or `{:error, :conversation_inactive}` if the conversation
+  has been soft-deleted.
   """
   def unarchive_conversation(conversation_id, user_id) do
-    case get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member ->
-        if Map.get(member.settings, "is_archived", false) do
-          new_settings = Map.put(member.settings, "is_archived", false)
+    lock_key = :erlang.phash2(user_id, 2_147_483_647)
 
-          member
-          |> ConversationMember.update_settings_changeset(new_settings)
-          |> Repo.update()
-        else
-          {:error, :not_archived}
-        end
+    Repo.transaction(fn ->
+      Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_key])
 
-      _ ->
-        {:error, :not_member}
+      conversation_id
+      |> get_conversation_member(user_id)
+      |> do_unarchive_member(conversation_id)
+    end)
+    |> unwrap_transaction_result()
+  end
+
+  defp do_unarchive_member(%ConversationMember{is_active: true} = member, conversation_id) do
+    settings = member.settings || %{}
+
+    cond do
+      not conversation_active?(conversation_id) ->
+        Repo.rollback(:conversation_inactive)
+
+      not Map.get(settings, "is_archived", false) ->
+        Repo.rollback(:not_archived)
+
+      true ->
+        apply_archive_settings(member, settings, false)
     end
+  end
+
+  defp do_unarchive_member(_member, _conversation_id), do: Repo.rollback(:not_member)
+
+  defp apply_archive_settings(member, settings, archived?) do
+    new_settings = Map.put(settings, "is_archived", archived?)
+
+    case member
+         |> ConversationMember.update_settings_changeset(new_settings)
+         |> Repo.update() do
+      {:ok, updated_member} -> updated_member
+      {:error, changeset} -> Repo.rollback({:changeset, changeset})
+    end
+  end
+
+  defp conversation_active?(conversation_id) do
+    Repo.exists?(from c in Conversation, where: c.id == ^conversation_id and c.is_active == true)
   end
 
   @doc """
   Lists archived conversations for a user.
+
+  Each conversation is enriched with `:member_info`, `:last_message`, and
+  `:unread_count` so the listing can be rendered without follow-up queries.
+  Enrichment is batched to avoid N+1 even at the maximum page size of 100.
+
+  Accepts the following options:
+
+    * `:limit` (default: 50) — page size
+    * `:offset` (default: 0) — number of rows to skip
   """
-  def list_archived_conversations(user_id, limit \\ 50) do
+  def list_archived_conversations(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
+
     query =
       from m in ConversationMember,
         join: c in Conversation,
@@ -977,15 +1030,68 @@ defmodule WhisprMessaging.Conversations do
         where: m.is_active == true,
         where: c.is_active == true,
         where: fragment("(?->>'is_archived')::boolean = true", m.settings),
-        order_by: [desc: c.updated_at],
+        order_by: [desc: c.updated_at, desc: c.id],
         limit: ^limit,
+        offset: ^offset,
         select: {m, c}
 
     results = Repo.all(query)
+    conversation_ids = Enum.map(results, fn {_m, c} -> c.id end)
+
+    last_messages = batch_last_messages(conversation_ids)
+    unread_counts = batch_unread_counts(results, user_id)
 
     Enum.map(results, fn {member, conversation} ->
       conversation
       |> Map.put(:member_info, member)
+      |> Map.put(:last_message, Map.get(last_messages, conversation.id))
+      |> Map.put(:unread_count, Map.get(unread_counts, conversation.id, 0))
     end)
+  end
+
+  # Loads the most recent non-deleted message for each conversation in one
+  # query, using `DISTINCT ON (conversation_id)` so PostgreSQL keeps only the
+  # newest row per conversation.
+  defp batch_last_messages([]), do: %{}
+
+  defp batch_last_messages(conversation_ids) do
+    # `sent_at` is stored at second precision, so two messages inserted in the
+    # same second can collide. Adding `inserted_at` and `id` as tiebreakers
+    # keeps the "most recent" pick deterministic.
+    query =
+      from m in Message,
+        where: m.conversation_id in ^conversation_ids,
+        where: m.is_deleted == false,
+        distinct: [asc: m.conversation_id],
+        order_by: [asc: m.conversation_id, desc: m.sent_at, desc: m.inserted_at, desc: m.id]
+
+    query
+    |> Repo.all()
+    |> Map.new(fn message -> {message.conversation_id, message} end)
+  end
+
+  # Counts unread messages per conversation in a single aggregated query.
+  # Joining `conversation_members` lets PostgreSQL apply each member's own
+  # `last_read_at` as the cutoff (NULL means everything counts as unread)
+  # without round-tripping per conversation.
+  defp batch_unread_counts([], _user_id), do: %{}
+
+  defp batch_unread_counts(member_conversations, user_id) do
+    conversation_ids = Enum.map(member_conversations, fn {_m, c} -> c.id end)
+
+    query =
+      from m in Message,
+        join: cm in ConversationMember,
+        on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+        where: m.conversation_id in ^conversation_ids,
+        where: m.sender_id != ^user_id,
+        where: m.is_deleted == false,
+        where: is_nil(cm.last_read_at) or m.sent_at > cm.last_read_at,
+        group_by: m.conversation_id,
+        select: {m.conversation_id, count(m.id)}
+
+    query
+    |> Repo.all()
+    |> Map.new()
   end
 end
