@@ -77,7 +77,10 @@ defmodule WhisprMessaging.Messages.MessageAttachmentTest do
 
     test "rejects filename longer than 255 characters" do
       long_name = String.duplicate("a", 300) <> ".txt"
-      changeset = MessageAttachment.changeset(%MessageAttachment{}, valid_attrs(%{filename: long_name}))
+
+      changeset =
+        MessageAttachment.changeset(%MessageAttachment{}, valid_attrs(%{filename: long_name}))
+
       refute changeset.valid?
     end
   end
@@ -132,7 +135,9 @@ defmodule WhisprMessaging.Messages.MessageAttachmentTest do
 
   describe "name and extension helpers" do
     test "display_name strips the file extension" do
-      assert "report" == MessageAttachment.display_name(%MessageAttachment{filename: "report.pdf"})
+      assert "report" ==
+               MessageAttachment.display_name(%MessageAttachment{filename: "report.pdf"})
+
       assert "noext" == MessageAttachment.display_name(%MessageAttachment{filename: "noext"})
     end
 
