@@ -1,5 +1,9 @@
 defmodule WhisprMessaging.MessagesTest do
-  use WhisprMessaging.DataCase, async: true
+  # async: false volontairement: le setup du describe "new_message redis publish"
+  # patche Application.put_env(:messaging_events_publisher, ...) ce qui est
+  # global. Avec async: true, plusieurs tests clobberent le publisher en
+  # concurrence et leakent des messages dans la mailbox des autres.
+  use WhisprMessaging.DataCase, async: false
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Messages.Message
