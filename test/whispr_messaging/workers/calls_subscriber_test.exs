@@ -91,4 +91,23 @@ defmodule WhisprMessaging.Workers.CallsSubscriberTest do
       refute_receive %Phoenix.Socket.Broadcast{event: "incoming_call"}, 50
     end
   end
+
+  describe "handle_info/2" do
+    test "logs and ignores subscribed events" do
+      assert {:noreply, %{}} ==
+               CallsSubscriber.handle_info(
+                 {:redix_pubsub, :pid, :ref, :subscribed, %{channel: "x"}},
+                 %{}
+               )
+    end
+
+    test "stops the worker on :retry_connect" do
+      assert {:stop, :normal, %{pubsub: nil}} ==
+               CallsSubscriber.handle_info(:retry_connect, %{pubsub: nil})
+    end
+
+    test "ignores unrecognised messages" do
+      assert {:noreply, :state} == CallsSubscriber.handle_info(:something_else, :state)
+    end
+  end
 end

@@ -50,7 +50,11 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
 
   @batch_size 100
 
-  defp dispatch_due_messages do
+  @doc """
+  Dispatches all currently-due scheduled messages. Public so tests can
+  trigger a deterministic poll without waiting for the scheduled tick.
+  """
+  def dispatch_due_messages do
     dispatch_due_batch()
   end
 
