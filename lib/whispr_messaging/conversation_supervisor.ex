@@ -211,11 +211,23 @@ defmodule WhisprMessaging.ConversationSupervisor do
         start_conversation(conversation_id)
 
       pid ->
+        ref = Process.monitor(pid)
+
         case DynamicSupervisor.terminate_child(__MODULE__, pid) do
           :ok ->
+            # Attend que le Registry soit nettoye (monitor fire apres l'exit
+            # final) avant de demarrer le nouveau, sinon get_conversation_pid
+            # peut retourner l'ancien pid mourant.
+            receive do
+              {:DOWN, ^ref, :process, ^pid, _} -> :ok
+            after
+              1_000 -> :timeout
+            end
+
             start_conversation(conversation_id)
 
           error ->
+            Process.demonitor(ref, [:flush])
             error
         end
     end
