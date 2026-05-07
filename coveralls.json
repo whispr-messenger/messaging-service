@@ -1,0 +1,16 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 0,
+    "treat_no_relevant_lines_as_covered": true
+  },
+  "skip_files": [
+    "lib/whispr_messaging/release.ex",
+    "lib/whispr_messaging/repo.ex",
+    "lib/whispr_messaging/services/user_service_behaviour.ex",
+    "lib/whispr_messaging_web/gettext.ex",
+    "lib/whispr_messaging_web/swagger_info.ex",
+    "lib/whispr_messaging_web/controllers/error_html.ex",
+    "lib/whispr_messaging_web/controllers/error_json.ex",
+    "test/support/.*"
+  ]
+}

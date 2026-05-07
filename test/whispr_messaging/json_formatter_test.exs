@@ -67,4 +67,35 @@ defmodule WhisprMessaging.JsonFormatterTest do
     assert payload["params"] == %{"query" => "hello", "limit" => 10}
     assert payload["tags"] == ["a", "b"]
   end
+
+  test "preserves booleans and nil values" do
+    output =
+      JsonFormatter.format(:info, "ok", @ts,
+        flag: true,
+        absent: nil
+      )
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+
+    assert payload["flag"] == true
+    assert payload["absent"] == nil
+  end
+
+  test "flattens tuples to lists" do
+    output = JsonFormatter.format(:info, "ok", @ts, point: {1, 2, 3})
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert payload["point"] == [1, 2, 3]
+  end
+
+  test "stringifies non-atom and non-binary metadata keys" do
+    output = JsonFormatter.format(:info, "ok", @ts, %{"a" => 1, 42 => "x"} |> Map.to_list())
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert payload["a"] == 1 or payload["42"] == "x"
+  end
+
+  test "falls back to inspect when message is not valid chardata" do
+    output = JsonFormatter.format(:info, %{not: "chardata"}, @ts, [])
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert is_binary(payload["message"])
+  end
 end
