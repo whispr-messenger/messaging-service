@@ -56,7 +56,11 @@ defmodule WhisprMessaging.Workers.EphemeralMessageCleaner do
   # Private helpers
   # ---------------------------------------------------------------------------
 
-  defp delete_expired_messages do
+  @doc """
+  Deletes expired ephemeral messages and broadcasts the deletion. Public so
+  tests can run a deterministic cleanup tick without waiting for the timer.
+  """
+  def delete_expired_messages do
     now = DateTime.utc_now()
 
     # Fetch expired messages (need conversation_id for broadcast)

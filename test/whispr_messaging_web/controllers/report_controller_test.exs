@@ -157,6 +157,51 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
     end
   end
 
+  describe "GET /messaging/api/v1/reports/:id" do
+    test "returns the report when the caller is the reporter", ctx do
+      reporter_conn =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+
+      %{"data" => %{"id" => report_id}} =
+        post(reporter_conn, ~p"/messaging/api/v1/reports", %{
+          "reported_user_id" => ctx.reported_user_id,
+          "category" => "spam"
+        })
+        |> json_response(201)
+
+      response =
+        get(reporter_conn, ~p"/messaging/api/v1/reports/#{report_id}")
+        |> json_response(200)
+
+      assert response["data"]["id"] == report_id
+    end
+
+    test "returns 404 for unknown report id", ctx do
+      build_conn()
+      |> authenticated_conn(ctx.reporter_id)
+      |> json_conn()
+      |> get(~p"/messaging/api/v1/reports/#{Ecto.UUID.generate()}")
+      |> json_response(404)
+    end
+  end
+
+  describe "GET /messaging/api/v1/reports/stats" do
+    test "returns admin report statistics", ctx do
+      admin_conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      response =
+        get(admin_conn, ~p"/messaging/api/v1/reports/stats")
+        |> json_response(200)
+
+      assert is_map(response["data"])
+    end
+  end
+
   describe "PUT /messaging/api/v1/reports/:id/resolve" do
     test "admin resolves a report", ctx do
       reporter_conn =
