@@ -27,7 +27,7 @@ defmodule WhisprMessagingWeb.SwaggerDefinitionsTest do
     test "#{inspect(controller)}.swagger_definitions/0 returns a map" do
       if Code.ensure_loaded?(unquote(controller)) and
            function_exported?(unquote(controller), :swagger_definitions, 0) do
-        defs = apply(unquote(controller), :swagger_definitions, [])
+        defs = unquote(controller).swagger_definitions()
         assert is_map(defs)
         assert map_size(defs) > 0
       end
