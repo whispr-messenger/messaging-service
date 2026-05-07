@@ -8,8 +8,8 @@ defmodule WhisprMessaging.ConversationSupervisorTest do
   use WhisprMessaging.DataCase, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Repo
 
   setup do
