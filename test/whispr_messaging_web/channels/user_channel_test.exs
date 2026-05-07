@@ -66,7 +66,6 @@ defmodule WhisprMessagingWeb.UserChannelTest do
     end
   end
 
-
   describe "get_unread_messages" do
     test "replies with the unread messages for the caller", ctx do
       {:ok, _} =

@@ -132,13 +132,18 @@ defmodule WhisprMessaging.Conversations.ConversationSettingsTest do
     end
 
     test "deletion_allowed? respects flag and time limit" do
-      cs = %ConversationSettings{settings: %{"allow_deletion" => true, "delete_time_limit" => 100}}
+      cs = %ConversationSettings{
+        settings: %{"allow_deletion" => true, "delete_time_limit" => 100}
+      }
+
       assert ConversationSettings.deletion_allowed?(cs, 50)
       refute ConversationSettings.deletion_allowed?(cs, 200)
     end
 
     test "delete_for_everyone_enabled? defaults to true" do
-      assert ConversationSettings.delete_for_everyone_enabled?(%ConversationSettings{settings: %{}})
+      assert ConversationSettings.delete_for_everyone_enabled?(%ConversationSettings{
+               settings: %{}
+             })
     end
 
     test "media_allowed? mirrors the flag" do
