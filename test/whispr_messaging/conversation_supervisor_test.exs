@@ -126,7 +126,11 @@ defmodule WhisprMessaging.ConversationSupervisorTest do
     test "replaces an existing server with a new pid", %{conversation: c} do
       {:ok, pid1} = ConversationSupervisor.start_conversation(c.id)
       assert {:ok, pid2} = ConversationSupervisor.restart_conversation(c.id)
-      assert pid1 != pid2
+      # Le BEAM peut reutiliser le meme pid si la termination + start sont tres
+      # rapprochees. On verifie l'invariant reel: l'ancien process est mort,
+      # le nouveau est vivant.
+      refute Process.alive?(pid1)
+      assert Process.alive?(pid2)
     end
   end
 
