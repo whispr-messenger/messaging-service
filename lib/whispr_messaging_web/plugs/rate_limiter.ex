@@ -50,11 +50,22 @@ defmodule WhisprMessagingWeb.Plugs.RateLimiter do
 
   # Private functions
 
+  # WHISPR-1387 : la cle priorise user_id (set par le plug Authenticate).
+  # Derriere Cloudflare ou un ingress k8s l'IP vue est celle du proxy partage,
+  # donc une cle IP-only met tous les users du meme CDN dans le meme bucket.
+  # Pour les routes non-authentifiees (login, OTP, /health) on garde un fallback
+  # IP, qui reste imparfait mais c'est le seul identifiant disponible.
   defp default_key(conn) do
-    # Use IP address as default key
-    ip = get_client_ip(conn)
     path = conn.request_path
-    "rate_limit:#{ip}:#{path}"
+
+    case conn.assigns[:user_id] do
+      user_id when is_binary(user_id) and user_id != "" ->
+        "rate_limit:user:#{user_id}:#{path}"
+
+      _ ->
+        ip = get_client_ip(conn)
+        "rate_limit:ip:#{ip}:#{path}"
+    end
   end
 
   defp get_client_ip(conn) do
