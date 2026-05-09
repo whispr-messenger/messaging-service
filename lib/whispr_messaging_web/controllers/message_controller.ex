@@ -340,12 +340,23 @@ defmodule WhisprMessagingWeb.MessageController do
         {:ok, message} ->
           message = WhisprMessaging.Repo.preload(message, :delivery_statuses)
 
+          payload = %{message: ConversationServer.serialize_message(message)}
+
           # Diffusion WebSocket sur le topic conversation
           Endpoint.broadcast(
             "conversation:#{message.conversation_id}",
             "message_edited",
-            %{message: ConversationServer.serialize_message(message)}
+            payload
           )
+
+          # Fanout aussi sur le canal user:* de chaque membre pour que la mise a jour
+          # remonte sur ConversationsListScreen meme quand la ChatScreen n est pas ouverte
+          # (meme pattern que message_deleted - WHISPR-1293/1301).
+          message.conversation_id
+          |> Conversations.list_conversation_members()
+          |> Enum.each(fn member ->
+            Endpoint.broadcast("user:#{member.user_id}", "message_edited", payload)
+          end)
 
           json(conn, %{
             data: render_message(message),

@@ -1,12 +1,18 @@
 defmodule WhisprMessaging.Moderation.SanctionsTest do
   use WhisprMessaging.DataCase, async: false
 
+  alias WhisprMessaging.Conversations
   alias WhisprMessaging.Moderation.Sanctions
 
   setup do
     conversation = create_test_conversation()
     user_id = create_test_user_id()
     admin_id = create_test_user_id()
+
+    # Ajouter target + admin comme membres pour permettre le fanout user:*
+    # (WHISPR-1307).
+    {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
+    {:ok, _} = Conversations.add_conversation_member(conversation.id, admin_id)
 
     %{conversation: conversation, user_id: user_id, admin_id: admin_id}
   end
@@ -101,6 +107,112 @@ defmodule WhisprMessaging.Moderation.SanctionsTest do
 
     test "returns nil when no active sanction", ctx do
       assert Sanctions.active_sanction_for(ctx.conversation.id, ctx.user_id) == nil
+    end
+  end
+
+  describe "broadcast fanout (WHISPR-1307)" do
+    test "mute fanout sur user:* de chaque membre", ctx do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.user_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.admin_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{ctx.conversation.id}")
+
+      {:ok, _sanction} =
+        Sanctions.create_sanction(%{
+          conversation_id: ctx.conversation.id,
+          user_id: ctx.user_id,
+          type: "mute",
+          reason: "spam",
+          issued_by: ctx.admin_id
+        })
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "moderation:user_muted"
+                     },
+                     1_000
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> target_topic,
+                       event: "moderation:user_muted",
+                       payload: target_payload
+                     },
+                     1_000
+
+      assert target_topic == ctx.user_id
+      assert target_payload.user_id == ctx.user_id
+      assert target_payload.conversation_id == ctx.conversation.id
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> admin_topic,
+                       event: "moderation:user_muted"
+                     },
+                     1_000
+
+      assert admin_topic == ctx.admin_id
+    end
+
+    test "kick fanout sur user:* de chaque membre", ctx do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.user_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.admin_id}")
+
+      {:ok, _sanction} =
+        Sanctions.create_sanction(%{
+          conversation_id: ctx.conversation.id,
+          user_id: ctx.user_id,
+          type: "kick",
+          reason: "harass",
+          issued_by: ctx.admin_id
+        })
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> target_topic,
+                       event: "moderation:user_kicked"
+                     },
+                     1_000
+
+      assert target_topic == ctx.user_id
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> admin_topic,
+                       event: "moderation:user_kicked"
+                     },
+                     1_000
+
+      assert admin_topic == ctx.admin_id
+    end
+
+    test "lift fanout sur user:* de chaque membre", ctx do
+      {:ok, sanction} =
+        Sanctions.create_sanction(%{
+          conversation_id: ctx.conversation.id,
+          user_id: ctx.user_id,
+          type: "mute",
+          reason: "spam",
+          issued_by: ctx.admin_id
+        })
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.user_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.admin_id}")
+
+      {:ok, _lifted} = Sanctions.lift_sanction(sanction.id)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> target_topic,
+                       event: "moderation:sanction_lifted",
+                       payload: target_payload
+                     },
+                     1_000
+
+      assert target_topic == ctx.user_id
+      assert target_payload.sanction_type == "mute"
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> admin_topic,
+                       event: "moderation:sanction_lifted"
+                     },
+                     1_000
+
+      assert admin_topic == ctx.admin_id
     end
   end
 
