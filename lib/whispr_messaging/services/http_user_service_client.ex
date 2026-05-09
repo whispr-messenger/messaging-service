@@ -1,12 +1,13 @@
 defmodule WhisprMessaging.Services.HttpUserServiceClient do
   @moduledoc """
-  Real implementation of `WhisprMessaging.Services.UserServiceBehaviour` that
-  talks to user-service over HTTP using the shared `x-internal-token` secret.
+  Implementation reelle de `WhisprMessaging.Services.UserServiceBehaviour`
+  qui dialogue avec user-service en HTTP via le secret partage
+  `x-internal-token`.
 
-  The base URL and token are read from
-  `Application.get_env(:whispr_messaging, :user_service_internal)` (see
-  `config/runtime.exs`), with env-var fallbacks `USER_SERVICE_INTERNAL_URL` and
-  `INTERNAL_API_TOKEN`.
+  L'URL de base et le token viennent de
+  `Application.get_env(:whispr_messaging, :user_service_internal)` (cf.
+  `config/runtime.exs`), avec fallback sur les env vars
+  `USER_SERVICE_INTERNAL_URL` et `INTERNAL_API_TOKEN`.
   """
 
   @behaviour WhisprMessaging.Services.UserServiceBehaviour
@@ -18,27 +19,28 @@ defmodule WhisprMessaging.Services.HttpUserServiceClient do
   @default_timeout_ms 5_000
 
   @doc """
-  Best-effort existence check.
+  Verification d'existence en best-effort.
 
-  user-service does not expose a dedicated `/users/:id/exists` endpoint today,
-  so we proxy via a self-paired call to `/internal/v1/contacts/check?ownerId=&
-  contactId=`. That endpoint always returns `200` (cf. user-service
-  `InternalContactsController` swagger doc), regardless of whether the user
-  exists. As a result this function effectively becomes a health-check of
-  user-service rather than a true existence check.
+  user-service n'expose pas aujourd'hui d'endpoint dedie
+  `/users/:id/exists`. On passe donc par un appel self-paire a
+  `/internal/v1/contacts/check?ownerId=&contactId=`. Cet endpoint repond
+  toujours `200` (cf. doc swagger du `InternalContactsController` cote
+  user-service), que l'utilisateur existe ou pas. Du coup cette fonction
+  fait surtout un healthcheck de user-service et pas une vraie verif
+  d'existence.
 
-  Behaviour:
+  Comportement :
 
-    * HTTP 200 → `{:ok, true}` (user-service is reachable; we cannot prove
-      non-existence with the current contract).
-    * 401/403 → `{:error, :unauthorized}` (token mismatch — logged at error
-      level).
-    * 5xx, timeout, network error → `{:error, :transient}` (caller decides
-      whether to retry or fail-closed).
+    * HTTP 200 -> `{:ok, true}` (user-service est joignable, on ne peut
+      pas prouver la non-existence avec le contrat actuel).
+    * 401/403 -> `{:error, :unauthorized}` (token qui ne matche pas, log
+      en error).
+    * 5xx, timeout, erreur reseau -> `{:error, :transient}` (a l'appelant
+      de decider entre retry ou fail-closed).
 
-  Follow-up: a dedicated existence endpoint should be added on user-service to
-  return 404 when the id is unknown. Tracked as a separate Jira ticket linked
-  from WHISPR-840.
+  A faire plus tard : ajouter un endpoint d'existence dedie cote
+  user-service qui renvoie 404 quand l'id est inconnu. Suivi sur un
+  ticket Jira distinct lie a WHISPR-840.
   """
   @impl true
   def check_user_exists(user_id) do
@@ -54,15 +56,17 @@ defmodule WhisprMessaging.Services.HttpUserServiceClient do
   end
 
   @doc """
-  Returns `{:ok, true}` when either user has blocked the other, `{:ok, false}`
-  when neither has, and `{:error, _}` on any failure.
+  Renvoie `{:ok, true}` si l'un des deux utilisateurs a bloque l'autre,
+  `{:ok, false}` si aucun des deux ne l'a fait, et `{:error, _}` en cas
+  d'echec.
 
-  Fail-safe policy: callers MUST treat `{:error, _}` as fail-closed (assume
-  blocked) — we do not return `{:ok, false}` on transient errors because that
-  would silently let blocked users initiate conversations whenever user-service
-  is degraded. The `with` chain in `WhisprMessaging.Conversations
-  .do_create_direct_conversation/3` already propagates the error, which short-
-  circuits the conversation creation.
+  Politique fail-safe : les appelants DOIVENT traiter `{:error, _}` comme
+  fail-closed (considerer comme bloque). On ne renvoie pas `{:ok, false}`
+  sur erreur transitoire, sinon des utilisateurs bloques pourraient
+  initier des conversations silencieusement quand user-service est
+  degrade. La chaine `with` dans
+  `WhisprMessaging.Conversations.do_create_direct_conversation/3`
+  propage deja l'erreur et court-circuite la creation.
   """
   @impl true
   def check_user_blocked(blocker_id, blocked_id) do
@@ -82,7 +86,7 @@ defmodule WhisprMessaging.Services.HttpUserServiceClient do
   end
 
   # ---------------------------------------------------------------------------
-  # Private helpers
+  # Helpers prives
   # ---------------------------------------------------------------------------
 
   defp do_check(owner_id, contact_id) do
