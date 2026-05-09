@@ -684,6 +684,23 @@ defmodule WhisprMessaging.MessagesTest do
       ghost_user = Ecto.UUID.generate()
       assert {:error, :not_found} = Messages.mark_unread(ghost_message, ghost_user)
     end
+
+    test "mark_unread/2 rollback last_read_at si delivery_status n'existe pas",
+         %{conversation: conversation, message: message} do
+      # WHISPR-1315 : si mark_message_unread fail (pas de delivery_status),
+      # on rollback la transaction donc last_read_at du membre n est pas modifie.
+      ghost_user = Ecto.UUID.generate()
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, ghost_user)
+
+      member = Conversations.get_conversation_member(conversation.id, ghost_user)
+      original_last_read = member.last_read_at
+
+      assert {:error, :not_found} = Messages.mark_unread(message.id, ghost_user)
+
+      refreshed = Conversations.get_conversation_member(conversation.id, ghost_user)
+      assert refreshed.last_read_at == original_last_read
+    end
   end
 
   describe "reactions" do

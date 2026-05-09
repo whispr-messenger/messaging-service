@@ -151,7 +151,7 @@ defmodule WhisprMessaging.Moderation.SanctionsTest do
       assert admin_topic == ctx.admin_id
     end
 
-    test "kick fanout sur user:* de chaque membre", ctx do
+    test "kick fanout sur user:* exclut le target (WHISPR-1315)", ctx do
       Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.user_id}")
       Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{ctx.admin_id}")
 
@@ -164,14 +164,7 @@ defmodule WhisprMessaging.Moderation.SanctionsTest do
           issued_by: ctx.admin_id
         })
 
-      assert_receive %Phoenix.Socket.Broadcast{
-                       topic: "user:" <> target_topic,
-                       event: "moderation:user_kicked"
-                     },
-                     1_000
-
-      assert target_topic == ctx.user_id
-
+      # L admin (qui n est pas le target) recoit l event sur son user:*
       assert_receive %Phoenix.Socket.Broadcast{
                        topic: "user:" <> admin_topic,
                        event: "moderation:user_kicked"
@@ -179,6 +172,17 @@ defmodule WhisprMessaging.Moderation.SanctionsTest do
                      1_000
 
       assert admin_topic == ctx.admin_id
+
+      # Le target kick ne fait plus partie de la conversation : il ne doit pas
+      # recevoir d event sur son user:* (filtre WHISPR-1315 : pas de fuite
+      # d info post-eviction).
+      target_topic = "user:#{ctx.user_id}"
+
+      refute_receive %Phoenix.Socket.Broadcast{
+                       topic: ^target_topic,
+                       event: "moderation:user_kicked"
+                     },
+                     200
     end
 
     test "lift fanout sur user:* de chaque membre", ctx do

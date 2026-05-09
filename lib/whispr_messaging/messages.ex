@@ -465,11 +465,19 @@ defmodule WhisprMessaging.Messages do
   gating `read_receipts` du reader.
   """
   def mark_unread(message_id, user_id) do
-    with {:ok, message} <- get_message(message_id),
-         {:ok, _delivery_status} <- mark_message_unread(message_id, user_id) do
-      rewind_member_last_read(message, user_id)
-      {:ok, message}
-    end
+    # WHISPR-1315 : on enveloppe les 2 ecritures (delivery_status + member.last_read_at)
+    # dans une meme transaction. Sinon un crash entre les 2 laisse l'etat incoherent
+    # (delivery_status reverte mais last_read_at toujours en avance => l'item ne
+    # remonte plus en unread dans l'UI au prochain refresh).
+    Repo.transaction(fn ->
+      with {:ok, message} <- get_message(message_id),
+           {:ok, _delivery_status} <- mark_message_unread(message_id, user_id) do
+        rewind_member_last_read(message, user_id)
+        message
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   defp rewind_member_last_read(%Message{conversation_id: conv_id, sent_at: sent_at}, user_id)
@@ -509,14 +517,17 @@ defmodule WhisprMessaging.Messages do
         payload
       )
 
+      # On exclut le reader du fanout user:*, il recoit deja l event sur conversation:*.
       conversation_id
       |> Conversations.list_conversation_members()
       |> Enum.each(fn member ->
-        WhisprMessagingWeb.Endpoint.broadcast(
-          "user:#{member.user_id}",
-          "message_unread",
-          payload
-        )
+        if member.user_id != user_id do
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{member.user_id}",
+            "message_unread",
+            payload
+          )
+        end
       end)
     end
 
