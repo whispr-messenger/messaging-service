@@ -26,7 +26,11 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   # l'user assis derriere ce socket). Le filtrage cote pid est le seul
   # endroit ou on connait l'identite du destinataire ; un broadcast topic
   # `conversation:<id>` ne sait pas qui est sur le canal.
-  intercept ["new_message", "message_edited", "reaction_added", "reaction_removed"]
+  #
+  # WHISPR-1390: on intercept aussi `force_leave` pour fermer le socket
+  # du membre kick (sinon il reste joined apres remove_member et peut
+  # continuer a envoyer des messages jusqu'a leave manuel).
+  intercept ["new_message", "message_edited", "reaction_added", "reaction_removed", "force_leave"]
 
   @impl true
   def join("conversation:" <> conversation_id, _payload, socket) do
@@ -108,6 +112,22 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     end
   end
 
+  # WHISPR-1390: kick force le close du socket cote membre cible. Sans
+  # ce stop, le user reste joined et peut continuer a `handle_in` (send
+  # message, edit, react) jusqu'a leave manuel. Les autres membres
+  # recoivent l'event mais ne le pushent pas a leur client (pas
+  # d'interet UI : ils ont deja `member_removed`).
+  def handle_out("force_leave", payload, socket) do
+    target_id = Map.get(payload, :user_id) || Map.get(payload, "user_id")
+
+    if target_id == socket.assigns.user_id do
+      push(socket, "force_leave", payload)
+      {:stop, :shutdown, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_info(:after_join, socket) do
     conversation_id = socket.assigns.conversation_id
@@ -181,6 +201,13 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, {:duplicate, message}} ->
         # Return existing message as success, but don't re-notify or re-broadcast
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+
+      # WHISPR-1390: refus cote serveur quand le sender a une sanction
+      # active sur la conversation. On retourne une raison stable au
+      # client pour qu'il puisse afficher un message dedie ("vous etes
+      # mute") plutot qu'une erreur generique.
+      {:error, :sanctioned} ->
+        {:reply, {:error, %{reason: "sanctioned"}}, socket}
 
       {:error, reason}
       when reason in [

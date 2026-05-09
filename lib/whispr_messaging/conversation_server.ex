@@ -15,6 +15,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Events.MessagingEvents
+  alias WhisprMessaging.Moderation.Sanctions
   alias WhisprMessaging.Services.{NotificationService, UserService}
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
@@ -460,21 +461,30 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp process_message(message_attrs, state) do
-    # Validate and create message
-    case Messages.create_message(message_attrs) do
-      {:ok, message} ->
-        # Create delivery statuses
-        Messages.create_delivery_statuses_for_conversation(
-          message.id,
-          state.conversation_id,
-          message.sender_id
-        )
+    # WHISPR-1390: verifie sanction active sur reception WS pour eviter
+    # bypass via socket deja etabli. Sans ce check, un user mute /
+    # shadow_restrict peut continuer a envoyer des messages tant qu'il
+    # ne quitte pas le canal (le check sanction n'est sinon fait qu'au
+    # join via verify_conversation_access).
+    sender_id = message_attrs[:sender_id] || message_attrs["sender_id"]
 
-        # Update metrics
-        new_metrics = update_message_metrics(state.metrics)
-        new_state = %{state | metrics: new_metrics}
+    with :ok <- check_sender_not_sanctioned(state.conversation_id, sender_id),
+         {:ok, message} <- Messages.create_message(message_attrs) do
+      # Create delivery statuses
+      Messages.create_delivery_statuses_for_conversation(
+        message.id,
+        state.conversation_id,
+        message.sender_id
+      )
 
-        {:ok, message, new_state}
+      # Update metrics
+      new_metrics = update_message_metrics(state.metrics)
+      new_state = %{state | metrics: new_metrics}
+
+      {:ok, message, new_state}
+    else
+      {:error, :sanctioned} = err ->
+        err
 
       {:error, %Ecto.Changeset{} = changeset} ->
         handle_message_creation_error(changeset, message_attrs)
@@ -483,6 +493,30 @@ defmodule WhisprMessaging.ConversationServer do
         # Signature verification errors (e.g. :invalid_signature,
         # :missing_signature_fields, :invalid_key_length, etc.)
         {:error, reason}
+    end
+  end
+
+  # WHISPR-1390: refuse l'envoi si le sender a une sanction active
+  # (mute / shadow_restrict / kick) sur cette conversation. Le check
+  # est volontairement strict : toute sanction active bloque l'envoi
+  # cote serveur, peu importe le type. fail-closed sur erreur DB pour
+  # ne pas creer de bypass silencieux.
+  defp check_sender_not_sanctioned(_conversation_id, nil), do: :ok
+
+  defp check_sender_not_sanctioned(conversation_id, sender_id) do
+    case Sanctions.active_sanction_for(conversation_id, sender_id) do
+      nil ->
+        :ok
+
+      sanction ->
+        Logger.info("Message rejete: sanction active",
+          sanction_type: sanction.type,
+          conversation_id: conversation_id,
+          sender_id: sender_id,
+          domain: :moderation
+        )
+
+        {:error, :sanctioned}
     end
   end
 
@@ -637,6 +671,17 @@ defmodule WhisprMessaging.ConversationServer do
         user_id: user_id,
         conversation_id: state.conversation_id
       })
+    )
+
+    # WHISPR-1390: force le close du socket du membre kick. Le channel
+    # intercept l'event et appelle {:stop, :shutdown, socket} si le
+    # user assis derriere le socket est la cible. Sans ca, le membre
+    # reste joined apres remove_member et peut continuer a envoyer
+    # des messages via le socket deja etabli.
+    Endpoint.broadcast(
+      "conversation:#{state.conversation_id}",
+      "force_leave",
+      %{user_id: user_id, reason: "kicked"}
     )
   end
 
