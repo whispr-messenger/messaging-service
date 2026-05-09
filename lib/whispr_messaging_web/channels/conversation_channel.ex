@@ -169,11 +169,24 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.edit_message(message_id, user_id, new_content, metadata || %{}) do
       {:ok, message} ->
-        broadcast(socket, "message_edited", %{
-          message: serialize_message(message)
-        })
+        payload = %{message: serialize_message(message)}
 
-        {:reply, {:ok, %{message: serialize_message(message)}}, socket}
+        broadcast(socket, "message_edited", payload)
+
+        # Fanout sur le canal user:* de chaque membre pour que ConversationsListScreen
+        # mette a jour le last_message meme quand la ChatScreen n est pas ouverte
+        # (meme pattern que message_deleted - WHISPR-1293/1301).
+        message.conversation_id
+        |> Conversations.list_conversation_members()
+        |> Enum.each(fn member ->
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{member.user_id}",
+            "message_edited",
+            payload
+          )
+        end)
+
+        {:reply, {:ok, payload}, socket}
 
       {:error, :not_found} ->
         {:reply, {:error, %{reason: "not_found"}}, socket}
