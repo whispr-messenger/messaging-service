@@ -70,5 +70,49 @@ defmodule WhisprMessagingWeb.Plugs.AuthenticateTest do
 
       refute Map.has_key?(conn.assigns, :user_id)
     end
+
+    test "leaves user_id unset when bearer JWT header has no kid (WHISPR-1239)" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT"})
+
+      conn =
+        build_conn(:get, "/")
+        |> put_req_header("authorization", "Bearer #{token}")
+        |> Authenticate.call([])
+
+      refute Map.has_key?(conn.assigns, :user_id)
+    end
+
+    test "leaves user_id unset when bearer JWT header has empty kid (WHISPR-1239)" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => ""})
+
+      conn =
+        build_conn(:get, "/")
+        |> put_req_header("authorization", "Bearer #{token}")
+        |> Authenticate.call([])
+
+      refute Map.has_key?(conn.assigns, :user_id)
+    end
+
+    test "leaves user_id unset when bearer JWT kid is unknown (WHISPR-1239)" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => "kid-absent-du-cache"})
+
+      conn =
+        build_conn(:get, "/")
+        |> put_req_header("authorization", "Bearer #{token}")
+        |> Authenticate.call([])
+
+      refute Map.has_key?(conn.assigns, :user_id)
+    end
+  end
+
+  # Construit un JWT structurellement valide avec header arbitraire.
+  # Payload et signature sont des placeholders ; la verification cryptographique
+  # n'est jamais atteinte dans ces tests (rejet en amont sur kid manquant /
+  # cache vide).
+  defp forge_jwt(header_map) do
+    header = header_map |> Jason.encode!() |> Base.url_encode64(padding: false)
+    payload = %{"sub" => "user-1"} |> Jason.encode!() |> Base.url_encode64(padding: false)
+    signature = Base.url_encode64("fake-sig", padding: false)
+    "#{header}.#{payload}.#{signature}"
   end
 end

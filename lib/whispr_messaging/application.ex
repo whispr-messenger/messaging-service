@@ -42,7 +42,7 @@ defmodule WhisprMessaging.Application do
       {Finch, name: WhisprMessaging.Finch},
 
       # JWKS public-key cache — must start before the Endpoint so that
-      # the Authenticate plug can call JwksCache.get_signing_key/0
+      # the Authenticate plug can call JwksCache.get_signing_key/1
       WhisprMessaging.JwksCache,
 
       # PubSub for Phoenix Channels
