@@ -86,6 +86,15 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     {:noreply, socket}
   end
 
+  # Cleanup automatique du typing indicator apres timeout. Sans ce untrack,
+  # un client qui arrete de taper sans envoyer `typing_stop` laisse l entree
+  # dans Presence indefiniment (cf WHISPR-1352).
+  @impl true
+  def handle_info({:stop_typing, user_id, _conversation_id}, socket) do
+    Presence.stop_typing(socket, user_id)
+    {:noreply, socket}
+  end
+
   # Handle new message sending
   @impl true
   def handle_in(
