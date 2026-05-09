@@ -452,20 +452,9 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      # Le sender doit recevoir l event sur son canal user:*
-      assert_receive %Phoenix.Socket.Broadcast{
-                       topic: "user:" <> sender_topic,
-                       event: "message_edited",
-                       payload: %{message: payload_sender}
-                     },
-                     1_000
-
-      assert sender_topic == user1_id
-      assert payload_sender["id"] == message.id
-      assert payload_sender["conversationId"] == conversation.id
-
-      # L autre membre du groupe doit aussi recevoir l event meme sans avoir
-      # la ChatScreen ouverte sur cette conversation.
+      # WHISPR-1315 : on exclut l editeur (sender du message d origine) du
+      # fanout user:* sinon il recoit l event 2x (une fois sur conversation:*,
+      # une fois sur son propre user:*). Seul user2 doit recevoir sur user:*.
       assert_receive %Phoenix.Socket.Broadcast{
                        topic: "user:" <> recipient_topic,
                        event: "message_edited",
@@ -475,6 +464,16 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
 
       assert recipient_topic == user2_id
       assert payload_recipient["id"] == message.id
+      assert payload_recipient["conversationId"] == conversation.id
+
+      # Le sender ne doit PAS recevoir d event sur user:* (filtre WHISPR-1315).
+      sender_topic = "user:#{user1_id}"
+
+      refute_receive %Phoenix.Socket.Broadcast{
+                       topic: ^sender_topic,
+                       event: "message_edited"
+                     },
+                     200
     end
 
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
@@ -627,21 +626,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         )
         |> json_response(200)
 
-      # Le sender doit recevoir l event sur son canal user:*
-      assert_receive %Phoenix.Socket.Broadcast{
-                       topic: "user:" <> sender_topic,
-                       event: "message_deleted",
-                       payload: payload_sender
-                     },
-                     1_000
-
-      assert sender_topic == user1_id
-      assert payload_sender["messageId"] == message.id
-      assert payload_sender["conversationId"] == conversation.id
-      assert payload_sender["deleteForEveryone"] == true
-
-      # L autre membre du groupe doit aussi recevoir l event meme sans avoir
-      # la ChatScreen ouverte sur cette conversation.
+      # WHISPR-1315 : le sender est exclu du fanout user:* (il recoit deja
+      # via conversation:*). Seul user2 doit recevoir sur user:*.
       assert_receive %Phoenix.Socket.Broadcast{
                        topic: "user:" <> recipient_topic,
                        event: "message_deleted",
@@ -653,6 +639,15 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert payload_recipient["messageId"] == message.id
       assert payload_recipient["conversationId"] == conversation.id
       assert payload_recipient["deleteForEveryone"] == true
+
+      # Le sender ne doit PAS recevoir d event sur user:* (filtre WHISPR-1315).
+      sender_topic = "user:#{user1_id}"
+
+      refute_receive %Phoenix.Socket.Broadcast{
+                       topic: ^sender_topic,
+                       event: "message_deleted"
+                     },
+                     200
     end
 
     test "soft delete (pour moi) ne diffuse PAS sur user:* (WHISPR-1293)", %{
