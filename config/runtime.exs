@@ -157,12 +157,19 @@ config :whispr_messaging,
 # JWT / JWKS Configuration (WHISPR-386)
 # Dynamic public key loading from auth-service JWKS endpoint.
 # Replaces the static JWT_PUBLIC_KEY_PATH / PEM volume mount.
+#
+# WHISPR-1241: en prod, refuser le boot si l'URL n'est pas HTTPS pour
+# bloquer un mis-deploiement avec une URL en clair.
+jwt_jwks_url =
+  System.get_env(
+    "JWT_JWKS_URL",
+    "http://auth-service/auth/.well-known/jwks.json"
+  )
+
+WhisprMessaging.JwksUrlValidator.validate!(jwt_jwks_url, config_env())
+
 config :whispr_messaging, :jwks,
-  url:
-    System.get_env(
-      "JWT_JWKS_URL",
-      "http://auth-service/auth/.well-known/jwks.json"
-    ),
+  url: jwt_jwks_url,
   refresh_ms: System.get_env("JWT_JWKS_REFRESH_MS", "3600000") |> String.to_integer()
 
 # ---------------------------------------------------------------------------
