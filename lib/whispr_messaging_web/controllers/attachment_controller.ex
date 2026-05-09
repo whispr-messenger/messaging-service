@@ -184,7 +184,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
-         {:ok, file_content} <- read_file(attachment.file_path) do
+         {:ok, file_content} <- read_file(local_path(attachment)) do
       Logger.info("File downloaded", attachment_id: attachment.id, domain: :attachment)
 
       conn
@@ -275,7 +275,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_permission(message, user_id),
-         :ok <- delete_file(attachment.file_path),
+         :ok <- delete_file(local_path(attachment)),
          {:ok, _} <- Messages.delete_attachment(attachment_id) do
       Logger.info("Attachment deleted", attachment_id: attachment_id, domain: :attachment)
 
@@ -356,6 +356,12 @@ defmodule WhisprMessagingWeb.AttachmentController do
       file_size: file_size,
       mime_type: upload.content_type
     })
+  end
+
+  # le schema stocke le chemin via storage_url ("/uploads/<uuid>.<ext>") -
+  # on reconstruit le chemin filesystem local pour read/delete sur disque.
+  defp local_path(%{storage_url: storage_url}) when is_binary(storage_url) do
+    Path.join(@upload_dir, Path.basename(storage_url))
   end
 
   defp read_file(file_path) do

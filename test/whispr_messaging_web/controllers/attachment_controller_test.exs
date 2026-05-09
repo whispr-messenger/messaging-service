@@ -143,16 +143,33 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
       |> json_response(404)
     end
 
-    test "controller source declares cache-control and etag headers on the success branch" do
-      # le download success path actuel raise KeyError sur attachment.file_path
-      # (field absent du schema, bug pre-existant non lie a ce ticket).
-      # On verifie au niveau source que les headers cache + etag sont bien
-      # cables sur la pipe de reussite afin d'eviter une regression silencieuse.
-      source =
-        File.read!("lib/whispr_messaging_web/controllers/attachment_controller.ex")
+    test "returns 200 with file content for the message owner", ctx do
+      filename = "#{Ecto.UUID.generate()}.txt"
+      file_path = Path.join(@upload_dir, filename)
+      File.write!(file_path, "hello-download")
 
-      assert source =~ ~s|put_resp_header("cache-control", "private, max-age=3600")|
-      assert source =~ ~s|put_resp_header("etag", "\\"#\{attachment.id\}\\"")|
+      {:ok, attachment} =
+        Messages.create_attachment(%{
+          message_id: ctx.message.id,
+          filename: "doc.txt",
+          file_type: "document",
+          mime_type: "text/plain",
+          file_size: 14,
+          storage_url: "/uploads/#{filename}"
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> get(~p"/messaging/api/v1/attachments/#{attachment.id}/download")
+
+      assert conn.status == 200
+      assert conn.resp_body == "hello-download"
+      assert get_resp_header(conn, "etag") == ["\"#{attachment.id}\""]
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=3600"]
+    after
+      File.rm_rf!(@upload_dir)
+      File.mkdir_p!(@upload_dir)
     end
   end
 
