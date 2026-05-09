@@ -15,7 +15,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Events.MessagingEvents
-  alias WhisprMessaging.Services.NotificationService
+  alias WhisprMessaging.Services.{NotificationService, UserService}
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
   alias WhisprMessagingWeb.{Endpoint, Presence}
 
@@ -82,6 +82,17 @@ defmodule WhisprMessaging.ConversationServer do
   """
   def mark_read(conversation_id, user_id, message_id \\ nil) do
     GenServer.cast(via_tuple(conversation_id), {:mark_read, user_id, message_id})
+  end
+
+  @doc """
+  WHISPR-1304: revert d'un mark_read sur un message specifique. Le
+  reader marque "comme non-lu" un message qu'il avait deja lu, le
+  serveur efface `read_at` en DB et broadcast `message_unread` aux
+  autres membres (gate par le flag `read_receipts` du reader, comme
+  pour mark_read).
+  """
+  def mark_unread(conversation_id, user_id, message_id) do
+    GenServer.cast(via_tuple(conversation_id), {:mark_unread, user_id, message_id})
   end
 
   @doc """
@@ -265,13 +276,60 @@ defmodule WhisprMessaging.ConversationServer do
       end
     end)
 
-    # Broadcast read receipt
-    broadcast_read_receipt(user_id, message_id, state)
+    # WHISPR-1304: gating WhatsApp punitive. On consulte le flag
+    # `read_receipts` du reader cote user-service avant de broadcast.
+    # Si l'utilisateur les a desactives -> on ecrit read_at en DB
+    # (pour son propre badge / unread_count) mais on skip le broadcast
+    # vers les autres membres. Sur erreur transitoire on fail-open
+    # (broadcast quand meme): une indispo de user-service ne doit pas
+    # casser la fonctionnalite pour les users qui l'ont activee.
+    if read_receipts_allowed?(user_id) do
+      broadcast_read_receipt(user_id, message_id, state)
+    else
+      Logger.debug("message_read broadcast skipped (reader privacy)",
+        user_id: user_id,
+        conversation_id: state.conversation_id
+      )
+    end
 
     # WHISPR-1109 follow-up: decrement the reader's badge in notification-service.
     MessagingEvents.publish_message_read(state.conversation_id, user_id, message_id)
 
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:mark_unread, user_id, message_id}, state) do
+    # WHISPR-1304: marquer comme non-lu cote backend = revert de la
+    # row delivery_status (read_at -> nil) + rewind `last_read_at`
+    # juste avant le sent_at du message + broadcast `message_unread`
+    # symetrique a mark_read pour que les autres membres et les autres
+    # devices du user remettent l'item en "unread" dans leur UI.
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      Messages.mark_unread(message_id, user_id)
+    end)
+
+    # Meme gating privacy que mark_read: si le user a desactive ses
+    # read_receipts, on ne signale pas non plus le mark_unread.
+    if read_receipts_allowed?(user_id) do
+      broadcast_unread_receipt(user_id, message_id, state)
+    else
+      Logger.debug("message_unread broadcast skipped (reader privacy)",
+        user_id: user_id,
+        conversation_id: state.conversation_id
+      )
+    end
+
+    {:noreply, state}
+  end
+
+  defp read_receipts_allowed?(user_id) do
+    case UserService.get_privacy_settings(user_id) do
+      {:ok, %{read_receipts: false}} -> false
+      # fail-open : sur error transitoire ou champ absent, on broadcast
+      # comme avant le gating WHISPR-1304.
+      _ -> true
+    end
   end
 
   # WHISPR-1058: watchdog fired — the client never sent `typing=false`.
@@ -554,6 +612,27 @@ defmodule WhisprMessaging.ConversationServer do
         timestamp: DateTime.utc_now()
       })
     )
+  end
+
+  # WHISPR-1304: broadcast `message_unread` symetrique a `message_read`.
+  # Diffuse sur le topic conversation et fanout sur le canal user:* de
+  # chaque membre pour que ConversationsListScreen remette l'item en
+  # "unread" meme quand ChatScreen n'est pas ouverte (meme pattern
+  # que la suppression dans WHISPR-1301).
+  defp broadcast_unread_receipt(user_id, message_id, state) do
+    payload =
+      camelize_keys(%{
+        user_id: user_id,
+        message_id: message_id,
+        conversation_id: state.conversation_id,
+        timestamp: DateTime.utc_now()
+      })
+
+    Endpoint.broadcast("conversation:#{state.conversation_id}", "message_unread", payload)
+
+    Enum.each(state.members, fn member ->
+      Endpoint.broadcast("user:#{member.user_id}", "message_unread", payload)
+    end)
   end
 
   defp broadcast_settings_updated(settings, state) do

@@ -621,6 +621,69 @@ defmodule WhisprMessaging.MessagesTest do
       assert Enum.count(statuses) == 3
       assert Enum.all?(statuses, fn s -> s.read_at != nil end)
     end
+
+    # WHISPR-1304: tests du mark_unread (revert d'un mark_read)
+    test "mark_message_unread/2 repasse read_at a nil et garde delivered_at", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      # marque comme lu (pose read_at + delivered_at)
+      assert {:ok, %{read_at: read_at, delivered_at: delivered_at}} =
+               Messages.mark_message_read(message.id, user2_id)
+
+      assert read_at != nil
+      assert delivered_at != nil
+
+      # revert
+      assert {:ok, delivery_status} = Messages.mark_message_unread(message.id, user2_id)
+      assert delivery_status.read_at == nil
+      # delivered_at est garde - le message a ete livre, c'est juste son
+      # etat "lu" qui est revert
+      assert delivery_status.delivered_at != nil
+    end
+
+    test "mark_message_unread/2 renvoie :not_found quand il n'y a aucun delivery_status", %{
+      message: message
+    } do
+      ghost_user = Ecto.UUID.generate()
+      assert {:error, :not_found} = Messages.mark_message_unread(message.id, ghost_user)
+    end
+
+    test "mark_unread/2 revert read_at + rewind last_read_at du membre", %{
+      conversation: conversation,
+      message: message,
+      user2_id: user2_id
+    } do
+      # le user2 marque le message comme lu
+      assert {:ok, _} = Messages.mark_message_read(message.id, user2_id)
+      member = Conversations.get_conversation_member(conversation.id, user2_id)
+      Conversations.mark_member_read(member)
+
+      # revert
+      assert {:ok, %{id: returned_id}} = Messages.mark_unread(message.id, user2_id)
+      assert returned_id == message.id
+
+      # delivery_status a read_at = nil
+      delivery_status =
+        WhisprMessaging.Repo.get_by(WhisprMessaging.Messages.DeliveryStatus,
+          message_id: message.id,
+          user_id: user2_id
+        )
+
+      assert delivery_status.read_at == nil
+
+      # last_read_at du membre est rewind avant le sent_at du message
+      refreshed_member = Conversations.get_conversation_member(conversation.id, user2_id)
+
+      assert refreshed_member.last_read_at == nil or
+               DateTime.compare(refreshed_member.last_read_at, message.sent_at) == :lt
+    end
+
+    test "mark_unread/2 renvoie :not_found quand le message n'existe pas" do
+      ghost_message = Ecto.UUID.generate()
+      ghost_user = Ecto.UUID.generate()
+      assert {:error, :not_found} = Messages.mark_unread(ghost_message, ghost_user)
+    end
   end
 
   describe "reactions" do

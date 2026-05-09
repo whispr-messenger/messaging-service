@@ -126,6 +126,9 @@ defmodule WhisprMessagingWeb.Router do
     # Per-message delivery receipt (WHISPR-1059)
     patch "/messages/:id/receipt", MessageController, :receipt
 
+    # Mark message as unread (WHISPR-1304 - revert d'un mark_read)
+    post "/messages/:id/unread", MessageController, :unread
+
     # Message reactions
     get "/messages/:id/reactions", ReactionController, :index
     post "/messages/:id/reactions", ReactionController, :create
