@@ -11,7 +11,11 @@ defmodule WhisprMessagingWeb.Presence do
     otp_app: :whispr_messaging,
     pubsub_server: WhisprMessaging.PubSub
 
-  require Logger
+  # Delai apres lequel le typing indicator est automatiquement nettoye
+  # si le client n a pas explicitement envoye `typing_stop`. Le message
+  # `{:stop_typing, user_id}` est envoye au process appelant (channel)
+  # qui doit le router vers `Presence.stop_typing/2` dans son `handle_info`.
+  @typing_timeout_ms 10_000
 
   @doc """
   Tracks a user's presence in a specific context (conversation or global).
@@ -81,6 +85,11 @@ defmodule WhisprMessagingWeb.Presence do
 
   @doc """
   Tracks typing indicators with automatic cleanup.
+
+  Apres `@typing_timeout_ms` ms, envoie `{:stop_typing, user_id, conversation_id}`
+  au process appelant (typiquement un channel). Le channel doit gerer ce message
+  dans son `handle_info/2` et appeler `Presence.stop_typing/2` pour untrack
+  reellement le user (sinon le typing indicator reste dans l ETS de Presence).
   """
   def track_typing(socket, user_id, conversation_id) do
     meta = %{
@@ -89,10 +98,9 @@ defmodule WhisprMessagingWeb.Presence do
       started_at: System.system_time(:second)
     }
 
-    track(socket, "typing:#{user_id}", meta)
+    {:ok, _ref} = track(socket, "typing:#{user_id}", meta)
 
-    # Schedule automatic cleanup after 10 seconds
-    Process.send_after(self(), {:stop_typing, user_id, conversation_id}, 10_000)
+    Process.send_after(self(), {:stop_typing, user_id, conversation_id}, @typing_timeout_ms)
   end
 
   @doc """
@@ -186,24 +194,5 @@ defmodule WhisprMessagingWeb.Presence do
       platform: Map.get(meta, :platform, "unknown"),
       version: Map.get(meta, :version, "unknown")
     }
-  end
-
-  # GenServer callbacks for cleanup tasks
-
-  def handle_info({:stop_typing, user_id, conversation_id}, state) do
-    # Clean up stale typing indicators
-    Logger.debug("Auto-stopping typing indicator",
-      user_id: user_id,
-      conversation_id: conversation_id,
-      domain: :presence
-    )
-
-    # This would be handled by the channel process that started the typing
-    # The message is mainly for logging and monitoring
-    {:noreply, state}
-  end
-
-  def handle_info(_msg, state) do
-    {:noreply, state}
   end
 end
