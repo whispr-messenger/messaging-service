@@ -386,6 +386,39 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
 
       assert response["errors"] != nil
     end
+
+    # WHISPR-843 : une erreur inattendue (atom Elixir) ne doit pas fuir
+    # via inspect(reason) dans la reponse JSON. On renvoie un message
+    # generique, et la raison reelle part dans les logs.
+    test "hides internal error details when group creation fails unexpectedly", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      attrs = %{
+        "type" => "group",
+        "name" => "Whatever",
+        "member_ids" => [user2_id],
+        "metadata" => %{}
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      with_mock Conversations,
+                [:passthrough],
+                create_group_conversation: fn _creator, _members, _name, _ext, _meta ->
+                  {:error, :secret_internal_atom}
+                end do
+        response =
+          post(conn, ~p"/messaging/api/v1/conversations", attrs)
+          |> json_response(422)
+
+        assert response["error"] == "internal_server_error"
+        refute response["error"] =~ "secret_internal_atom"
+      end
+    end
   end
 
   describe "GET /messaging/api/v1/conversations/:id" do
@@ -567,6 +600,28 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["isMuted"] == true
       assert response["data"]["isPinned"] == false
       assert response["data"]["isArchived"] == false
+    end
+
+    # WHISPR-847 : sans authentification, l'endpoint ne doit JAMAIS renvoyer
+    # le contenu de la conversation. La branche legacy revele les metadonnees
+    # (type, name, members count via metadata) a un appelant non authentifie.
+    test "returns 401 without authentication", %{user1_id: user1_id} do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+
+      conn = build_conn() |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(401)
+
+      assert response["error"] == "authentication_required"
     end
   end
 
