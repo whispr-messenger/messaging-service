@@ -15,6 +15,9 @@ defmodule WhisprMessaging.Invites do
   # Default TTL: 7 days.
   @default_ttl_seconds 7 * 24 * 3600
 
+  # Plafond de membres actifs par groupe (anti-flood via invite link).
+  @max_group_members 256
+
   @doc """
   Generates a new invite token for a group conversation.
 
@@ -55,33 +58,46 @@ defmodule WhisprMessaging.Invites do
   Joins the authenticated user to a conversation referenced by an invite token.
 
   Returns `{:ok, %{conversation: c, member: m, already_member: boolean}}` on
-  success, `{:error, :not_found}` when the token is unknown, revoked, or
-  expired.
+  success. Erreurs possibles :
+    * `{:error, :not_found}` — token inconnu, révoqué, ou expiré
+    * `{:error, :previously_kicked}` — l'utilisateur a déjà été kické du groupe ;
+      un re-invite explicite par un admin est requis (pas de réactivation silencieuse)
+    * `{:error, :member_cap_reached}` — le groupe a atteint le plafond `@max_group_members`
   """
   def join_by_token(token, user_id) when is_binary(token) and is_binary(user_id) do
-    with {:ok, conversation} <- fetch_by_token(token),
-         :ok <- ensure_not_expired(conversation) do
-      case Conversations.get_conversation_member(conversation.id, user_id) do
-        %ConversationMember{is_active: true} = member ->
-          {:ok, %{conversation: conversation, member: member, already_member: true}}
-
-        %ConversationMember{is_active: false} = member ->
-          {:ok, reactivated} =
-            member
-            |> ConversationMember.changeset(%{is_active: true})
-            |> Repo.update()
-
-          {:ok, %{conversation: conversation, member: reactivated, already_member: false}}
-
-        nil ->
-          case Conversations.add_conversation_member(conversation.id, user_id) do
-            {:ok, member} ->
-              {:ok, %{conversation: conversation, member: member, already_member: false}}
-
-            other ->
-              other
-          end
+    Repo.transaction(fn ->
+      with {:ok, conversation} <- fetch_by_token(token),
+           :ok <- ensure_not_expired(conversation),
+           {:ok, result} <- do_join(conversation, user_id) do
+        result
+      else
+        {:error, reason} -> Repo.rollback(reason)
       end
+    end)
+  end
+
+  defp do_join(conversation, user_id) do
+    case Conversations.get_conversation_member(conversation.id, user_id) do
+      %ConversationMember{is_active: true} = member ->
+        {:ok, %{conversation: conversation, member: member, already_member: true}}
+
+      # un kické ne peut pas se re-inviter via le lien : il faut un re-invite admin explicite
+      %ConversationMember{is_active: false} ->
+        {:error, :previously_kicked}
+
+      nil ->
+        with :ok <- ensure_under_member_cap(conversation.id),
+             {:ok, member} <- Conversations.add_conversation_member(conversation.id, user_id) do
+          {:ok, %{conversation: conversation, member: member, already_member: false}}
+        end
+    end
+  end
+
+  defp ensure_under_member_cap(conversation_id) do
+    if Conversations.count_conversation_members(conversation_id) >= @max_group_members do
+      {:error, :member_cap_reached}
+    else
+      :ok
     end
   end
 
