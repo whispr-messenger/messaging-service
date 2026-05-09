@@ -554,8 +554,21 @@ defmodule WhisprMessagingWeb.MessageController do
          {:ok, delivery_status} <- apply_receipt(id, user_id, status) do
       # WHISPR-1109: notify notification-service so the reader's badge
       # decrements. Only the "read" transition matters for unread counts.
+      # WHISPR-1392: re-check que le message est encore actif juste avant
+      # le broadcast. Si un autre user a declenche delete_for_everyone entre
+      # le snapshot et ici, on skip le publish pour eviter un badge drift
+      # cote notification-service (decrement sur message disparu).
       if status == "read" do
-        MessagingEvents.publish_message_read(message.conversation_id, user_id, id)
+        case Messages.get_active_message(id) do
+          {:ok, _fresh} ->
+            MessagingEvents.publish_message_read(message.conversation_id, user_id, id)
+
+          {:error, :not_found} ->
+            Logger.info("receipt: message deleted before publish, skip broadcast",
+              message_id: id,
+              user_id: user_id
+            )
+        end
       end
 
       json(conn, %{
