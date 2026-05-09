@@ -121,6 +121,16 @@ defmodule WhisprMessaging.Messages.MessageTest do
       assert %Ecto.Query{} = Message.search_messages_query(Ecto.UUID.generate(), "hello")
     end
 
+    test "search_messages_query/3 applique un LIMIT par defaut a 50" do
+      query = Message.search_messages_query(Ecto.UUID.generate(), "hello")
+      assert %Ecto.Query{limit: %Ecto.Query.LimitExpr{params: [{50, :integer}]}} = query
+    end
+
+    test "search_messages_query/3 cap le LIMIT custom a 100" do
+      query = Message.search_messages_query(Ecto.UUID.generate(), "hello", limit: 500)
+      assert %Ecto.Query{limit: %Ecto.Query.LimitExpr{params: [{100, :integer}]}} = query
+    end
+
     test "with_relations_query/1" do
       assert %Ecto.Query{} = Message.with_relations_query(Ecto.UUID.generate())
     end

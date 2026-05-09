@@ -63,9 +63,7 @@ defmodule WhisprMessagingWeb.MessageController do
            true <- Messages.user_can_access_message?(conversation_id, user_id) do
         messages =
           if is_binary(search_term) and search_term != "" do
-            conversation_id
-            |> Messages.search_messages(search_term, user_id)
-            |> Enum.take(limit)
+            Messages.search_messages(conversation_id, search_term, user_id, limit: limit)
           else
             Messages.list_recent_messages(conversation_id, limit, before_timestamp, user_id)
           end
