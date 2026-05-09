@@ -283,14 +283,21 @@ defmodule WhisprMessaging.ConversationServer do
     # vers les autres membres. Sur erreur transitoire on fail-open
     # (broadcast quand meme): une indispo de user-service ne doit pas
     # casser la fonctionnalite pour les users qui l'ont activee.
-    if read_receipts_allowed?(user_id) do
-      broadcast_read_receipt(user_id, message_id, state)
-    else
-      Logger.debug("message_read broadcast skipped (reader privacy)",
-        user_id: user_id,
-        conversation_id: state.conversation_id
-      )
-    end
+    #
+    # WHISPR-1315: le check HTTP `read_receipts_allowed?` peut bloquer
+    # jusqu a 5s sur round-trip user-service. On l execute dans un Task
+    # pour ne pas bloquer le GenServer (qui serialise tous les casts de
+    # la conversation).
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      if read_receipts_allowed?(user_id) do
+        broadcast_read_receipt(user_id, message_id, state)
+      else
+        Logger.debug("message_read broadcast skipped (reader privacy)",
+          user_id: user_id,
+          conversation_id: state.conversation_id
+        )
+      end
+    end)
 
     # WHISPR-1109 follow-up: decrement the reader's badge in notification-service.
     MessagingEvents.publish_message_read(state.conversation_id, user_id, message_id)
@@ -311,14 +318,18 @@ defmodule WhisprMessaging.ConversationServer do
 
     # Meme gating privacy que mark_read: si le user a desactive ses
     # read_receipts, on ne signale pas non plus le mark_unread.
-    if read_receipts_allowed?(user_id) do
-      broadcast_unread_receipt(user_id, message_id, state)
-    else
-      Logger.debug("message_unread broadcast skipped (reader privacy)",
-        user_id: user_id,
-        conversation_id: state.conversation_id
-      )
-    end
+    # WHISPR-1315: meme reason que mark_read, on sort le check HTTP
+    # du GenServer.
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      if read_receipts_allowed?(user_id) do
+        broadcast_unread_receipt(user_id, message_id, state)
+      else
+        Logger.debug("message_unread broadcast skipped (reader privacy)",
+          user_id: user_id,
+          conversation_id: state.conversation_id
+        )
+      end
+    end)
 
     {:noreply, state}
   end
