@@ -21,6 +21,16 @@ defmodule WhisprMessagingWeb.Router do
     plug WhisprMessagingWeb.Plugs.ValidatePathUuid
   end
 
+  # WHISPR-845 — pipeline pour les endpoints de diagnostic detaille.
+  # Le contenu de /health/detailed (memoire BEAM, run_queue, count de
+  # processes, conversations actives) facilite la planification d'attaques
+  # DoS s'il est expose publiquement. On gate via le shared internal token
+  # deja utilise pour les appels service-to-service.
+  pipeline :internal_api do
+    plug :accepts, ["json"]
+    plug WhisprMessagingWeb.Plugs.InternalApiToken
+  end
+
   scope "/messaging/api/swagger" do
     forward "/", PhoenixSwagger.Plug.SwaggerUI,
       otp_app: :whispr_messaging,
@@ -52,7 +62,6 @@ defmodule WhisprMessagingWeb.Router do
 
     # Health check endpoints
     get "/health", HealthController, :check
-    get "/health/detailed", HealthController, :detailed
     get "/health/live", HealthController, :live
     get "/health/ready", HealthController, :ready
 
@@ -197,5 +206,14 @@ defmodule WhisprMessagingWeb.Router do
     pipe_through :api
 
     post "/report", ReportController, :create
+  end
+
+  # WHISPR-845 — endpoints de diagnostic detaille, gated par le shared
+  # internal token. Les probes k8s utilisent /live et /ready (publics),
+  # donc gate ici ne casse rien cote infra.
+  scope "/messaging/api/v1", WhisprMessagingWeb do
+    pipe_through :internal_api
+
+    get "/health/detailed", HealthController, :detailed
   end
 end
