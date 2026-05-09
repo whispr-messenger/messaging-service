@@ -136,7 +136,8 @@ defmodule WhisprMessaging.Services.HttpUserServiceClient do
             :named_table,
             :public,
             :set,
-            read_concurrency: true
+            read_concurrency: true,
+            write_concurrency: true
           ])
 
           :ok
