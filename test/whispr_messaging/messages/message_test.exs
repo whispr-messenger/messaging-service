@@ -174,6 +174,36 @@ defmodule WhisprMessaging.Messages.MessageTest do
       refute Map.has_key?(cs.changes, :sender_id)
       assert cs.changes.message_type == "system"
     end
+
+    test "create_system_message draws a random client_random in the int4 positive range" do
+      cs = Message.create_system_message(Ecto.UUID.generate(), "joined", %{})
+      assert is_integer(cs.changes.client_random)
+      assert cs.changes.client_random >= 0
+      # rester dans la plage PostgreSQL int4 signe positif
+      assert cs.changes.client_random <= 2_147_483_647
+    end
+
+    test "create_system_message ne collide pas sous burst (1000 appels => 1000 valeurs distinctes)" do
+      values =
+        for _ <- 1..1000 do
+          cs = Message.create_system_message(Ecto.UUID.generate(), "burst", %{})
+          cs.changes.client_random
+        end
+
+      # crypto random sur 31 bits => collision quasi-nulle sur 1000 tirages
+      assert MapSet.size(MapSet.new(values)) == 1000
+    end
+  end
+
+  describe "generate_client_random/0" do
+    test "renvoie un entier non-negatif dans la plage int4 positif" do
+      for _ <- 1..200 do
+        v = Message.generate_client_random()
+        assert is_integer(v)
+        assert v >= 0
+        assert v <= 2_147_483_647
+      end
+    end
   end
 
   describe "type and state predicates" do
