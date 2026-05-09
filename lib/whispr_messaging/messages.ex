@@ -114,6 +114,19 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
+  Renvoie un message uniquement s'il est encore actif (non soft-delete).
+  Sert a re-checker l'etat juste avant un broadcast lie a la lecture, pour
+  eviter un badge drift cote notification-service quand un autre user a
+  declenche delete_for_everyone entre le snapshot et le publish (WHISPR-1392).
+  """
+  def get_active_message(id) do
+    case Repo.one(from m in Message, where: m.id == ^id and m.is_deleted == false) do
+      nil -> {:error, :not_found}
+      message -> {:ok, message}
+    end
+  end
+
+  @doc """
   Searches messages by content across conversations the user participates in.
 
   Options (WHISPR-1061):
