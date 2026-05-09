@@ -39,6 +39,9 @@ defmodule WhisprMessagingWeb.Plugs.Cors do
     decision = decide_origin_header(origin, allowed)
 
     conn
+    # vary: origin toujours emis pour que les caches partages ne servent pas
+    # une reponse wildcard a un client qui attendait un origin specifique
+    |> put_resp_header("vary", "origin")
     |> put_allow_origin(decision)
     |> maybe_put_common_headers(decision)
   end
@@ -70,9 +73,7 @@ defmodule WhisprMessagingWeb.Plugs.Cors do
   end
 
   defp put_allow_origin(conn, {:match, value}) do
-    conn
-    |> put_resp_header("access-control-allow-origin", value)
-    |> put_resp_header("vary", "origin")
+    put_resp_header(conn, "access-control-allow-origin", value)
   end
 
   defp decide_origin_header(_origin, []), do: :none
