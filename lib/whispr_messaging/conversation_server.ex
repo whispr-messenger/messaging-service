@@ -21,6 +21,30 @@ defmodule WhisprMessaging.ConversationServer do
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
+  # WHISPR-1360: timeouts explicites sur GenServer.call. Le defaut Erlang
+  # est 5_000 ms : sous charge (DB lente, lock d'index, broadcast multi-membres),
+  # le caller obtient {:EXIT, ...timeout} apres 5s alors que le serveur
+  # continue de traiter et peut laisser un etat partiellement ecrit.
+  # On dimensionne par operation pour avoir un budget realiste sans
+  # bloquer la pool socket en cas de degradation.
+
+  # Lecture seule en RAM, doit toujours repondre en quelques ms.
+  # Si meme `get_state` traine, c est un signe que le GenServer est sature
+  # et il vaut mieux echouer vite que d empiler les callers.
+  @call_timeout_short 5_000
+
+  # Operations DB-bound moderees (remove_member = 1 update + broadcast,
+  # update_settings = 1 update + broadcast). 10s couvre un round-trip
+  # Postgres lent + le passage par Phoenix.PubSub sans etre permissif.
+  @call_timeout_default 10_000
+
+  # Operations DB-bound + fanout multi-membres (send_message = insert
+  # message + delivery_statuses pour N membres + broadcast PubSub +
+  # publication Redis ; add_member = insert member + broadcast +
+  # task system message). 15s laisse une marge pour les conversations
+  # de groupe avec beaucoup de membres pendant un incident DB.
+  @call_timeout_long 15_000
+
   # @typep conversation_state :: %{
   #          conversation_id: binary(),
   #          conversation: Conversation.t(),
@@ -53,21 +77,33 @@ defmodule WhisprMessaging.ConversationServer do
   Sends a message through the conversation server.
   """
   def send_message(conversation_id, message_attrs) do
-    GenServer.call(via_tuple(conversation_id), {:send_message, message_attrs})
+    GenServer.call(
+      via_tuple(conversation_id),
+      {:send_message, message_attrs},
+      @call_timeout_long
+    )
   end
 
   @doc """
   Adds a user to the conversation.
   """
   def add_member(conversation_id, user_id, settings \\ nil) do
-    GenServer.call(via_tuple(conversation_id), {:add_member, user_id, settings})
+    GenServer.call(
+      via_tuple(conversation_id),
+      {:add_member, user_id, settings},
+      @call_timeout_long
+    )
   end
 
   @doc """
   Removes a user from the conversation.
   """
   def remove_member(conversation_id, user_id) do
-    GenServer.call(via_tuple(conversation_id), {:remove_member, user_id})
+    GenServer.call(
+      via_tuple(conversation_id),
+      {:remove_member, user_id},
+      @call_timeout_default
+    )
   end
 
   @doc """
@@ -99,14 +135,18 @@ defmodule WhisprMessaging.ConversationServer do
   Gets conversation state for debugging.
   """
   def get_state(conversation_id) do
-    GenServer.call(via_tuple(conversation_id), :get_state)
+    GenServer.call(via_tuple(conversation_id), :get_state, @call_timeout_short)
   end
 
   @doc """
   Updates conversation settings.
   """
   def update_settings(conversation_id, settings) do
-    GenServer.call(via_tuple(conversation_id), {:update_settings, settings})
+    GenServer.call(
+      via_tuple(conversation_id),
+      {:update_settings, settings},
+      @call_timeout_default
+    )
   end
 
   # GenServer Callbacks
