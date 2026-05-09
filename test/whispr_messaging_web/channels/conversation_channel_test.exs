@@ -232,6 +232,50 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       ref = push(socket, "edit_message", edit_attrs)
       assert_reply ref, :error, %{reason: "forbidden"}
     end
+
+    test "edit fanout sur user:* de chaque membre (WHISPR-1307)", %{
+      socket: socket,
+      message: message,
+      conversation: conversation,
+      user_id: user_id,
+      other_user_id: other_user_id
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{other_user_id}")
+
+      edit_attrs = %{
+        "message_id" => message.id,
+        "content" => "edited_fanout",
+        "metadata" => %{"edited" => true}
+      }
+
+      ref = push(socket, "edit_message", edit_attrs)
+      assert_reply ref, :ok, %{message: _edited_message}
+
+      # Sender doit recevoir l event sur son canal user:* meme si la ChatScreen
+      # ne diffuse que sur "conversation:*".
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> sender_topic,
+                       event: "message_edited",
+                       payload: payload_sender
+                     },
+                     1_000
+
+      assert sender_topic == user_id
+      assert payload_sender.message["id"] == message.id
+      assert payload_sender.message["conversationId"] == conversation.id
+
+      # L autre membre doit aussi recevoir l event meme sans avoir la ChatScreen ouverte.
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> recipient_topic,
+                       event: "message_edited",
+                       payload: payload_recipient
+                     },
+                     1_000
+
+      assert recipient_topic == other_user_id
+      assert payload_recipient.message["id"] == message.id
+    end
   end
 
   describe "delete_message" do
