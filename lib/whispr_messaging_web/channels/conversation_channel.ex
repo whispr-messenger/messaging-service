@@ -202,14 +202,28 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     case Messages.delete_message(message_id, user_id, delete_for_everyone) do
       {:ok, message} ->
-        broadcast(
-          socket,
-          "message_deleted",
+        payload =
           camelize_keys(%{
             message_id: message_id,
+            conversation_id: message.conversation_id,
             delete_for_everyone: delete_for_everyone
           })
-        )
+
+        broadcast(socket, "message_deleted", payload)
+
+        # Fanout sur le canal user:* de chaque membre (uniquement delete_for_everyone)
+        # pour que ConversationsListScreen recoive l event meme sans ChatScreen ouverte.
+        if delete_for_everyone do
+          message.conversation_id
+          |> Conversations.list_conversation_members()
+          |> Enum.each(fn member ->
+            WhisprMessagingWeb.Endpoint.broadcast(
+              "user:#{member.user_id}",
+              "message_deleted",
+              payload
+            )
+          end)
+        end
 
         {:reply, {:ok, %{message: serialize_message(message)}}, socket}
 

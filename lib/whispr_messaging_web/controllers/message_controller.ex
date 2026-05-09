@@ -411,15 +411,27 @@ defmodule WhisprMessagingWeb.MessageController do
         # Diffusion WebSocket sur le topic conversation (uniquement pour delete_for_everyone,
         # les soft-deletes "pour moi" ne concernent que l'utilisateur courant)
         if delete_for_everyone do
-          Endpoint.broadcast(
-            "conversation:#{message.conversation_id}",
-            "message_deleted",
+          payload =
             camelize_keys(%{
               message_id: message.id,
               conversation_id: message.conversation_id,
               delete_for_everyone: true
             })
+
+          Endpoint.broadcast(
+            "conversation:#{message.conversation_id}",
+            "message_deleted",
+            payload
           )
+
+          # Fanout aussi sur le canal user:* de chaque membre pour que la suppression
+          # remonte sur ConversationsListScreen meme quand la ChatScreen n est pas ouverte
+          # (cas typique d un groupe ou seuls quelques membres ont l ecran de conv au premier plan).
+          message.conversation_id
+          |> Conversations.list_conversation_members()
+          |> Enum.each(fn member ->
+            Endpoint.broadcast("user:#{member.user_id}", "message_deleted", payload)
+          end)
         end
 
         json(conn, %{
