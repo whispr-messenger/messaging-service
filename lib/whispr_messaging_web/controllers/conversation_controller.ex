@@ -7,6 +7,8 @@ defmodule WhisprMessagingWeb.ConversationController do
   use WhisprMessagingWeb, :controller
   use PhoenixSwagger
 
+  require Logger
+
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Services.{MediaClient, UserService}
 
@@ -215,9 +217,11 @@ defmodule WhisprMessagingWeb.ConversationController do
               |> json(%{errors: translate_errors(changeset)})
 
             {:error, reason} ->
+              Logger.error("create_direct_conversation failed: #{inspect(reason)}")
+
               conn
               |> put_status(:unprocessable_entity)
-              |> json(%{error: inspect(reason)})
+              |> json(%{error: "internal_server_error"})
           end
 
         {:error, resp_conn} ->
@@ -372,9 +376,11 @@ defmodule WhisprMessagingWeb.ConversationController do
         |> json(%{errors: translate_errors(changeset)})
 
       {:error, reason} ->
+        Logger.error("create_group_conversation failed: #{inspect(reason)}")
+
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{error: inspect(reason)})
+        |> json(%{error: "internal_server_error"})
     end
   end
 
@@ -422,13 +428,9 @@ defmodule WhisprMessagingWeb.ConversationController do
           |> json(%{error: "Conversation not found"})
       end
     else
-      # If no user_id provided, just return basic info (or 403 if we want strict privacy)
-      # For now keeping legacy behavior but handling 404
-      with {:ok, conversation} <- Conversations.get_conversation(id) do
-        json(conn, %{
-          data: render_conversation(conversation, authorization_header(conn))
-        })
-      end
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "authentication_required"})
     end
   end
 
@@ -495,9 +497,11 @@ defmodule WhisprMessagingWeb.ConversationController do
           |> json(%{errors: translate_errors(changeset)})
 
         {:error, reason} ->
+          Logger.error("update_conversation failed: #{inspect(reason)}")
+
           conn
           |> put_status(:bad_request)
-          |> json(%{error: inspect(reason)})
+          |> json(%{error: "internal_server_error"})
       end
     else
       false ->
