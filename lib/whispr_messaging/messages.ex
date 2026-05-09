@@ -509,14 +509,17 @@ defmodule WhisprMessaging.Messages do
         payload
       )
 
+      # On exclut le reader du fanout user:*, il recoit deja l event sur conversation:*.
       conversation_id
       |> Conversations.list_conversation_members()
       |> Enum.each(fn member ->
-        WhisprMessagingWeb.Endpoint.broadcast(
-          "user:#{member.user_id}",
-          "message_unread",
-          payload
-        )
+        if member.user_id != user_id do
+          WhisprMessagingWeb.Endpoint.broadcast(
+            "user:#{member.user_id}",
+            "message_unread",
+            payload
+          )
+        end
       end)
     end
 

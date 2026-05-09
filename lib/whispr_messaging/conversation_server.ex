@@ -630,8 +630,13 @@ defmodule WhisprMessaging.ConversationServer do
 
     Endpoint.broadcast("conversation:#{state.conversation_id}", "message_unread", payload)
 
+    # On exclut le reader du fanout user:*, il vient juste de cliquer mark_unread
+    # sur son device et recoit deja l event via le topic conversation:*.
+    # Sans ca son badge blink (event recu 2x).
     Enum.each(state.members, fn member ->
-      Endpoint.broadcast("user:#{member.user_id}", "message_unread", payload)
+      if member.user_id != user_id do
+        Endpoint.broadcast("user:#{member.user_id}", "message_unread", payload)
+      end
     end)
   end
 
