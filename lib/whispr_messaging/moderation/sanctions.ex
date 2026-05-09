@@ -122,7 +122,15 @@ defmodule WhisprMessaging.Moderation.Sanctions do
       reason: sanction.reason
     }
 
-    fanout_to_members(sanction.conversation_id, "moderation:user_kicked", payload)
+    # Le user kick ne fait plus partie de la conversation : on lui evite
+    # le fanout user:* (informatif inutile et fuite d info post-eviction).
+    # mute / lifted restent diffuses a tous les membres (informatif legitime).
+    fanout_to_members(
+      sanction.conversation_id,
+      "moderation:user_kicked",
+      payload,
+      exclude_user_id: sanction.user_id
+    )
   end
 
   defp broadcast_sanction_event(_), do: :ok
@@ -140,10 +148,14 @@ defmodule WhisprMessaging.Moderation.Sanctions do
   # Diffuse l event sur le topic conversation:* (pour les ChatScreen ouvertes)
   # ET sur le topic user:* de chaque membre pour que ConversationsListScreen
   # reflete le mute/kick/lift meme quand la ChatScreen n est pas ouverte.
-  # Le user cible (mute/kick) recoit aussi l event sur son propre user:*
-  # pour mettre a jour sa vue immediatement (meme pattern que message_deleted -
-  # WHISPR-1293/1301). Si l appel DB echoue, on ne casse pas le flux principal.
-  defp fanout_to_members(conversation_id, event, payload) do
+  # Le user cible (mute) recoit aussi l event sur son propre user:* pour
+  # mettre a jour sa vue immediatement (meme pattern que message_deleted -
+  # WHISPR-1293/1301). Pour kick on exclut le target via `exclude_user_id`,
+  # il n est plus membre de la conversation. Si l appel DB echoue, on ne
+  # casse pas le flux principal.
+  defp fanout_to_members(conversation_id, event, payload, opts \\ []) do
+    excluded = Keyword.get(opts, :exclude_user_id)
+
     WhisprMessagingWeb.Endpoint.broadcast(
       "conversation:#{conversation_id}",
       event,
@@ -153,7 +165,9 @@ defmodule WhisprMessaging.Moderation.Sanctions do
     conversation_id
     |> Conversations.list_conversation_members()
     |> Enum.each(fn member ->
-      WhisprMessagingWeb.Endpoint.broadcast("user:#{member.user_id}", event, payload)
+      if member.user_id != excluded do
+        WhisprMessagingWeb.Endpoint.broadcast("user:#{member.user_id}", event, payload)
+      end
     end)
   end
 
