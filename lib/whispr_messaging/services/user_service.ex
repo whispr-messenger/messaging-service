@@ -103,6 +103,19 @@ defmodule WhisprMessaging.Services.UserService do
     client().check_user_blocked(blocker_id, blocked_id)
   end
 
+  @doc """
+  Recupere les flags de privacy d'un utilisateur (`read_receipts`,
+  `last_seen_privacy`, ...). WHISPR-1304: utilise par le gating
+  WhatsApp punitive avant de broadcast `message_read`/`message_unread`.
+
+  Sur erreur transitoire les appelants doivent fail-open (broadcast
+  quand meme) - une indispo de user-service ne doit pas couper les
+  read receipts d'un user qui les a actives.
+  """
+  def get_privacy_settings(user_id) do
+    client().get_privacy_settings(user_id)
+  end
+
   @doc false
   def client do
     Application.get_env(

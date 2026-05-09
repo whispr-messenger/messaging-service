@@ -287,6 +287,23 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     {:reply, {:ok, %{status: "read"}}, socket}
   end
 
+  # WHISPR-1304: symetrique a mark_read. Le client envoie
+  # `{ "message_id": "..." }` pour remettre un message lu en non-lu.
+  # `message_id` est obligatoire (un mark_unread sur toute la conv
+  # n'a pas de sens cote produit).
+  def handle_in("mark_unread", %{"message_id" => message_id}, socket)
+      when is_binary(message_id) do
+    conversation_id = socket.assigns.conversation_id
+    user_id = socket.assigns.user_id
+
+    ConversationServer.mark_unread(conversation_id, user_id, message_id)
+    {:reply, {:ok, %{status: "unread"}}, socket}
+  end
+
+  def handle_in("mark_unread", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", details: "message_id is required"}}, socket}
+  end
+
   # Handle typing indicators
   def handle_in("typing_start", _payload, socket) do
     conversation_id = socket.assigns.conversation_id

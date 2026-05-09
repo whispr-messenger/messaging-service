@@ -307,6 +307,18 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  WHISPR-1304: rewind `last_read_at` du member a `before` (typiquement
+  juste avant le `sent_at` du message qu'on remarque comme non-lu).
+  Si `before` est `nil`, on reset le champ a nil pour que toutes les
+  messages comptent comme non-lus.
+  """
+  def mark_member_unread(%ConversationMember{} = member, before \\ nil) do
+    member
+    |> ConversationMember.rewind_read_changeset(before)
+    |> Repo.update()
+  end
+
+  @doc """
   Removes a member from a conversation (deactivates).
   """
   def remove_conversation_member(conversation_id, user_id) do

@@ -563,6 +563,58 @@ defmodule WhisprMessagingWeb.MessageController do
   defp ensure_receipt_user(nil), do: :unauthorized
   defp ensure_receipt_user(_user_id), do: :ok
 
+  @doc """
+  WHISPR-1304: marque un message comme non-lu (revert d'un mark_read).
+  POST /messaging/api/v1/messages/:id/unread
+
+  Renvoie 200 + payload {data: {messageId, conversationId, status}}
+  en cas de succes, 404 si le message n'existe pas, 403 si le caller
+  n'est pas membre de la conversation.
+
+  Le broadcast `message_unread` part par
+  `ConversationServer.mark_unread/3`, gate par le flag privacy
+  `read_receipts` du reader (meme regle que mark_read).
+  """
+  def unread(conn, %{"id" => message_id}) do
+    user_id = conn.assigns[:user_id]
+
+    with :ok <- ensure_receipt_user(user_id),
+         {:ok, message} <- Messages.get_message(message_id),
+         true <-
+           Messages.user_can_access_message?(message.conversation_id, user_id) || :forbidden,
+         {:ok, _message} <- Messages.mark_unread(message_id, user_id) do
+      # Broadcast `message_unread` inline (gate par le flag privacy
+      # `read_receipts` du reader). On passe par le helper
+      # `Messages.broadcast_unread/3` plutot que par
+      # `ConversationServer.mark_unread/3` parce qu'en REST on n'a
+      # pas la garantie d'avoir une sandbox DB partagee avec le
+      # GenServer (cf. Ecto.Adapters.SQL.Sandbox cross-process).
+      Messages.broadcast_unread(message.conversation_id, user_id, message_id)
+
+      json(conn, %{
+        data:
+          camelize_keys(%{
+            message_id: message_id,
+            conversation_id: message.conversation_id,
+            status: "unread"
+          })
+      })
+    else
+      :unauthorized ->
+        conn |> put_status(:unauthorized) |> json(%{errors: %{detail: "Unauthorized"}})
+
+      :forbidden ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "Not a member of the conversation"}})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "Message not found"}})
+    end
+  end
+
   defp valid_receipt_status("delivered"), do: true
   defp valid_receipt_status("read"), do: true
   defp valid_receipt_status(_), do: false

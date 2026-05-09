@@ -58,6 +58,15 @@ defmodule WhisprMessaging.Messages.DeliveryStatus do
   end
 
   @doc """
+  WHISPR-1304: changeset pour revert un mark_read. Repasse `read_at`
+  a `nil` mais garde `delivered_at` (le message est toujours arrive).
+  """
+  def mark_unread_changeset(delivery_status) do
+    delivery_status
+    |> cast(%{read_at: nil}, [:read_at])
+  end
+
+  @doc """
   Query to get delivery statuses for a message.
   """
   def by_message_query(message_id) do

@@ -10,6 +10,7 @@ defmodule WhisprMessaging.Messages do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Events.MessagingEvents
+  alias WhisprMessaging.Services.UserService
 
   alias WhisprMessaging.Messages.{
     DeliveryStatus,
@@ -425,6 +426,107 @@ defmodule WhisprMessaging.Messages do
 
       error ->
         error
+    end
+  end
+
+  @doc """
+  WHISPR-1304: revert d'un `mark_message_read` pour un user donne.
+  Repasse `read_at` a `nil` sur la row delivery_status correspondante.
+  Renvoie `{:ok, delivery_status}` si la row existait, `{:error,
+  :not_found}` sinon (rien a revert).
+
+  N'efface volontairement pas `delivered_at` : le message a toujours
+  ete livre, on remet juste son etat "lu" en "non-lu".
+  """
+  def mark_message_unread(message_id, user_id) do
+    case Repo.one(DeliveryStatus.by_message_and_user_query(message_id, user_id)) do
+      nil ->
+        {:error, :not_found}
+
+      delivery_status ->
+        delivery_status
+        |> DeliveryStatus.mark_unread_changeset()
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  WHISPR-1304: marque un message comme non-lu cote DB et rewind
+  `last_read_at` du conversation_member juste avant le `sent_at` du
+  message, pour que `unread_count` (sent_at > last_read_at) recompte
+  ce message.
+
+  Renvoie `{:ok, message}` en cas de succes, `{:error, :not_found}`
+  si le message ou le delivery_status n'existe pas.
+
+  N'effectue PAS le broadcast - c'est a l'appelant (controller ou
+  channel) de delegate a `ConversationServer.mark_unread/3` ou de
+  broadcast directement, parce que le broadcast doit passer par le
+  gating `read_receipts` du reader.
+  """
+  def mark_unread(message_id, user_id) do
+    with {:ok, message} <- get_message(message_id),
+         {:ok, _delivery_status} <- mark_message_unread(message_id, user_id) do
+      rewind_member_last_read(message, user_id)
+      {:ok, message}
+    end
+  end
+
+  defp rewind_member_last_read(%Message{conversation_id: conv_id, sent_at: sent_at}, user_id)
+       when not is_nil(sent_at) do
+    with %{is_active: true} = member <- Conversations.get_conversation_member(conv_id, user_id) do
+      rewind_to = DateTime.add(sent_at, -1, :second)
+      Conversations.mark_member_unread(member, rewind_to)
+    end
+
+    :ok
+  end
+
+  defp rewind_member_last_read(_message, _user_id), do: :ok
+
+  @doc """
+  WHISPR-1304: broadcast `message_unread` sur le topic conversation
+  + fanout sur le canal user:* de chaque membre.
+
+  Gate par le flag privacy `read_receipts` du reader: si le user a
+  desactive ses read receipts, on skip le broadcast (mais on a deja
+  ecrit l'etat en DB via `mark_unread/2`). Sur erreur transitoire
+  user-service on fail-open (broadcast quand meme).
+  """
+  def broadcast_unread(conversation_id, user_id, message_id) do
+    if read_receipts_allowed?(user_id) do
+      payload =
+        %{
+          userId: user_id,
+          messageId: message_id,
+          conversationId: conversation_id,
+          timestamp: DateTime.utc_now()
+        }
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "conversation:#{conversation_id}",
+        "message_unread",
+        payload
+      )
+
+      conversation_id
+      |> Conversations.list_conversation_members()
+      |> Enum.each(fn member ->
+        WhisprMessagingWeb.Endpoint.broadcast(
+          "user:#{member.user_id}",
+          "message_unread",
+          payload
+        )
+      end)
+    end
+
+    :ok
+  end
+
+  defp read_receipts_allowed?(user_id) do
+    case UserService.get_privacy_settings(user_id) do
+      {:ok, %{read_receipts: false}} -> false
+      _ -> true
     end
   end
 
