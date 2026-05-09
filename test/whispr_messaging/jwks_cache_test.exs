@@ -34,7 +34,27 @@ defmodule WhisprMessaging.JwksCacheTest do
     :ok
   end
 
-  describe "get_signing_key/0" do
+  describe "get_signing_key/1 missing kid (WHISPR-1239)" do
+    test "rejects nil kid with :missing_kid even when keys are loaded" do
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(200)
+
+        assert {:error, :missing_kid} = JwksCache.get_signing_key(nil)
+        # default arg : meme comportement que nil
+        assert {:error, :missing_kid} = JwksCache.get_signing_key()
+      end
+    end
+
+    test "rejects empty string kid with :missing_kid" do
+      assert {:error, :missing_kid} = JwksCache.get_signing_key("")
+    end
+  end
+
+  describe "get_signing_key/1 with kid" do
     test "returns :not_loaded when key has not been fetched yet" do
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
@@ -43,7 +63,7 @@ defmodule WhisprMessaging.JwksCacheTest do
         send(JwksCache, :refresh)
         Process.sleep(100)
 
-        assert {:error, :not_loaded} = JwksCache.get_signing_key()
+        assert {:error, :not_loaded} = JwksCache.get_signing_key("test-kid-1")
       end
     end
 
@@ -55,7 +75,7 @@ defmodule WhisprMessaging.JwksCacheTest do
         send(JwksCache, :refresh)
         Process.sleep(200)
 
-        assert {:ok, pem} = JwksCache.get_signing_key()
+        assert {:ok, pem} = JwksCache.get_signing_key("test-kid-1")
         assert is_binary(pem)
         assert String.starts_with?(pem, "-----BEGIN")
       end
@@ -70,7 +90,7 @@ defmodule WhisprMessaging.JwksCacheTest do
         send(JwksCache, :refresh)
         Process.sleep(200)
 
-        assert {:ok, _pem} = JwksCache.get_signing_key()
+        assert {:ok, _pem} = JwksCache.get_signing_key("test-kid-1")
       end
 
       # Trigger a second refresh with a mock failure and verify key is retained
@@ -82,12 +102,10 @@ defmodule WhisprMessaging.JwksCacheTest do
         Process.sleep(200)
 
         # Key should still be available from the previous successful fetch
-        assert {:ok, _pem} = JwksCache.get_signing_key()
+        assert {:ok, _pem} = JwksCache.get_signing_key("test-kid-1")
       end
     end
-  end
 
-  describe "get_signing_key/1 with kid" do
     test "returns the key matching the given kid" do
       with_mock Finch, [:passthrough],
         request: fn _req, _name, _opts ->
