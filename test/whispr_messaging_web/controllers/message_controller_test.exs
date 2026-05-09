@@ -961,6 +961,55 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                patch(conn, ~p"/messaging/api/v1/messages/#{missing}/receipt", status: "delivered")
                |> json_response(404)
     end
+
+    # WHISPR-1392: race delete_for_everyone entre snapshot et publish.
+    # On veut que receipt(read) reussisse cote DB mais skip le broadcast
+    # quand le message a ete soft-delete entre temps -> pas de badge drift.
+    test "skip publish_message_read quand message soft-delete entre snapshot et publish (WHISPR-1392)",
+         %{
+           message: message,
+           user2_id: user2_id
+         } do
+      # Soft-delete le message AVANT le call. Le controller fait
+      # get_message_with_relations (qui ne filtre pas is_deleted), applique
+      # le receipt, puis re-check via get_active_message -> not_found -> skip.
+      message
+      |> Message.delete_changeset(true)
+      |> Repo.update!()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt", status: "read")
+        |> json_response(200)
+
+      # Le receipt DB reste applique (delivered_at + read_at), seul le
+      # broadcast cross-service est skip pour eviter le drift badge.
+      assert response["data"]["message_id"] == message.id
+      assert response["data"]["user_id"] == user2_id
+      assert response["data"]["read_at"] != nil
+    end
+
+    test "publish_message_read normal quand message encore actif (WHISPR-1392)", %{
+      message: message,
+      user2_id: user2_id
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        patch(conn, ~p"/messaging/api/v1/messages/#{message.id}/receipt", status: "read")
+        |> json_response(200)
+
+      assert response["data"]["read_at"] != nil
+      # Le message est toujours actif -> pas de skip log, behavior nominal.
+      refute Repo.get!(Message, message.id).is_deleted
+    end
   end
 
   # WHISPR-1304: POST /messaging/api/v1/messages/:id/unread
