@@ -737,22 +737,6 @@ defmodule WhisprMessaging.Conversations do
   # Conversation discovery and search
 
   @doc """
-  Searches conversations by metadata.
-  """
-  def search_conversations(search_term, limit \\ 20) do
-    search_pattern = "%#{search_term}%"
-
-    query =
-      from c in Conversation,
-        where: c.is_active == true,
-        where: ilike(fragment("?::text", c.metadata), ^search_pattern),
-        order_by: [desc: c.updated_at],
-        limit: ^limit
-
-    Repo.all(query)
-  end
-
-  @doc """
   Searches the authenticated user's conversations by name or participant user_id.
 
   The `q` parameter is matched case-insensitively against:

@@ -344,8 +344,8 @@ defmodule WhisprMessaging.Messages do
   Searches messages by metadata content, excluding messages the user
   has individually deleted.
   """
-  def search_messages(conversation_id, search_term, user_id \\ nil) do
-    Message.search_messages_query(conversation_id, search_term)
+  def search_messages(conversation_id, search_term, user_id \\ nil, opts \\ []) do
+    Message.search_messages_query(conversation_id, search_term, opts)
     |> exclude_user_deletions(user_id)
     |> Repo.all()
   end

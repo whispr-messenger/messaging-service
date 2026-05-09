@@ -157,15 +157,19 @@ defmodule WhisprMessaging.Messages.Message do
   @doc """
   Query to search messages by content (when decrypted client-side).
   """
-  def search_messages_query(conversation_id, search_term) when is_binary(search_term) do
-    # Note: This is for metadata search only since content is encrypted
+  def search_messages_query(conversation_id, search_term, opts \\ [])
+      when is_binary(search_term) do
+    # le contenu est chiffre - on cherche sur metadata->>'name' (cle non chiffree)
+    # cf WHISPR-1419 - cap LIMIT obligatoire pour eviter de retourner toute la DB
     search_pattern = "%#{search_term}%"
+    limit_value = opts |> Keyword.get(:limit, 50) |> max(1) |> min(100)
 
     from m in __MODULE__,
       where: m.conversation_id == ^conversation_id,
       where: m.is_deleted == false,
-      where: ilike(fragment("?::text", m.metadata), ^search_pattern),
-      order_by: [desc: m.sent_at]
+      where: ilike(fragment("(?->>'name')", m.metadata), ^search_pattern),
+      order_by: [desc: m.sent_at],
+      limit: ^limit_value
   end
 
   @doc """
