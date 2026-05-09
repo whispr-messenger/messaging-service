@@ -133,11 +133,39 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
     end
   end
 
-  describe "GET /messaging/api/v1/health/detailed" do
-    test "returns detailed health information" do
+  describe "GET /messaging/api/v1/health/detailed (WHISPR-845)" do
+    @internal_token "test-internal-token"
+
+    defp with_internal_token(conn, token \\ @internal_token) do
+      put_req_header(conn, "x-internal-token", token)
+    end
+
+    test "returns 404 sans header internal token" do
       conn =
         build_conn()
         |> json_conn()
+
+      resp = get(conn, ~p"/messaging/api/v1/health/detailed")
+      assert resp.status == 404
+      body = Jason.decode!(resp.resp_body)
+      assert body["error"] == "not_found"
+    end
+
+    test "returns 404 avec un token invalide" do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> with_internal_token("wrong-token")
+
+      resp = get(conn, ~p"/messaging/api/v1/health/detailed")
+      assert resp.status == 404
+    end
+
+    test "returns 200 avec le bon internal token" do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> with_internal_token()
 
       response =
         get(conn, ~p"/messaging/api/v1/health/detailed")
@@ -149,10 +177,11 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
       assert response["checks"] != nil
     end
 
-    test "includes all relevant health checks" do
+    test "includes all relevant health checks (avec token)" do
       conn =
         build_conn()
         |> json_conn()
+        |> with_internal_token()
 
       response =
         get(conn, ~p"/messaging/api/v1/health/detailed")
@@ -173,10 +202,11 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
       end
     end
 
-    test "includes memory and process information" do
+    test "includes memory and process information (avec token)" do
       conn =
         build_conn()
         |> json_conn()
+        |> with_internal_token()
 
       response =
         get(conn, ~p"/messaging/api/v1/health/detailed")
@@ -191,10 +221,11 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
       assert response["process_info"]["memory_usage"] != nil
     end
 
-    test "includes conversation metrics" do
+    test "includes conversation metrics (avec token)" do
       conn =
         build_conn()
         |> json_conn()
+        |> with_internal_token()
 
       response =
         get(conn, ~p"/messaging/api/v1/health/detailed")
@@ -315,6 +346,7 @@ defmodule WhisprMessagingWeb.HealthControllerTest do
       conn =
         build_conn()
         |> json_conn()
+        |> put_req_header("x-internal-token", "test-internal-token")
 
       start_time = System.monotonic_time(:millisecond)
 
