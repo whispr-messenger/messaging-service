@@ -430,10 +430,20 @@ defmodule WhisprMessaging.Conversations do
   """
   def leave_conversation(conversation_id, user_id) do
     Repo.transaction(fn ->
+      # lock + re-query pour eviter promote spurious sur 2 admins quit concurrents.
+      # On lock toutes les rows actives de la conversation : serialise les
+      # leave concurrents pour qu'une seule tx voie l'etat post-commit de
+      # l'autre (apres release du lock).
+      lock_query =
+        from m in ConversationMember,
+          where: m.conversation_id == ^conversation_id and m.is_active == true,
+          order_by: [asc: m.joined_at],
+          lock: "FOR UPDATE"
+
       with {:ok, conversation} <- get_conversation(conversation_id),
+           members <- Repo.all(lock_query),
            %ConversationMember{is_active: true} = member <-
-             get_conversation_member(conversation_id, user_id) do
-        members = list_conversation_members(conversation_id)
+             Enum.find(members, fn m -> m.user_id == user_id end) do
         role = member_role(member)
 
         auto_promoted =
@@ -458,7 +468,6 @@ defmodule WhisprMessaging.Conversations do
       else
         {:error, :not_found} -> Repo.rollback(:conversation_not_found)
         nil -> Repo.rollback(:not_member)
-        %ConversationMember{is_active: false} -> Repo.rollback(:not_member)
       end
     end)
   end
