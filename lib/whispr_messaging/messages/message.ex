@@ -245,8 +245,8 @@ defmodule WhisprMessaging.Messages.Message do
   Creates a system message (notifications, member changes, etc.).
   """
   def create_system_message(conversation_id, content, metadata \\ %{}) do
-    # System messages use a deterministic client_random based on timestamp
-    client_random = DateTime.utc_now() |> DateTime.to_unix(:microsecond) |> rem(2_147_483_647)
+    # crypto random pour eviter collision microsecond sous burst (contrainte unique sender_id+client_random)
+    client_random = generate_client_random()
 
     %__MODULE__{}
     |> changeset(%{
@@ -258,6 +258,21 @@ defmodule WhisprMessaging.Messages.Message do
       metadata: metadata,
       client_random: client_random
     })
+  end
+
+  @doc """
+  Generates a cryptographically random integer in `[0, 2_147_483_647]` used as
+  `client_random` for system messages. Replaces an ancien schema timestamp en
+  microsecondes qui pouvait collider sous burst (contrainte unique
+  `(sender_id, client_random)`).
+
+  La valeur reste dans la plage PostgreSQL `int4` positif (`client_random` est
+  stocke en `:integer`).
+  """
+  @spec generate_client_random() :: non_neg_integer()
+  def generate_client_random do
+    <<value::unsigned-integer-31, _::1>> = :crypto.strong_rand_bytes(4)
+    value
   end
 
   @doc """
