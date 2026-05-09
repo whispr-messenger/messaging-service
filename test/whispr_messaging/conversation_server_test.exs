@@ -2,6 +2,7 @@ defmodule WhisprMessaging.ConversationServerTest do
   use WhisprMessaging.DataCase, async: false
 
   alias WhisprMessaging.{Conversations, ConversationServer, ConversationSupervisor, Messages}
+  alias WhisprMessaging.Moderation.Sanctions
 
   setup do
     # Create test conversation
@@ -567,6 +568,115 @@ defmodule WhisprMessaging.ConversationServerTest do
       # Server should still be alive and responsive
       final_state = ConversationServer.get_state(conversation.id)
       assert final_state.conversation_id == initial_state.conversation_id
+    end
+  end
+
+  # WHISPR-1390: garde-fou sanction sur process_message + broadcast
+  # force_leave sur kick.
+  describe "sanction guard (WHISPR-1390)" do
+    setup %{conversation: conversation} do
+      start_supervised!({ConversationServer, conversation.id})
+      :ok
+    end
+
+    test "user mute ne peut pas envoyer un message", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      # user1 est mute par user2 (admin) sur cette conversation
+      {:ok, _sanction} =
+        Sanctions.create_sanction(%{
+          conversation_id: conversation.id,
+          user_id: user1_id,
+          type: "mute",
+          reason: "spam",
+          issued_by: user2_id
+        })
+
+      attrs = %{
+        conversation_id: conversation.id,
+        sender_id: user1_id,
+        message_type: "text",
+        content: "tentative bypass",
+        client_random: 77_777
+      }
+
+      assert {:error, :sanctioned} =
+               ConversationServer.send_message(conversation.id, attrs)
+
+      # le message ne doit pas exister en DB
+      assert Messages.get_message_by_sender_and_random(user1_id, 77_777) == {:error, :not_found}
+    end
+
+    test "user shadow_restrict ne peut pas envoyer un message", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, _sanction} =
+        Sanctions.create_sanction(%{
+          conversation_id: conversation.id,
+          user_id: user1_id,
+          type: "shadow_restrict",
+          reason: "abuse",
+          issued_by: user2_id
+        })
+
+      attrs = %{
+        conversation_id: conversation.id,
+        sender_id: user1_id,
+        message_type: "text",
+        content: "shadow attempt",
+        client_random: 88_881
+      }
+
+      assert {:error, :sanctioned} =
+               ConversationServer.send_message(conversation.id, attrs)
+    end
+
+    test "user sans sanction peut envoyer un message", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      attrs = %{
+        conversation_id: conversation.id,
+        sender_id: user1_id,
+        message_type: "text",
+        content: "ok",
+        client_random: 88_882
+      }
+
+      assert {:ok, _message} =
+               ConversationServer.send_message(conversation.id, attrs)
+    end
+
+    test "remove_member broadcast force_leave avec le user_id cible", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      assert {:ok, _} = ConversationServer.remove_member(conversation.id, user1_id)
+
+      # member_removed part en premier
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "member_removed"
+                     },
+                     500
+
+      # force_leave part avec le payload identifiant la cible pour que
+      # le ConversationChannel ferme le socket cote user kick.
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "force_leave",
+                       payload: payload
+                     },
+                     500
+
+      assert payload.user_id == user1_id
+      assert payload.reason == "kicked"
     end
   end
 end

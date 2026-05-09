@@ -807,4 +807,65 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       refute Map.has_key?(WhisprMessagingWeb.Presence.list(topic), typing_key)
     end
   end
+
+  # WHISPR-1390: le membre kick doit etre disconnect du channel (et pas
+  # juste recevoir `member_removed`). Sans ca il continue a traiter
+  # handle_in :send_message via son socket deja etabli.
+  describe "force_leave (WHISPR-1390)" do
+    test "le user cible recoit force_leave et son socket est ferme", %{
+      socket: socket,
+      conversation: conversation,
+      user_id: user_id
+    } do
+      # Le channel est link au test process via subscribe_and_join. Quand
+      # handle_out renvoie {:stop, :shutdown, _}, l'EXIT remonte vers
+      # nous : on trap pour pouvoir l'observer sans crasher le test.
+      Process.flag(:trap_exit, true)
+
+      {:ok, _, joined_socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
+
+      channel_pid = joined_socket.channel_pid
+      ref = Process.monitor(channel_pid)
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "conversation:#{conversation.id}",
+        "force_leave",
+        %{user_id: user_id, reason: "kicked"}
+      )
+
+      assert_push "force_leave", %{user_id: ^user_id, reason: "kicked"}
+      assert_receive {:DOWN, ^ref, :process, ^channel_pid, _reason}, 1_000
+    end
+
+    test "un autre membre voit son socket survivre au force_leave d'un tiers", %{
+      socket: socket,
+      conversation: conversation,
+      other_user_id: other_user_id
+    } do
+      {:ok, _, joined_socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
+
+      channel_pid = joined_socket.channel_pid
+      ref = Process.monitor(channel_pid)
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "conversation:#{conversation.id}",
+        "force_leave",
+        %{user_id: other_user_id, reason: "kicked"}
+      )
+
+      # Le socket courant ne doit pas etre stoppe (la cible est un autre user).
+      refute_receive {:DOWN, ^ref, :process, ^channel_pid, _reason}, 200
+      assert Process.alive?(channel_pid)
+    end
+  end
 end
