@@ -14,11 +14,19 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.Message
+  alias WhisprMessaging.Services.UserService
   alias WhisprMessagingWeb.Presence
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
   require Logger
+
+  # WHISPR-1364: on intercepte les events qui transportent un sender pour
+  # pouvoir filtrer par destinataire (skip si le sender est bloque par
+  # l'user assis derriere ce socket). Le filtrage cote pid est le seul
+  # endroit ou on connait l'identite du destinataire ; un broadcast topic
+  # `conversation:<id>` ne sait pas qui est sur le canal.
+  intercept ["new_message", "message_edited", "reaction_added", "reaction_removed"]
 
   @impl true
   def join("conversation:" <> conversation_id, _payload, socket) do
@@ -57,8 +65,46 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, :not_member} ->
         {:error, %{reason: "not_authorized"}}
 
+      {:error, :blocked} ->
+        # WHISPR-1364: conv directe entre A et B, l'un des deux a bloque
+        # l'autre -> on refuse le join. Pour les groupes le block est
+        # honore via le filtre handle_out, l'user reste membre.
+        {:error, %{reason: "blocked"}}
+
       {:error, :not_found} ->
         {:error, %{reason: "conversation_not_found"}}
+    end
+  end
+
+  # WHISPR-1364: filtre par destinataire avant push vers le socket. Si le
+  # sender du payload est dans la set des users bloques par l'user assis
+  # derriere ce socket, on skip silencieusement. Symetrie : peu importe
+  # qui a bloque qui (A bloque B ou B bloque A), aucun broadcast entre
+  # eux.
+  @impl true
+  def handle_out(event, payload, socket) when event in ["new_message", "message_edited"] do
+    sender_id = extract_sender_id(payload)
+
+    if sender_id && blocked_for_recipient?(socket, sender_id) do
+      {:noreply, socket}
+    else
+      push(socket, event, payload)
+      {:noreply, socket}
+    end
+  end
+
+  def handle_out(event, payload, socket)
+      when event in ["reaction_added", "reaction_removed"] do
+    # Pour les reactions, le sender est `userId` (camelCase, cf
+    # `add_reaction` plus bas). Meme logique : si l'user qui reagit a
+    # ete bloque par le destinataire, on n'envoie pas l'event.
+    reactor_id = Map.get(payload, "userId") || Map.get(payload, :user_id)
+
+    if reactor_id && blocked_for_recipient?(socket, reactor_id) do
+      {:noreply, socket}
+    else
+      push(socket, event, payload)
+      {:noreply, socket}
     end
   end
 
@@ -411,7 +457,13 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         # Then check membership
         case Conversations.get_conversation_member(conversation_id, user_id) do
           %ConversationMember{is_active: true} ->
-            {:ok, conversation}
+            # WHISPR-1364: pour les conv directes, on bloque le join si
+            # l'un des deux a bloque l'autre. Sinon le user bloque pourrait
+            # quand meme atterrir sur la chat screen et envoyer des
+            # messages que l'autre voit. Pour les groupes on laisse joindre :
+            # l'user reste legitimement membre, le filtre se fait au niveau
+            # broadcast (handle_out).
+            check_direct_block(conversation, user_id)
 
           _ ->
             {:error, :not_member}
@@ -419,6 +471,54 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
       {:error, :not_found} ->
         {:error, :not_found}
+    end
+  end
+
+  # Pour conv directe : on cherche l'autre membre et on demande au
+  # user-service si la paire est bloquee (relation symetrique). On
+  # fail-open sur erreur transitoire pour ne pas casser le messaging si
+  # user-service est down.
+  defp check_direct_block(%{type: "direct"} = conversation, user_id) do
+    other_id =
+      conversation.id
+      |> Conversations.list_conversation_members()
+      |> Enum.map(& &1.user_id)
+      |> Enum.find(fn id -> id != user_id end)
+
+    case other_id do
+      nil ->
+        {:ok, conversation}
+
+      other ->
+        case UserService.check_user_blocked(user_id, other) do
+          {:ok, true} -> {:error, :blocked}
+          _ -> {:ok, conversation}
+        end
+    end
+  end
+
+  defp check_direct_block(conversation, _user_id), do: {:ok, conversation}
+
+  # Helpers WHISPR-1364: extraction du sender du payload broadcaste pour
+  # le filtrage handle_out. Le payload est camelize_keys/1 (cf
+  # `serialize_message`) donc on lit `"senderId"` cote string.
+  defp extract_sender_id(%{message: %{"senderId" => sender_id}}), do: sender_id
+  defp extract_sender_id(%{"message" => %{"senderId" => sender_id}}), do: sender_id
+  defp extract_sender_id(%{message: %{senderId: sender_id}}), do: sender_id
+  defp extract_sender_id(_), do: nil
+
+  # Le destinataire = user assis derriere ce socket. On verifie s'il a
+  # une relation de blocage avec le sender, en passant par la map cachee
+  # en ETS pour ne pas hammer user-service par broadcast.
+  defp blocked_for_recipient?(socket, sender_id) do
+    recipient_id = socket.assigns.user_id
+    conversation_id = socket.assigns.conversation_id
+
+    blocks = Conversations.get_blocks_for_conversation(conversation_id)
+
+    case Map.get(blocks, recipient_id) do
+      nil -> false
+      set -> MapSet.member?(set, sender_id)
     end
   end
 
