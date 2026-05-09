@@ -4,8 +4,8 @@ defmodule WhisprMessaging.Workers.CallsSubscriber do
   Phoenix channels hosted by this service.
 
   Subscribes to:
-    * `whispr:calls:initiated` — published by calls-service when a caller
-      issues `POST /calls` and the LiveKit room has been provisioned.
+    * `whispr:calls:initiated`       — caller issued POST /calls, LiveKit room provisioned.
+    * `whispr:calls:participant_left` — LiveKit webhook: a participant left the room.
 
   Rebroadcasts as `incoming_call` on `user:<callee_id>` for every participant
   other than the initiator, so `useWebSocket.ts` in mobile-app can open the
@@ -24,7 +24,10 @@ defmodule WhisprMessaging.Workers.CallsSubscriber do
   use GenServer
   require Logger
 
-  @channels ["whispr:calls:initiated"]
+  alias WhisprMessaging.Conversations.Conversation
+  alias WhisprMessaging.Repo
+
+  @channels ["whispr:calls:initiated", "whispr:calls:participant_left"]
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -98,6 +101,9 @@ defmodule WhisprMessaging.Workers.CallsSubscriber do
   defp route_event("whispr:calls:initiated", payload),
     do: broadcast_incoming_call(payload)
 
+  defp route_event("whispr:calls:participant_left", payload),
+    do: handle_participant_left(payload)
+
   defp route_event(channel, _payload),
     do: Logger.warning("[CallsSubscriber] Unknown channel: #{channel}")
 
@@ -134,5 +140,67 @@ defmodule WhisprMessaging.Workers.CallsSubscriber do
     )
 
     :ok
+  end
+
+  @doc """
+  Handles a `participant_left` event from calls-service.
+
+  Guards against two late-arrival scenarios that occur when the LiveKit webhook
+  fires after the conversation has already been ended or removed:
+
+  - conversation absente (nil) : log warn, retourne :ok — idempotent.
+  - conversation inactive (is_active: false) : log info, retourne :ok — idempotent.
+  - cas normal : broadcast `participant_left` sur le topic conversation:*.
+
+  Exposed as a public function so tests can invoke it directly without a live
+  Redis transport (meme pattern que `broadcast_incoming_call/1`).
+  """
+  @spec handle_participant_left(map()) :: :ok
+  def handle_participant_left(payload) do
+    conversation_id = payload["conversation_id"]
+    user_id = payload["user_id"]
+    call_id = payload["call_id"]
+
+    case Repo.get(Conversation, conversation_id) do
+      nil ->
+        Logger.warning(
+          "[CallsSubscriber] participant_left ignored: conversation not found",
+          conversation_id: conversation_id,
+          user_id: user_id,
+          call_id: call_id
+        )
+
+        :ok
+
+      %Conversation{is_active: false} ->
+        Logger.info(
+          "[CallsSubscriber] participant_left ignored: conversation inactive",
+          conversation_id: conversation_id,
+          user_id: user_id,
+          call_id: call_id
+        )
+
+        :ok
+
+      %Conversation{is_active: true} ->
+        data = %{
+          "call_id" => call_id,
+          "conversation_id" => conversation_id,
+          "user_id" => user_id,
+          "left_at" => payload["left_at"]
+        }
+
+        WhisprMessagingWeb.Endpoint.broadcast(
+          "conversation:#{conversation_id}",
+          "participant_left",
+          data
+        )
+
+        Logger.info(
+          "[CallsSubscriber] Broadcast participant_left (call=#{call_id}, user=#{user_id})"
+        )
+
+        :ok
+    end
   end
 end
