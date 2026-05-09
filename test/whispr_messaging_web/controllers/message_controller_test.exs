@@ -2,7 +2,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
   use WhisprMessagingWeb.ConnCase, async: true
   use WhisprMessagingWeb, :verified_routes
 
-  alias WhisprMessaging.{Conversations, Messages}
+  alias WhisprMessaging.{Conversations, Messages, Repo}
+  alias WhisprMessaging.Messages.Message
 
   setup do
     # Create test users
@@ -549,6 +550,36 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         |> json_response(422)
 
       assert response["errors"] != nil
+    end
+
+    # WHISPR-1374: la branche bad_request (reason atom non matche) ne doit pas
+    # leaker le contenu de reason via inspect/1 dans la reponse HTTP.
+    test "returns generic bad_request without leaking inspected reason", %{
+      message: message,
+      user1_id: user1_id
+    } do
+      # Soft-delete pour forcer Message.editable?/1 a renvoyer false ->
+      # edit_message renvoie {:error, :not_editable} qui tombe dans bad_request.
+      {:ok, _} =
+        message
+        |> Message.delete_changeset(true)
+        |> Repo.update()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        put(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}",
+          %{"content" => "noop", "metadata" => %{}}
+        )
+        |> json_response(400)
+
+      assert response["error"] == "bad_request"
+      refute response["error"] =~ "not_editable"
     end
   end
 

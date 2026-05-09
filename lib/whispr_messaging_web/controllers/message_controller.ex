@@ -7,6 +7,8 @@ defmodule WhisprMessagingWeb.MessageController do
   use WhisprMessagingWeb, :controller
   use PhoenixSwagger
 
+  require Logger
+
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.ConversationServer
   alias WhisprMessaging.Events.MessagingEvents
@@ -388,9 +390,17 @@ defmodule WhisprMessagingWeb.MessageController do
           |> json(%{error: "Message not found"})
 
         {:error, reason} ->
+          # WHISPR-1374: message generique cote client, detail server-side dans
+          # Logger pour ne pas exposer le contenu du changeset / message user.
+          Logger.warning("message edit failed",
+            message_id: id,
+            user_id: user_id,
+            reason: inspect(reason)
+          )
+
           conn
           |> put_status(:bad_request)
-          |> json(%{error: inspect(reason)})
+          |> json(%{error: "bad_request"})
       end
     end
   end
@@ -505,8 +515,15 @@ defmodule WhisprMessagingWeb.MessageController do
     |> json(%{errors: translate_errors(cs)})
   end
 
-  defp handle_forward_result(conn, {:error, reason}),
-    do: conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+  # WHISPR-1374: message generique cote client, detail server-side dans Logger
+  # pour ne pas exposer le contenu du changeset / message user via la reponse HTTP.
+  defp handle_forward_result(conn, {:error, reason}) do
+    Logger.warning("message forward failed", reason: inspect(reason))
+
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "bad_request"})
+  end
 
   defp broadcast_forwarded(message),
     do: broadcast_new_message(message.conversation_id, message)
