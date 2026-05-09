@@ -194,20 +194,27 @@ defmodule WhisprMessagingWeb.MessageController do
 
     # Diffuse aussi sur le canal `user:*` pour les membres hors expéditeur,
     # ce qui alimente ConversationsListScreen sans nécessiter que l'écran soit ouvert.
+    # WHISPR-1315 : on extrait `members` une seule fois et on le passe en param
+    # au helper de fanout + au publish Redis pour eviter une double query.
     members = Conversations.list_conversation_members(conversation_id)
-
-    Enum.each(members, fn member ->
-      if member.user_id != message.sender_id do
-        Endpoint.broadcast("user:#{member.user_id}", "new_message", %{
-          message: serialized
-        })
-      end
-    end)
+    fanout_user_channels(members, "new_message", %{message: serialized}, message.sender_id)
 
     # WHISPR-1109: publish on Redis so notification-service can bump the
     # badge counter of every recipient. The REST path never hits the
     # GenServer, so the publish has to live here too.
     MessagingEvents.publish_new_message(message, members)
+  end
+
+  # Fanout d un event sur le canal `user:<id>` de chaque membre, en excluant
+  # l auteur (sender / editor / deleter) qui recoit deja l event via le topic
+  # conversation:*. Helper centralise pour eviter le N+1 sur `list_conversation_members`
+  # quand plusieurs paths (create / update / delete) ont besoin du meme fanout.
+  defp fanout_user_channels(members, event, payload, exclude_user_id) do
+    Enum.each(members, fn member ->
+      if member.user_id != exclude_user_id do
+        Endpoint.broadcast("user:#{member.user_id}", event, payload)
+      end
+    end)
   end
 
   swagger_path :show do
@@ -352,11 +359,9 @@ defmodule WhisprMessagingWeb.MessageController do
           # Fanout aussi sur le canal user:* de chaque membre pour que la mise a jour
           # remonte sur ConversationsListScreen meme quand la ChatScreen n est pas ouverte
           # (meme pattern que message_deleted - WHISPR-1293/1301).
-          message.conversation_id
-          |> Conversations.list_conversation_members()
-          |> Enum.each(fn member ->
-            Endpoint.broadcast("user:#{member.user_id}", "message_edited", payload)
-          end)
+          # On exclut l editeur (= sender du message original) sinon il recoit l event 2x.
+          members = Conversations.list_conversation_members(message.conversation_id)
+          fanout_user_channels(members, "message_edited", payload, message.sender_id)
 
           json(conn, %{
             data: render_message(message),
@@ -438,11 +443,10 @@ defmodule WhisprMessagingWeb.MessageController do
           # Fanout aussi sur le canal user:* de chaque membre pour que la suppression
           # remonte sur ConversationsListScreen meme quand la ChatScreen n est pas ouverte
           # (cas typique d un groupe ou seuls quelques membres ont l ecran de conv au premier plan).
-          message.conversation_id
-          |> Conversations.list_conversation_members()
-          |> Enum.each(fn member ->
-            Endpoint.broadcast("user:#{member.user_id}", "message_deleted", payload)
-          end)
+          # On exclut l expediteur du fanout user:* sinon il recoit l event 2x
+          # (une fois sur conversation:*, une fois sur son propre user:*).
+          members = Conversations.list_conversation_members(message.conversation_id)
+          fanout_user_channels(members, "message_deleted", payload, message.sender_id)
         end
 
         json(conn, %{
