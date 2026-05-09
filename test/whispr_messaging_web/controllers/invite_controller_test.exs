@@ -164,5 +164,49 @@ defmodule WhisprMessagingWeb.InviteControllerTest do
       |> post(~p"/messaging/api/v1/invites/#{random_token}/join")
       |> json_response(404)
     end
+
+    # WHISPR-1416 — un kické ne se re-invite pas silencieusement via le lien
+    test "previously kicked user cannot rejoin via invite link", ctx do
+      {:ok, conversation} = Invites.generate_invite(ctx.conversation.id, ctx.admin_id)
+
+      # on simule un kick : l'admin retire member_id
+      {:ok, _} = Conversations.remove_conversation_member(ctx.conversation.id, ctx.member_id)
+
+      body =
+        build_conn()
+        |> authenticated_conn(ctx.member_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/invites/#{conversation.invite_token}/join")
+        |> json_response(400)
+
+      assert body["error"] =~ "previously kicked"
+
+      # le membre reste inactif (pas de réactivation silencieuse)
+      assert %ConversationMember{is_active: false} =
+               Conversations.get_conversation_member(ctx.conversation.id, ctx.member_id)
+    end
+
+    # WHISPR-1416 — plafond de membres pour bloquer le flood via invite link
+    test "join is rejected when group has reached the member cap", ctx do
+      {:ok, conversation} = Invites.generate_invite(ctx.conversation.id, ctx.admin_id)
+
+      # remplir le groupe jusqu'au plafond (256) avant le join du joiner
+      filler_count = 256 - Conversations.count_conversation_members(ctx.conversation.id)
+
+      Enum.each(1..filler_count, fn _ ->
+        Conversations.add_conversation_member(ctx.conversation.id, Ecto.UUID.generate())
+      end)
+
+      body =
+        build_conn()
+        |> authenticated_conn(ctx.joiner_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/invites/#{conversation.invite_token}/join")
+        |> json_response(400)
+
+      assert body["error"] =~ "member cap"
+
+      assert is_nil(Conversations.get_conversation_member(ctx.conversation.id, ctx.joiner_id))
+    end
   end
 end
