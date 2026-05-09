@@ -32,4 +32,19 @@ defmodule WhisprMessaging.Services.UserServiceBehaviour do
   """
   @callback check_user_blocked(blocker_id :: String.t(), blocked_id :: String.t()) ::
               {:ok, boolean()} | {:error, term()}
+
+  @doc """
+  Renvoie les flags de privacy settings du user (`read_receipts`,
+  `last_seen_privacy`, etc.) en allant chercher
+  `GET /internal/users/:id/privacy` cote user-service.
+
+  Politique fail-safe : sur `{:error, _}` les appelants doivent
+  fallback en mode "broadcast autorise" (fail-open) plutot que de
+  casser un scenario nominal. Le gating WhatsApp punitive est une
+  regle de privacy, pas une regle de securite, donc une indispo de
+  user-service ne doit pas couper les read receipts par defaut.
+  """
+  @callback get_privacy_settings(user_id :: String.t()) ::
+              {:ok, %{required(:read_receipts) => boolean(), optional(atom()) => any()}}
+              | {:error, term()}
 end

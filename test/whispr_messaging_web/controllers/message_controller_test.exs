@@ -884,4 +884,108 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                |> json_response(404)
     end
   end
+
+  # WHISPR-1304: POST /messaging/api/v1/messages/:id/unread
+  describe "POST /messaging/api/v1/messages/:id/unread (WHISPR-1304)" do
+    setup %{conversation: conversation, user1_id: user1_id, user2_id: user2_id} do
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "to_unmark",
+          client_random: 77_777
+        })
+
+      # user2 a deja lu le message
+      {:ok, _} = Messages.mark_message_read(message.id, user2_id)
+
+      %{message: message, _user2: user2_id}
+    end
+
+    test "renvoie 200 + broadcast message_unread", %{
+      conversation: conversation,
+      message: message,
+      user2_id: user2_id
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/messages/#{message.id}/unread")
+        |> json_response(200)
+
+      assert response["data"]["status"] == "unread"
+      assert response["data"]["messageId"] == message.id
+      assert response["data"]["conversationId"] == conversation.id
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "message_unread"
+                     },
+                     1_000
+    end
+
+    test "renvoie 404 quand le message n'existe pas", %{user2_id: user2_id} do
+      missing = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      assert %{"errors" => _} =
+               post(conn, ~p"/messaging/api/v1/messages/#{missing}/unread")
+               |> json_response(404)
+    end
+
+    test "renvoie 403 quand le caller n'est pas membre de la conversation", %{message: message} do
+      stranger = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(stranger)
+        |> json_conn()
+
+      assert %{"errors" => _} =
+               post(conn, ~p"/messaging/api/v1/messages/#{message.id}/unread")
+               |> json_response(403)
+    end
+
+    test "skip le broadcast quand reader.read_receipts=false", %{
+      conversation: conversation,
+      message: message,
+      user2_id: user2_id
+    } do
+      Process.put(:mock_user_service_client, %{
+        get_privacy_settings: fn ^user2_id ->
+          {:ok,
+           %{
+             read_receipts: false,
+             last_seen_privacy: nil,
+             online_status: nil
+           }}
+        end
+      })
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user2_id)
+        |> json_conn()
+
+      response =
+        post(conn, ~p"/messaging/api/v1/messages/#{message.id}/unread")
+        |> json_response(200)
+
+      assert response["data"]["status"] == "unread"
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "message_unread"}, 200
+    end
+  end
 end
