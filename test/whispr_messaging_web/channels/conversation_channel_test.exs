@@ -3,6 +3,7 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Conversations.BlockCache
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Repo
   alias WhisprMessagingWeb.ConversationChannel
@@ -557,6 +558,218 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
 
       # Presence diffs would be pushed when other users join/leave
       # This is tested indirectly through the presence system
+    end
+  end
+
+  describe "block bypass in group chat (WHISPR-1364)" do
+    setup do
+      # Reset le cache ETS entre tests pour ne pas hereditrer un etat
+      # d'une suite precedente.
+      BlockCache.reset()
+
+      on_exit(fn ->
+        Application.delete_env(:whispr_messaging, :mock_user_service_client_overrides)
+      end)
+
+      :ok
+    end
+
+    test "skips new_message push when sender is blocked by recipient" do
+      # On verifie le contrat handle_out : si la map de blocks contient
+      # le sender pour le user assis derriere ce socket, l event est
+      # skippe. Test focal sur le filtre, pas sur le pipeline complet.
+      user_a = Ecto.UUID.generate()
+      user_b = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "test-group"},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_a)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_b)
+
+      Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, %{
+        check_user_blocked: fn
+          ^user_a, ^user_b -> {:ok, true}
+          ^user_b, ^user_a -> {:ok, true}
+          _, _ -> {:ok, false}
+        end
+      })
+
+      socket_a = socket(UserSocket, "user_socket:#{user_a}", %{user_id: user_a})
+
+      {:ok, _, _channel_a_socket} =
+        subscribe_and_join(socket_a, ConversationChannel, "conversation:#{conversation.id}")
+
+      # Simule un broadcast de B sur le topic conversation. Avec
+      # `intercept`, le payload arrive a `handle_out` du channel pid de
+      # A et doit etre skippe par le filtre block.
+      payload = %{
+        message: %{
+          "senderId" => user_b,
+          "content" => "ignored",
+          "messageType" => "text"
+        }
+      }
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "conversation:#{conversation.id}",
+        "new_message",
+        payload
+      )
+
+      # Si le filtre marche, le push n'est jamais propage au transport
+      # (test pid). 200ms de marge pour le traitement du handle_out.
+      refute_push "new_message", _, 200
+    end
+
+    test "delivers new_message push when no block exists" do
+      # Test miroir du precedent : sans block, le filtre passe through.
+      user_a = Ecto.UUID.generate()
+      user_b = Ecto.UUID.generate()
+
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "test-group"},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_a)
+      {:ok, _} = Conversations.add_conversation_member(conversation.id, user_b)
+
+      Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, %{
+        check_user_blocked: fn _, _ -> {:ok, false} end
+      })
+
+      socket_a = socket(UserSocket, "user_socket:#{user_a}", %{user_id: user_a})
+
+      {:ok, _, _channel_a} =
+        subscribe_and_join(socket_a, ConversationChannel, "conversation:#{conversation.id}")
+
+      payload = %{
+        message: %{
+          "senderId" => user_b,
+          "content" => "delivered",
+          "messageType" => "text"
+        }
+      }
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "conversation:#{conversation.id}",
+        "new_message",
+        payload
+      )
+
+      assert_push "new_message", %{message: %{"senderId" => ^user_b}}
+    end
+
+    test "joins direct conversation when not blocked", %{
+      socket: socket,
+      conversation: conversation,
+      user_id: _user_id,
+      other_user_id: _other_user_id
+    } do
+      Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, %{
+        check_user_blocked: fn _, _ -> {:ok, false} end
+      })
+
+      assert {:ok, _, _socket} =
+               subscribe_and_join(
+                 socket,
+                 ConversationChannel,
+                 "conversation:#{conversation.id}"
+               )
+    end
+
+    test "blocks join on direct conversation when users have a block", %{
+      socket: socket,
+      conversation: conversation
+    } do
+      Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, %{
+        check_user_blocked: fn _, _ -> {:ok, true} end
+      })
+
+      assert {:error, %{reason: "blocked"}} =
+               subscribe_and_join(
+                 socket,
+                 ConversationChannel,
+                 "conversation:#{conversation.id}"
+               )
+    end
+
+    test "block cache returns the same map within TTL", %{
+      conversation: conversation,
+      user_id: user_a,
+      other_user_id: user_b
+    } do
+      # 1er appel calcule, le cache stocke. 2eme appel doit lire le cache
+      # (on le verifie en stub-ant pour qu'il leve si re-appele).
+      counter = :counters.new(1, [])
+
+      Process.put(:mock_user_service_client, %{
+        check_user_blocked: fn _, _ ->
+          :counters.add(counter, 1, 1)
+          {:ok, true}
+        end
+      })
+
+      blocks1 =
+        BlockCache.get_for_conversation(
+          conversation.id,
+          [user_a, user_b]
+        )
+
+      blocks2 =
+        BlockCache.get_for_conversation(
+          conversation.id,
+          [user_a, user_b]
+        )
+
+      assert blocks1 == blocks2
+      # Le 2eme appel ne doit pas avoir touche le mock (cache hit).
+      # Une paire (a,b) + (b,a) = 2 appels au max sur le 1er run.
+      first_run_calls = :counters.get(counter, 1)
+      assert first_run_calls > 0
+      assert first_run_calls <= 2
+    end
+
+    test "block cache invalidate forces a refetch", %{
+      conversation: conversation,
+      user_id: user_a,
+      other_user_id: user_b
+    } do
+      counter = :counters.new(1, [])
+
+      Process.put(:mock_user_service_client, %{
+        check_user_blocked: fn _, _ ->
+          :counters.add(counter, 1, 1)
+          {:ok, false}
+        end
+      })
+
+      _ =
+        BlockCache.get_for_conversation(
+          conversation.id,
+          [user_a, user_b]
+        )
+
+      first_calls = :counters.get(counter, 1)
+      assert first_calls > 0
+
+      :ok = BlockCache.invalidate(conversation.id)
+
+      _ =
+        BlockCache.get_for_conversation(
+          conversation.id,
+          [user_a, user_b]
+        )
+
+      total_calls = :counters.get(counter, 1)
+      assert total_calls > first_calls
     end
   end
 

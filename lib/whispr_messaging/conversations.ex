@@ -9,7 +9,13 @@ defmodule WhisprMessaging.Conversations do
   import Ecto.Query, warn: false
   alias WhisprMessaging.Repo
 
-  alias WhisprMessaging.Conversations.{Conversation, ConversationMember, ConversationSettings}
+  alias WhisprMessaging.Conversations.{
+    BlockCache,
+    Conversation,
+    ConversationMember,
+    ConversationSettings
+  }
+
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Services.UserService
 
@@ -218,6 +224,29 @@ defmodule WhisprMessaging.Conversations do
   def list_conversation_members(conversation_id) do
     ConversationMember.active_members_query(conversation_id)
     |> Repo.all()
+  end
+
+  @doc """
+  WHISPR-1364: renvoie la map des relations de blocage entre membres
+  d'une conversation, pour filtrer le broadcast cote channel.
+
+  Forme : `%{user_id => MapSet.t([blocked_user_id, ...])}`. La cle est
+  un destinataire potentiel ; la valeur l'ensemble des autres membres
+  qu'il considere bloques (ou qui l'ont bloque - relation symetrique).
+  Quand un message provient d'un sender dans cet ensemble, on doit
+  skipper le broadcast vers ce destinataire.
+
+  Cache 60s par conversation_id (cf `BlockCache`). Sur erreur transitoire
+  user-service, on fail-open : pas de filtre, l'app messaging ne casse
+  pas si user-service est down.
+  """
+  def get_blocks_for_conversation(conversation_id) do
+    member_ids =
+      conversation_id
+      |> list_conversation_members()
+      |> Enum.map(& &1.user_id)
+
+    BlockCache.get_for_conversation(conversation_id, member_ids)
   end
 
   @doc """
