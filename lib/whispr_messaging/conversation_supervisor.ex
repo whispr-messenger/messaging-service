@@ -1,9 +1,9 @@
 defmodule WhisprMessaging.ConversationSupervisor do
   @moduledoc """
-  DynamicSupervisor for managing ConversationServer processes.
+  DynamicSupervisor qui gere les processus ConversationServer.
 
-  Handles starting, stopping, and monitoring individual conversation GenServers.
-  Provides fault tolerance with automatic restarts and cleanup.
+  Demarre, stoppe et surveille les GenServers de conversation. Tolere
+  les fautes via redemarrage automatique et nettoyage des PID morts.
   """
 
   use DynamicSupervisor
@@ -12,14 +12,14 @@ defmodule WhisprMessaging.ConversationSupervisor do
   alias WhisprMessaging.ConversationServer
 
   @doc """
-  Starts the conversation supervisor.
+  Demarre le superviseur de conversations.
   """
   def start_link(init_arg) do
     DynamicSupervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
   @doc """
-  Starts a conversation server for the given conversation ID.
+  Demarre un ConversationServer pour l'ID de conversation donne.
   """
   def start_conversation(conversation_id) do
     case get_conversation_pid(conversation_id) do
@@ -63,7 +63,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Stops a conversation server for the given conversation ID.
+  Stoppe le ConversationServer associe a la conversation donnee.
   """
   def stop_conversation(conversation_id) do
     case get_conversation_pid(conversation_id) do
@@ -89,7 +89,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Gets the PID of a conversation server if it exists.
+  Renvoie le PID du ConversationServer s'il tourne, sinon nil.
   """
   def get_conversation_pid(conversation_id) do
     case Registry.lookup(WhisprMessaging.ConversationRegistry, conversation_id) do
@@ -99,7 +99,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Lists all active conversation servers.
+  Liste toutes les conversations actuellement actives.
   """
   def list_conversations do
     DynamicSupervisor.which_children(__MODULE__)
@@ -110,7 +110,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Gets conversation server statistics.
+  Statistiques sur les ConversationServers (total, actifs, memoire).
   """
   def get_stats do
     children = DynamicSupervisor.which_children(__MODULE__)
@@ -123,7 +123,8 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Ensures a conversation server is running for the given conversation ID.
+  Garantit qu'un ConversationServer tourne pour la conversation donnee
+  (le demarre si besoin).
   """
   def ensure_conversation_server(conversation_id) do
     case get_conversation_pid(conversation_id) do
@@ -133,7 +134,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Stops all conversation servers (for graceful shutdown).
+  Stoppe tous les ConversationServers (utilise pour un arret propre).
   """
   def stop_all_conversations do
     children = DynamicSupervisor.which_children(__MODULE__)
@@ -148,7 +149,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Performs health check on conversation servers.
+  Healthcheck sur les ConversationServers.
   """
   def health_check do
     children = DynamicSupervisor.which_children(__MODULE__)
@@ -165,7 +166,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
     }
   end
 
-  # DynamicSupervisor Callbacks
+  # Callbacks DynamicSupervisor
 
   @impl true
   def init(_init_arg) do
@@ -174,7 +175,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
-  # Private Functions
+  # Fonctions privees
 
   defp get_conversation_id_from_pid(pid) do
     case Registry.keys(WhisprMessaging.ConversationRegistry, pid) do
@@ -200,10 +201,10 @@ defmodule WhisprMessaging.ConversationSupervisor do
     end
   end
 
-  # Management functions for operations
+  # Fonctions de gestion utilisees en operationnel
 
   @doc """
-  Restarts a conversation server if it's unhealthy.
+  Redemarre un ConversationServer si son etat est instable.
   """
   def restart_conversation(conversation_id) do
     case get_conversation_pid(conversation_id) do
@@ -234,7 +235,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
   end
 
   @doc """
-  Gracefully shuts down idle conversation servers.
+  Stoppe proprement les ConversationServers inactifs depuis trop longtemps.
   """
   def cleanup_idle_conversations(idle_threshold_minutes \\ 30) do
     children = DynamicSupervisor.which_children(__MODULE__)
@@ -270,7 +271,7 @@ defmodule WhisprMessaging.ConversationSupervisor do
           minutes_since_activity = DateTime.diff(DateTime.utc_now(), state.last_activity, :minute)
           minutes_since_activity >= threshold_minutes
         catch
-          # Consider unresponsive processes as idle
+          # un process qui ne repond plus est traite comme inactif
           :exit, _ -> true
         end
     end

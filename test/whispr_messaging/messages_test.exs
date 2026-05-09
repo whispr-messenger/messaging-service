@@ -10,7 +10,7 @@ defmodule WhisprMessaging.MessagesTest do
 
   describe "messages" do
     setup do
-      # Create test conversation
+      # cree une conversation de test
       {:ok, conversation} =
         Conversations.create_conversation(%{
           type: "direct",
@@ -18,7 +18,7 @@ defmodule WhisprMessaging.MessagesTest do
           is_active: true
         })
 
-      # Add test members
+      # ajoute les membres de test
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
 
@@ -80,10 +80,10 @@ defmodule WhisprMessaging.MessagesTest do
         client_random: 12_345
       }
 
-      # First message should succeed
+      # le premier message doit passer
       assert {:ok, _message1} = Messages.create_message(attrs)
 
-      # Second message with same client_random should fail
+      # le second avec le meme client_random doit echouer
       assert {:error, %Ecto.Changeset{}} = Messages.create_message(attrs)
     end
 
@@ -171,7 +171,7 @@ defmodule WhisprMessaging.MessagesTest do
       conversation: conversation,
       user1_id: user1_id
     } do
-      # Create multiple messages with explicit timestamps to ensure order
+      # cree plusieurs messages avec des timestamps explicites pour garantir l'ordre
       base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
       _messages =
@@ -189,23 +189,19 @@ defmodule WhisprMessaging.MessagesTest do
           message
         end
 
-      # Messages created:
-      # 1: now - 1s (newest)
-      # 2: now - 2s
-      # 3: now - 3s
-      # 4: now - 4s
-      # 5: now - 5s (oldest)
-      # Wait, I am subtracting i.
-      # i=1 => -1s
-      # i=5 => -5s.
-      # So message 1 is NEWEST. Message 5 is OLDEST.
-      # Descending order (newest first) should be: 1, 2, 3, 4, 5.
+      # Messages crees :
+      # 1 : now - 1s (le plus recent)
+      # 2 : now - 2s
+      # 3 : now - 3s
+      # 4 : now - 4s
+      # 5 : now - 5s (le plus ancien)
+      # i=1 -> -1s, i=5 -> -5s, donc message 1 = plus recent, message 5 = plus ancien.
+      # ordre desc (du plus recent au plus ancien) attendu : 1, 2, 3, 4, 5.
 
       recent_messages = Messages.list_recent_messages(conversation.id, 3)
 
       assert Enum.count(recent_messages) == 3
-      # Should be in descending order by sent_at
-      # 1 is newest.
+      # tri descendant par sent_at, 1 = le plus recent
       assert Enum.at(recent_messages, 0).client_random == 1
       assert Enum.at(recent_messages, 1).client_random == 2
       assert Enum.at(recent_messages, 2).client_random == 3
@@ -216,7 +212,7 @@ defmodule WhisprMessaging.MessagesTest do
       user1_id: user1_id,
       user2_id: user2_id
     } do
-      # Create messages from user1
+      # cree des messages de user1
       for i <- 1..3 do
         Messages.create_message(%{
           conversation_id: conversation.id,
@@ -227,7 +223,7 @@ defmodule WhisprMessaging.MessagesTest do
         })
       end
 
-      # Count unread messages for user2 (should be 3)
+      # compte les non lus pour user2 (doit etre 3)
       unread_count = Messages.count_unread_messages(conversation.id, user2_id)
       assert unread_count == 3
     end
@@ -235,8 +231,8 @@ defmodule WhisprMessaging.MessagesTest do
 
   describe "new_message redis publish (WHISPR-1158)" do
     setup do
-      # Inject a synchronous dispatcher so the publish runs inline and
-      # doesn't outlive the test, leaking the sandboxed DB connection.
+      # on injecte un dispatcher synchrone pour que le publish tourne inline et
+      # ne survive pas au test (sinon il leak la connexion DB sandboxee).
       alias WhisprMessaging.Events.MessagingEvents, as: Events
 
       sync_dispatcher = fn message ->
@@ -316,7 +312,7 @@ defmodule WhisprMessaging.MessagesTest do
       sender_id: sender_id,
       other_id: other_id
     } do
-      # Remove the other member so the sender is alone in the conversation.
+      # retire l'autre membre pour que l'envoyeur soit seul dans la conversation
       Conversations.remove_conversation_member(conversation.id, other_id)
 
       {:ok, _message} =
@@ -489,7 +485,7 @@ defmodule WhisprMessaging.MessagesTest do
                  user1_id
                )
 
-      # Should create 1 delivery status (for user2, excluding sender user1)
+      # doit creer 1 delivery status (pour user2, l'envoyeur user1 est exclu)
       assert count == 1
     end
 
@@ -497,7 +493,7 @@ defmodule WhisprMessaging.MessagesTest do
       message: message,
       user2_id: user2_id
     } do
-      # First mark as delivered
+      # on marque d'abord comme delivre
       assert {:ok, delivery_status} = Messages.mark_message_delivered(message.id, user2_id)
       assert delivery_status.delivered_at != nil
       assert delivery_status.read_at == nil
@@ -507,10 +503,10 @@ defmodule WhisprMessaging.MessagesTest do
       message: message,
       user2_id: user2_id
     } do
-      # Mark as read without marking delivered first
+      # marque comme lu sans avoir marque delivre avant
       assert {:ok, delivery_status} = Messages.mark_message_read(message.id, user2_id)
       assert delivery_status.read_at != nil
-      # Should be set automatically
+      # doit etre rempli automatiquement
       assert delivery_status.delivered_at != nil
     end
 
@@ -570,14 +566,14 @@ defmodule WhisprMessaging.MessagesTest do
         user1_id
       )
 
-      # Initially pending
+      # au depart : pending
       assert Messages.get_aggregate_delivery_status(message.id) == "pending"
 
-      # After delivery
+      # apres delivery
       Messages.mark_message_delivered(message.id, user2_id)
       assert Messages.get_aggregate_delivery_status(message.id) == "delivered"
 
-      # After reading
+      # apres lecture
       Messages.mark_message_read(message.id, user2_id)
       assert Messages.get_aggregate_delivery_status(message.id) == "read"
     end
@@ -587,7 +583,7 @@ defmodule WhisprMessaging.MessagesTest do
       user1_id = Ecto.UUID.generate()
       user2_id = Ecto.UUID.generate()
 
-      # Create real conversation for DB constraints
+      # vraie conversation pour respecter les contraintes DB
       {:ok, conversation} =
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
@@ -595,13 +591,13 @@ defmodule WhisprMessaging.MessagesTest do
           is_active: true
         })
 
-      # Add members
+      # ajoute les membres
       {:ok, _} = WhisprMessaging.Conversations.add_conversation_member(conversation.id, user1_id)
       {:ok, _} = WhisprMessaging.Conversations.add_conversation_member(conversation.id, user2_id)
 
       conversation_id = conversation.id
 
-      # Create messages
+      # cree les messages
       for i <- 1..3 do
         {:ok, message} =
           Messages.create_message(%{
@@ -612,15 +608,15 @@ defmodule WhisprMessaging.MessagesTest do
             client_random: i
           })
 
-        # Create delivery status for user2
+        # cree un delivery status pour user2
         Messages.create_delivery_statuses_for_conversation(message.id, conversation_id, user1_id)
       end
 
-      # Mark as read
+      # marque comme lu
       assert {:ok, count} = Messages.mark_conversation_read(conversation_id, user2_id)
       assert count == 3
 
-      # Verify timestamps
+      # verifie les timestamps
       statuses = WhisprMessaging.Repo.all(WhisprMessaging.Messages.DeliveryStatus)
       assert Enum.count(statuses) == 3
       assert Enum.all?(statuses, fn s -> s.read_at != nil end)
@@ -670,10 +666,10 @@ defmodule WhisprMessaging.MessagesTest do
       message: message,
       user2_id: user2_id
     } do
-      # First reaction should succeed
+      # la premiere reaction doit passer
       assert {:ok, _reaction} = Messages.add_reaction(message.id, user2_id, "👍")
 
-      # Duplicate reaction should fail
+      # reaction dupliquee : doit echouer
       assert {:error, %Ecto.Changeset{}} = Messages.add_reaction(message.id, user2_id, "👍")
     end
 
@@ -681,13 +677,13 @@ defmodule WhisprMessaging.MessagesTest do
       message: message,
       user2_id: user2_id
     } do
-      # Add reaction first
+      # ajoute la reaction
       {:ok, _reaction} = Messages.add_reaction(message.id, user2_id, "👍")
 
-      # Remove reaction
+      # retire la reaction
       assert {:ok, :deleted} = Messages.remove_reaction(message.id, user2_id, "👍")
 
-      # Try to remove again (should fail)
+      # nouvelle tentative de retrait : doit echouer
       assert {:error, :not_found} = Messages.remove_reaction(message.id, user2_id, "👍")
     end
 
@@ -696,7 +692,7 @@ defmodule WhisprMessaging.MessagesTest do
       user1_id: user1_id,
       user2_id: user2_id
     } do
-      # Add multiple reactions
+      # ajoute plusieurs reactions
       Messages.add_reaction(message.id, user1_id, "👍")
       Messages.add_reaction(message.id, user2_id, "👍")
       Messages.add_reaction(message.id, user1_id, "❤️")
@@ -713,7 +709,7 @@ defmodule WhisprMessaging.MessagesTest do
       _conversation_id = Ecto.UUID.generate()
       sender_id = Ecto.UUID.generate()
 
-      # We need a real conversation for foreign key constraints
+      # il faut une vraie conversation pour les FK
       {:ok, conversation} =
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
@@ -721,7 +717,7 @@ defmodule WhisprMessaging.MessagesTest do
           is_active: true
         })
 
-      # Update conversation_id to real one
+      # remplace conversation_id par celui de la vraie conversation
       conversation_id = conversation.id
 
       assert {:ok, message} =
@@ -745,7 +741,7 @@ defmodule WhisprMessaging.MessagesTest do
       _conversation_id = Ecto.UUID.generate()
       sender_id = Ecto.UUID.generate()
 
-      # We need a real conversation
+      # il faut une vraie conversation
       {:ok, conversation} =
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
@@ -774,7 +770,7 @@ defmodule WhisprMessaging.MessagesTest do
     test "create_system_message/3 creates a system message" do
       _conversation_id = Ecto.UUID.generate()
 
-      # We need a real conversation
+      # il faut une vraie conversation
       {:ok, conversation} =
         WhisprMessaging.Conversations.create_conversation(%{
           type: "group",
@@ -798,7 +794,7 @@ defmodule WhisprMessaging.MessagesTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Ephemeral message tests (WHISPR-469)
+  # Tests messages ephemeres (WHISPR-469)
   # ---------------------------------------------------------------------------
 
   describe "ephemeral messages" do
@@ -863,7 +859,7 @@ defmodule WhisprMessaging.MessagesTest do
       past = DateTime.add(DateTime.utc_now(), -5, :second) |> DateTime.truncate(:second)
       future = DateTime.add(DateTime.utc_now(), 300, :second) |> DateTime.truncate(:second)
 
-      # Insert a non-ephemeral message
+      # insere un message non-ephemere
       {:ok, normal_msg} =
         Messages.create_message(%{
           conversation_id: c.id,
@@ -873,7 +869,7 @@ defmodule WhisprMessaging.MessagesTest do
           client_random: 100
         })
 
-      # Insert a valid ephemeral message (future expiry)
+      # insere un message ephemere valide (expiration future)
       {:ok, live_ephemeral} =
         Messages.create_message(%{
           conversation_id: c.id,
@@ -884,7 +880,7 @@ defmodule WhisprMessaging.MessagesTest do
           expires_at: future
         })
 
-      # Directly insert an already-expired message (bypass validation)
+      # insere directement un message deja expire (bypass de la validation)
       expired_id = Ecto.UUID.generate()
 
       WhisprMessaging.Repo.insert_all("messages", [
@@ -917,7 +913,7 @@ defmodule WhisprMessaging.MessagesTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Draft tests (WHISPR-471)
+  # Tests brouillons (WHISPR-471)
   # ---------------------------------------------------------------------------
 
   describe "drafts" do
@@ -978,7 +974,7 @@ defmodule WhisprMessaging.MessagesTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Scheduled message tests (WHISPR-470)
+  # Tests messages programmes (WHISPR-470)
   # ---------------------------------------------------------------------------
 
   describe "scheduled messages" do
@@ -1158,7 +1154,7 @@ defmodule WhisprMessaging.MessagesTest do
       {:ok, _} = Messages.pin_message(message.id, user_id)
       {:ok, _} = Messages.pin_message(other.id, user_id)
 
-      # Global delete should remove the pin from the listing
+      # un delete global doit retirer le pin de la liste
       {:ok, _} = Messages.delete_message(other.id, user_id, true)
 
       pins = Messages.list_pinned_messages(conversation.id)
@@ -1296,8 +1292,8 @@ defmodule WhisprMessaging.MessagesTest do
     end
 
     test "escapes LIKE wildcards to prevent injection", %{user_id: user_id} do
-      # `%` should match literally, not as a wildcard — there is no message
-      # whose content literally contains `%`, so the result must be empty.
+      # `%` doit matcher au sens litteral et pas etre interprete comme wildcard.
+      # aucun message ne contient `%` litteral, donc le resultat doit etre vide.
       assert Messages.search_messages_global(user_id, "%") == []
     end
 
@@ -1313,11 +1309,11 @@ defmodule WhisprMessaging.MessagesTest do
     test "filters by conversation_id when provided", %{user_id: user_id, hello: hello} do
       other_conv_id = Ecto.UUID.generate()
 
-      # Filter by a conversation the user isn't even in → empty
+      # filtre par une conversation dont l'user n'est meme pas membre -> vide
       assert [] =
                Messages.search_messages_global(user_id, "hello", conversation_id: other_conv_id)
 
-      # Filter by the conversation that actually holds the match → hit
+      # filtre par la conversation qui contient vraiment le match -> hit
       results =
         Messages.search_messages_global(user_id, "hello", conversation_id: hello.conversation_id)
 
@@ -1361,7 +1357,7 @@ defmodule WhisprMessaging.MessagesTest do
     test "clips to a ~40-char radius around the match" do
       content = String.duplicate("a", 100) <> "needle" <> String.duplicate("b", 100)
       result = Messages.build_match_preview(content, "needle")
-      # Excerpt length is roughly 40 + len(needle) + 40 = 86
+      # taille extrait : environ 40 + len(needle) + 40 = 86
       assert byte_size(result.excerpt) <= 86
       assert String.slice(result.excerpt, result.match_start, result.match_length) == "needle"
     end

@@ -1,17 +1,19 @@
 defmodule WhisprMessaging.Services.MediaClient do
   @moduledoc """
-  Lightweight HTTP client for the media-service.
+  Petit client HTTP pour media-service.
 
-  WHISPR-1256: when serializing conversations the messaging-service must hand
-  back URLs that a web client can render in `<img src>` without an
-  `Authorization` header. The `/media/v1/:id/blob` endpoint requires a JWT,
-  so this module forwards the caller's `Authorization` header to media-service
-  and swaps the bare blob URL for the presigned S3 URL the endpoint returns
+  WHISPR-1256 : quand on serialise les conversations, messaging-service
+  doit renvoyer des URLs qu'un client web peut afficher dans
+  `<img src>` sans header `Authorization`. L'endpoint
+  `/media/v1/:id/blob` exige un JWT, donc ce module forwarde le header
+  `Authorization` de l'appelant a media-service et echange l'URL blob
+  brute contre l'URL S3 presignee renvoyee par l'endpoint
   (`{ url, expiresAt }`).
 
-  Mirrors the pattern used by user-service `MediaClientService` (WHISPR-1253)
-  but in Elixir + Finch. Falls back to the input URL on any error so a
-  media-service outage never breaks the conversations list.
+  Reprend le pattern du `MediaClientService` cote user-service
+  (WHISPR-1253) en version Elixir + Finch. En cas d'erreur on retombe
+  sur l'URL d'entree, comme ca un incident media-service ne casse
+  jamais la liste des conversations.
   """
 
   require Logger
@@ -35,19 +37,19 @@ defmodule WhisprMessaging.Services.MediaClient do
   )
 
   # ---------------------------------------------------------------------------
-  # Public API
+  # API publique
   # ---------------------------------------------------------------------------
 
   @doc """
-  Replaces every value under a recognised media key (see `@media_url_keys`)
-  in the given metadata map by a presigned S3 URL.
+  Remplace chaque valeur sous une cle media reconnue (voir
+  `@media_url_keys`) dans la map metadata par une URL S3 presignee.
 
-  Untouched when:
-    - `metadata` is not a map
-    - the value is not a binary
-    - the value does not look like `/media/v1/:uuid/(blob|thumbnail)`
-    - `authorization` is `nil` or empty
-    - media-service is unreachable / returns an error
+  On laisse tel quel quand :
+    - `metadata` n'est pas une map
+    - la valeur n'est pas un binary
+    - la valeur ne ressemble pas a `/media/v1/:uuid/(blob|thumbnail)`
+    - `authorization` est `nil` ou vide
+    - media-service est injoignable ou renvoie une erreur
   """
   def presign_metadata_urls(metadata, authorization)
 
@@ -74,9 +76,9 @@ defmodule WhisprMessaging.Services.MediaClient do
   end
 
   @doc """
-  Returns `{:ok, presigned_url}` when the input URL points to a media-service
-  blob and the presign call succeeds. Returns `:unchanged` otherwise — caller
-  keeps the original value.
+  Renvoie `{:ok, presigned_url}` quand l'URL en entree pointe vers un
+  blob media-service et que le presign reussit. Renvoie `:unchanged`
+  sinon - dans ce cas l'appelant garde la valeur d'origine.
   """
   def maybe_presign_url(url, authorization) when is_binary(url) do
     case extract_media_id(url) do
@@ -94,12 +96,13 @@ defmodule WhisprMessaging.Services.MediaClient do
   def maybe_presign_url(_url, _authorization), do: :unchanged
 
   @doc """
-  Asks media-service for a presigned URL. Returns `{:ok, url}` on success,
-  `{:error, reason}` otherwise.
+  Demande une URL presignee a media-service. Renvoie `{:ok, url}` en
+  cas de succes, `{:error, reason}` sinon.
 
-  - `media_id` — the UUID extracted from the bare blob URL
-  - `kind` — `:blob` or `:thumbnail`
-  - `authorization` — the raw `Authorization` header value (`"Bearer ..."`)
+  - `media_id` : UUID extrait de l'URL blob brute
+  - `kind` : `:blob` ou `:thumbnail`
+  - `authorization` : valeur brute du header `Authorization`
+    (`"Bearer ..."`)
   """
   def presign(media_id, kind, authorization)
       when is_binary(media_id) and kind in [:blob, :thumbnail] do
@@ -114,7 +117,7 @@ defmodule WhisprMessaging.Services.MediaClient do
   end
 
   # ---------------------------------------------------------------------------
-  # Cache management (ETS, lazy initialised)
+  # Gestion du cache (ETS, init lazy)
   # ---------------------------------------------------------------------------
 
   @doc false
@@ -165,7 +168,7 @@ defmodule WhisprMessaging.Services.MediaClient do
   end
 
   # ---------------------------------------------------------------------------
-  # Private helpers
+  # Helpers prives
   # ---------------------------------------------------------------------------
 
   defp do_presign(media_id, kind, authorization) do
@@ -185,7 +188,7 @@ defmodule WhisprMessaging.Services.MediaClient do
         {:ok, presigned_url}
 
       {:ok, %{"url" => nil}} ->
-        # Thumbnail endpoint returns `{ url: null }` when none is stored.
+        # l'endpoint thumbnail renvoie `{ url: null }` quand il n'y en a pas
         {:error, :no_media}
 
       _ ->

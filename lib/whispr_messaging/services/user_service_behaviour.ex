@@ -1,30 +1,34 @@
 defmodule WhisprMessaging.Services.UserServiceBehaviour do
   @moduledoc """
-  Contract for user-service clients consumed by the messaging-service.
+  Contrat des clients user-service consommes par messaging-service.
 
-  Implementations must talk to user-service over the internal HTTP API
-  (`/internal/v1/...`) authenticated by the `x-internal-token` shared secret,
-  matching the contract introduced in WHISPR-1230.
+  Les implementations doivent parler a user-service via l'API HTTP
+  interne (`/internal/v1/...`) authentifiee par le secret partage
+  `x-internal-token`, conformement au contrat introduit dans
+  WHISPR-1230.
   """
 
   @doc """
-  Returns `{:ok, true}` when the user appears to exist on user-service.
+  Renvoie `{:ok, true}` quand l'utilisateur semble exister cote
+  user-service.
 
-  Today this is a proxy of user-service availability — there is no dedicated
-  existence endpoint, so implementations rely on a self-paired call to
-  `/contacts/check`. See `WhisprMessaging.Services.HttpUserServiceClient` for
-  the rationale and the follow-up ticket linked there.
+  Aujourd'hui c'est surtout un proxy de la dispo de user-service : pas
+  d'endpoint d'existence dedie, du coup les implementations passent par
+  un appel self-paire a `/contacts/check`. Voir
+  `WhisprMessaging.Services.HttpUserServiceClient` pour le pourquoi et
+  le ticket de suivi.
   """
   @callback check_user_exists(user_id :: String.t()) ::
               {:ok, boolean()} | {:error, term()}
 
   @doc """
-  Returns `{:ok, true}` when `blocker_id` has blocked `blocked_id` (or vice
-  versa, depending on the implementation's bidirectional semantics), `{:ok,
-  false}` otherwise.
+  Renvoie `{:ok, true}` quand `blocker_id` a bloque `blocked_id` (ou
+  l'inverse, selon la semantique bidirectionnelle de l'implementation),
+  `{:ok, false}` sinon.
 
-  On transient failure the implementation must fail-closed (assume blocked) by
-  returning `{:error, _}` so callers can deny the action by default.
+  En cas d'echec transitoire l'implementation doit fail-closed
+  (considerer comme bloque) en renvoyant `{:error, _}` afin que les
+  appelants refusent l'action par defaut.
   """
   @callback check_user_blocked(blocker_id :: String.t(), blocked_id :: String.t()) ::
               {:ok, boolean()} | {:error, term()}
