@@ -54,6 +54,64 @@ defmodule WhisprMessaging.ConversationsTest do
     end
   end
 
+  describe "list_members_for_conversations/1 (WHISPR-848)" do
+    test "returns an empty map for an empty list" do
+      assert Conversations.list_members_for_conversations([]) == %{}
+    end
+
+    test "returns active member user_ids grouped by conversation in a single query" do
+      user1 = Ecto.UUID.generate()
+      user2 = Ecto.UUID.generate()
+      user3 = Ecto.UUID.generate()
+
+      {:ok, conv1} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, conv2} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv1.id, user1)
+      {:ok, _} = Conversations.add_conversation_member(conv1.id, user2)
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user1)
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user3)
+
+      result = Conversations.list_members_for_conversations([conv1.id, conv2.id])
+
+      assert Enum.sort(Map.get(result, conv1.id)) == Enum.sort([user1, user2])
+      assert Enum.sort(Map.get(result, conv2.id)) == Enum.sort([user1, user3])
+    end
+
+    test "returns conversation_ids in the map only when there are active members" do
+      user_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+
+      missing_id = Ecto.UUID.generate()
+      result = Conversations.list_members_for_conversations([conv.id, missing_id])
+
+      assert Map.get(result, conv.id) == [user_id]
+      refute Map.has_key?(result, missing_id)
+    end
+
+    test "excludes inactive members" do
+      user_id = Ecto.UUID.generate()
+      removed_user_id = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, removed_user_id)
+      {:ok, _} = Conversations.remove_conversation_member(conv.id, removed_user_id)
+
+      result = Conversations.list_members_for_conversations([conv.id])
+      assert result[conv.id] == [user_id]
+    end
+  end
+
   describe "get_conversation/1" do
     test "returns existing conversation" do
       {:ok, conversation} =
