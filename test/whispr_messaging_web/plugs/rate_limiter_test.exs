@@ -19,7 +19,7 @@ defmodule WhisprMessagingWeb.Plugs.RateLimiterTest do
     base = build_conn(:get, path) |> Map.put(:remote_ip, {127, 0, 0, 1})
 
     on_exit(fn ->
-      Redix.command(:redix, ["DEL", "rate_limit:127.0.0.1:#{path}"])
+      Redix.command(:redix, ["DEL", "rate_limit:ip:127.0.0.1:#{path}"])
     end)
 
     %{conn: base, path: path}
@@ -79,9 +79,71 @@ defmodule WhisprMessagingWeb.Plugs.RateLimiterTest do
       refute result.halted
 
       # Check the key built with the forwarded IP exists
-      {:ok, count} = Redix.command(:redix, ["ZCARD", "rate_limit:10.0.0.1:#{path}"])
+      {:ok, count} = Redix.command(:redix, ["ZCARD", "rate_limit:ip:10.0.0.1:#{path}"])
       assert count >= 1
-      Redix.command(:redix, ["DEL", "rate_limit:10.0.0.1:#{path}"])
+      Redix.command(:redix, ["DEL", "rate_limit:ip:10.0.0.1:#{path}"])
+    end
+
+    test "uses user_id when assigns[:user_id] is set (anti-CDN-bucket-collision)", %{path: path} do
+      user_id = "user-#{System.unique_integer([:positive])}"
+
+      conn =
+        build_conn(:get, path)
+        |> Map.put(:remote_ip, {127, 0, 0, 1})
+        |> assign(:user_id, user_id)
+
+      opts = RateLimiter.init(limit: 10, window_seconds: 60)
+      result = RateLimiter.call(conn, opts)
+      refute result.halted
+
+      # le bucket doit etre indexe sur user_id, pas sur l'IP
+      {:ok, user_count} = Redix.command(:redix, ["ZCARD", "rate_limit:user:#{user_id}:#{path}"])
+      assert user_count >= 1
+      {:ok, ip_count} = Redix.command(:redix, ["ZCARD", "rate_limit:ip:127.0.0.1:#{path}"])
+      assert ip_count == 0
+
+      Redix.command(:redix, ["DEL", "rate_limit:user:#{user_id}:#{path}"])
+    end
+
+    test "fallback IP quand assigns[:user_id] absent (route non-authentifiee)", %{path: path} do
+      conn =
+        build_conn(:get, path)
+        |> Map.put(:remote_ip, {192, 168, 1, 42})
+
+      opts = RateLimiter.init(limit: 10, window_seconds: 60)
+      result = RateLimiter.call(conn, opts)
+      refute result.halted
+
+      {:ok, ip_count} = Redix.command(:redix, ["ZCARD", "rate_limit:ip:192.168.1.42:#{path}"])
+      assert ip_count >= 1
+
+      Redix.command(:redix, ["DEL", "rate_limit:ip:192.168.1.42:#{path}"])
+    end
+
+    test "deux users derriere le meme IP ne partagent PAS le bucket", %{path: path} do
+      user_a = "user-a-#{System.unique_integer([:positive])}"
+      user_b = "user-b-#{System.unique_integer([:positive])}"
+
+      build_authed = fn user_id ->
+        build_conn(:get, path)
+        |> Map.put(:remote_ip, {10, 0, 0, 1})
+        |> assign(:user_id, user_id)
+      end
+
+      opts = RateLimiter.init(limit: 1, window_seconds: 60)
+
+      # user_a brule sa quota
+      r1 = RateLimiter.call(build_authed.(user_a), opts)
+      r2 = RateLimiter.call(build_authed.(user_a), opts)
+      refute r1.halted
+      assert r2.halted
+
+      # user_b doit pouvoir passer malgre la meme IP
+      r3 = RateLimiter.call(build_authed.(user_b), opts)
+      refute r3.halted
+
+      Redix.command(:redix, ["DEL", "rate_limit:user:#{user_a}:#{path}"])
+      Redix.command(:redix, ["DEL", "rate_limit:user:#{user_b}:#{path}"])
     end
 
     test "supports a custom key function", %{path: path} do
