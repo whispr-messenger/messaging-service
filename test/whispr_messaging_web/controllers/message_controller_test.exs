@@ -552,6 +552,81 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert payload["deleteForEveryone"] == true
     end
 
+    test "delete_for_everyone fanout sur user:* de chaque membre (WHISPR-1293)", %{
+      message: message,
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      # Subscribe sur les deux topics user:* pour verifier le fanout
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user2_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      _response =
+        delete(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}",
+          delete_for_everyone: true
+        )
+        |> json_response(200)
+
+      # Le sender doit recevoir l event sur son canal user:*
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> sender_topic,
+                       event: "message_deleted",
+                       payload: payload_sender
+                     },
+                     1_000
+
+      assert sender_topic == user1_id
+      assert payload_sender["messageId"] == message.id
+      assert payload_sender["conversationId"] == conversation.id
+      assert payload_sender["deleteForEveryone"] == true
+
+      # L autre membre du groupe doit aussi recevoir l event meme sans avoir
+      # la ChatScreen ouverte sur cette conversation.
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> recipient_topic,
+                       event: "message_deleted",
+                       payload: payload_recipient
+                     },
+                     1_000
+
+      assert recipient_topic == user2_id
+      assert payload_recipient["messageId"] == message.id
+      assert payload_recipient["conversationId"] == conversation.id
+      assert payload_recipient["deleteForEveryone"] == true
+    end
+
+    test "soft delete (pour moi) ne diffuse PAS sur user:* (WHISPR-1293)", %{
+      message: message,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user2_id}")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      _response =
+        delete(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}",
+          delete_for_everyone: false
+        )
+        |> json_response(200)
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "message_deleted"}, 300
+    end
+
     test "soft delete (pour moi) ne diffuse PAS message_deleted (WHISPR-915)", %{
       message: message,
       conversation: conversation,
