@@ -33,10 +33,21 @@ defmodule WhisprMessaging.JwksCache do
   end
 
   @doc """
-  Returns `{:ok, pem_string}` for the given `kid`, or the first cached key if
-  `kid` is `nil`.  Returns `{:error, :not_loaded}` when no keys are available.
+  Returns `{:ok, pem_string}` for the given `kid`.
+
+  - `{:error, :missing_kid}` quand `kid` est `nil` ou vide. On refuse explicitement
+    le fallback "premiere cle du cache" parce que pendant une rotation la map
+    `keys` n'est pas ordonnee : la "premiere" cle devient non-deterministe et
+    on risque d'utiliser une cle non prevue (cf WHISPR-1239).
+  - `{:error, :not_loaded}` quand aucune cle ne correspond au `kid` demande
+    (kid inconnu ou cache vide).
   """
-  def get_signing_key(kid \\ nil) do
+  def get_signing_key(kid \\ nil)
+
+  def get_signing_key(nil), do: {:error, :missing_kid}
+  def get_signing_key(""), do: {:error, :missing_kid}
+
+  def get_signing_key(kid) when is_binary(kid) do
     case GenServer.call(__MODULE__, {:get_signing_key, kid}) do
       nil -> {:error, :not_loaded}
       pem -> {:ok, pem}
@@ -63,12 +74,7 @@ defmodule WhisprMessaging.JwksCache do
   end
 
   @impl true
-  def handle_call({:get_signing_key, nil}, _from, %{keys: keys} = state) do
-    pem = keys |> Map.values() |> List.first()
-    {:reply, pem, state}
-  end
-
-  def handle_call({:get_signing_key, kid}, _from, %{keys: keys} = state) do
+  def handle_call({:get_signing_key, kid}, _from, %{keys: keys} = state) when is_binary(kid) do
     {:reply, Map.get(keys, kid), state}
   end
 

@@ -26,6 +26,33 @@ defmodule WhisprMessagingWeb.UserSocketTest do
     test "rejects connections with an invalid token" do
       assert :error == connect(UserSocket, %{"token" => "not.a.real.jwt"})
     end
+
+    test "rejects a JWT whose header has no kid (WHISPR-1239)" do
+      # Header sans kid -> peek_kid renvoie {:error, :missing_kid} -> connect :error
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT"})
+      assert :error == connect(UserSocket, %{"token" => token})
+    end
+
+    test "rejects a JWT whose header has an empty kid (WHISPR-1239)" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => ""})
+      assert :error == connect(UserSocket, %{"token" => token})
+    end
+
+    test "rejects a JWT whose kid is unknown to the JWKS cache (WHISPR-1239)" do
+      # Header valide avec kid mais inconnu du cache -> :not_loaded -> :error
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => "kid-absent-du-cache"})
+      assert :error == connect(UserSocket, %{"token" => token})
+    end
+  end
+
+  # Construit un JWT structurellement valide (3 segments base64url) avec un
+  # header arbitraire. Le payload et la signature sont des placeholders ;
+  # on s'arrete avant la verification cryptographique dans ces tests.
+  defp forge_jwt(header_map) do
+    header = header_map |> Jason.encode!() |> Base.url_encode64(padding: false)
+    payload = %{"sub" => "user-1"} |> Jason.encode!() |> Base.url_encode64(padding: false)
+    signature = Base.url_encode64("fake-sig", padding: false)
+    "#{header}.#{payload}.#{signature}"
   end
 
   describe "id/1" do

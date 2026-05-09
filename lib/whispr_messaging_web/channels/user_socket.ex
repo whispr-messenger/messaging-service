@@ -52,13 +52,20 @@ defmodule WhisprMessagingWeb.UserSocket do
   end
 
   defp verify_jwt(token) do
-    kid = peek_kid(token)
-
-    with {:ok, pem} <- JwksCache.get_signing_key(kid),
+    with {:ok, kid} <- peek_kid(token),
+         {:ok, pem} <- JwksCache.get_signing_key(kid),
          {:ok, claims} <- validate_token(token, pem),
          {:ok, user_id} <- extract_sub(claims) do
       {:ok, user_id}
     else
+      {:error, :missing_kid} ->
+        Logger.warning("JWT rejete : header sans kid",
+          domain: :socket,
+          cause: :kid_missing
+        )
+
+        {:error, :missing_kid}
+
       {:error, :not_loaded} ->
         Logger.warning("JWKS key not yet loaded, rejecting socket connection", domain: :socket)
         {:error, :jwks_not_loaded}
@@ -80,13 +87,16 @@ defmodule WhisprMessagingWeb.UserSocket do
     |> Joken.Config.add_claim("aud", nil, &__MODULE__.valid_aud?/1)
   end
 
+  # WHISPR-1239 : on impose la presence d'un `kid` dans le header JWT.
+  # Sans `kid`, JwksCache devrait sinon fallback sur "premiere cle du cache",
+  # ce qui devient non-deterministe pendant une rotation (Map non ordonnee).
   defp peek_kid(token) do
     with [header_b64 | _] <- String.split(token, "."),
          {:ok, json} <- Base.url_decode64(header_b64, padding: false),
-         {:ok, %{"kid" => kid}} when is_binary(kid) <- Jason.decode(json) do
-      kid
+         {:ok, %{"kid" => kid}} when is_binary(kid) and kid != "" <- Jason.decode(json) do
+      {:ok, kid}
     else
-      _ -> nil
+      _ -> {:error, :missing_kid}
     end
   end
 
