@@ -9,7 +9,7 @@ when picking up and completing a Jira ticket for this repository.
 
 - Jira cloud ID: `82ae2da5-7ee5-48f7-8877-a644651cd84b`
 - GitHub org/repo: `whispr-messenger/messaging-service`
-- Default base branch: `main`
+- Default base branch: `deploy/preprod` (NE PAS toucher `main` ni `/v1`, voir workspace CLAUDE.md global §31)
 - Language: **Elixir / Phoenix** (`mix`)
 
 ---
@@ -32,8 +32,8 @@ Each ticket **must** be worked on in a dedicated
 multiple tickets.
 
 ```bash
-git fetch origin main
-git worktree add .worktrees/<TICKET-KEY>-<short-kebab-description> -b <TICKET-KEY>-<short-kebab-description> origin/main
+git fetch origin deploy/preprod
+git worktree add .worktrees/<TICKET-KEY>-<short-kebab-description> -b <TICKET-KEY>-<short-kebab-description> origin/deploy/preprod
 cd .worktrees/<TICKET-KEY>-<short-kebab-description>
 ```
 
@@ -41,17 +41,20 @@ Branch naming convention: `WHISPR-XXX-short-description-of-the-fix`
 
 Example:
 ```bash
-git worktree add .worktrees/WHISPR-468-implement-conversation-search -b WHISPR-468-implement-conversation-search origin/main
+git worktree add .worktrees/WHISPR-468-implement-conversation-search -b WHISPR-468-implement-conversation-search origin/deploy/preprod
 cd .worktrees/WHISPR-468-implement-conversation-search
 ```
 
 ### Cleanup after merge
 
-Once the PR is merged and the ticket is closed, remove the worktree:
+Once the PR is merged and the ticket is closed, remove the worktree and revenir sur `deploy/preprod` :
 
 ```bash
+cd /path/to/messaging-service
 git worktree remove .worktrees/<TICKET-KEY>-<short-kebab-description>
 git branch -d <TICKET-KEY>-<short-kebab-description>
+git checkout deploy/preprod
+git pull origin deploy/preprod
 ```
 
 ---
@@ -193,7 +196,7 @@ If no ticket is associated with the PR:
 
 ### Create the PR
 
-Use `mcp__github__create_pull_request`:
+Use `mcp__github__create_pull_request` (ou `gh pr create --base deploy/preprod`) :
 
 ```json
 {
@@ -201,7 +204,7 @@ Use `mcp__github__create_pull_request`:
   "repo": "messaging-service",
   "title": "[WHISPR-XXX] <same as commit title>",
   "head": "<branch-name>",
-  "base": "main",
+  "base": "deploy/preprod",
   "body": "## Summary\n- bullet 1\n- bullet 2\n\n## Test plan\n- [ ] mix test green\n- [ ] mix format --check-formatted clean\n- [ ] mix credo --strict clean\n\nCloses WHISPR-XXX"
 }
 ```
@@ -267,12 +270,14 @@ Use `mcp__atlassian__transitionJiraIssue` with the transition whose `name` is
 
 ---
 
-## 11. Clean up worktree and return to main
+## 11. Clean up worktree and return to deploy/preprod
 
 ```bash
 cd /path/to/messaging-service
 git worktree remove .worktrees/<TICKET-KEY>-<short-kebab-description>
 git branch -d <TICKET-KEY>-<short-kebab-description>
+git checkout deploy/preprod
+git pull origin deploy/preprod
 ```
 
 ---
