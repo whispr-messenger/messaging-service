@@ -438,10 +438,14 @@ defmodule WhisprMessagingWeb.MessageController do
           # Fanout aussi sur le canal user:* de chaque membre pour que la suppression
           # remonte sur ConversationsListScreen meme quand la ChatScreen n est pas ouverte
           # (cas typique d un groupe ou seuls quelques membres ont l ecran de conv au premier plan).
+          # On exclut l expediteur du fanout user:* sinon il recoit l event 2x
+          # (une fois sur conversation:*, une fois sur son propre user:*).
           message.conversation_id
           |> Conversations.list_conversation_members()
           |> Enum.each(fn member ->
-            Endpoint.broadcast("user:#{member.user_id}", "message_deleted", payload)
+            if member.user_id != message.sender_id do
+              Endpoint.broadcast("user:#{member.user_id}", "message_deleted", payload)
+            end
           end)
         end
 
