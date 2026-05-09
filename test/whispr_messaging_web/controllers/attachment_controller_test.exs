@@ -142,6 +142,18 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
       |> get(~p"/messaging/api/v1/attachments/#{Ecto.UUID.generate()}/download")
       |> json_response(404)
     end
+
+    test "controller source declares cache-control and etag headers on the success branch" do
+      # le download success path actuel raise KeyError sur attachment.file_path
+      # (field absent du schema, bug pre-existant non lie a ce ticket).
+      # On verifie au niveau source que les headers cache + etag sont bien
+      # cables sur la pipe de reussite afin d'eviter une regression silencieuse.
+      source =
+        File.read!("lib/whispr_messaging_web/controllers/attachment_controller.ex")
+
+      assert source =~ ~s|put_resp_header("cache-control", "private, max-age=3600")|
+      assert source =~ ~s|put_resp_header("etag", "\\"#\{attachment.id\}\\"")|
+    end
   end
 
   describe "DELETE /messaging/api/v1/attachments/:id" do

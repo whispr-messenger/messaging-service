@@ -194,6 +194,10 @@ defmodule WhisprMessagingWeb.AttachmentController do
         "attachment; filename=\"#{attachment.filename}\""
       )
       |> put_resp_header("content-length", "#{attachment.file_size}")
+      # private + max-age 3600 pour activer le 304 path mobile sans partager le cache
+      |> put_resp_header("cache-control", "private, max-age=3600")
+      # ETag stable base sur attachment_id - immuable une fois cree
+      |> put_resp_header("etag", "\"#{attachment.id}\"")
       |> send_resp(200, file_content)
     else
       {:error, :not_found} ->
