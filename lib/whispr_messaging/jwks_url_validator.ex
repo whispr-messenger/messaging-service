@@ -9,6 +9,10 @@ defmodule WhisprMessaging.JwksUrlValidator do
 
   Les environnements `:dev` et `:test` ne sont pas verifies: le cluster
   k8s interne et les boucles locales utilisent legitimement HTTP.
+
+  Override explicite `WHISPR_ALLOW_HTTP_JWKS=true` : permet d'autoriser
+  HTTP en `:prod` quand l'auth-service est joint via un service k8s
+  cluster-internal (cas preprod). A ne PAS activer en prod publique.
   """
 
   @doc """
@@ -21,15 +25,22 @@ defmodule WhisprMessaging.JwksUrlValidator do
   def validate!(url, env)
 
   def validate!(url, :prod) when is_binary(url) do
-    if String.starts_with?(url, "https://") do
-      :ok
-    else
-      raise """
-      JWT_JWKS_URL doit utiliser HTTPS en production.
-      Valeur actuelle: #{inspect(url)}
-      Corrigez la variable d'environnement JWT_JWKS_URL pour pointer
-      sur une URL https:// (ex: https://auth.example.com/auth/.well-known/jwks.json).
-      """
+    cond do
+      String.starts_with?(url, "https://") ->
+        :ok
+
+      System.get_env("WHISPR_ALLOW_HTTP_JWKS") == "true" ->
+        :ok
+
+      true ->
+        raise """
+        JWT_JWKS_URL doit utiliser HTTPS en production.
+        Valeur actuelle: #{inspect(url)}
+        Corrigez la variable d'environnement JWT_JWKS_URL pour pointer
+        sur une URL https:// (ex: https://auth.example.com/auth/.well-known/jwks.json).
+        Pour autoriser HTTP en cluster-internal (preprod), definissez
+        WHISPR_ALLOW_HTTP_JWKS=true.
+        """
     end
   end
 
