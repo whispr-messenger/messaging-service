@@ -109,6 +109,14 @@ defmodule WhisprMessagingWeb.Plugs.CorsTest do
       assert get_resp_header(conn, "access-control-allow-methods") != []
     end
 
+    test "emits vary: origin even on wildcard so shared caches key on origin" do
+      System.put_env("CORS_ALLOWED_ORIGINS", "*")
+
+      conn = call(:get, [{"origin", "https://anywhere.example.com"}])
+
+      assert get_resp_header(conn, "vary") == ["origin"]
+    end
+
     test "OPTIONS preflight returns 204 with the wildcard origin" do
       System.put_env("CORS_ALLOWED_ORIGINS", "*")
 
