@@ -288,6 +288,144 @@ defmodule WhisprMessaging.ConversationServerTest do
       # Verify all messages are marked as read
       # This would typically involve checking conversation read status
     end
+
+    # WHISPR-1304: gating WhatsApp punitive sur le broadcast message_read
+    test "broadcast message_read est skip quand reader.read_receipts=false", %{
+      conversation: conversation,
+      user2_id: user2_id,
+      message: message
+    } do
+      # le ConversationServer tourne dans un autre process que le test;
+      # on passe par l'Application env (pris en compte par le mock) au
+      # lieu du Process dict qui n'est pas visible cross-process.
+      put_privacy_override(fn ^user2_id ->
+        {:ok, %{read_receipts: false, last_seen_privacy: nil, online_status: nil}}
+      end)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      ConversationServer.mark_read(conversation.id, user2_id, message.id)
+
+      # Aucun broadcast message_read ne doit arriver
+      refute_receive %Phoenix.Socket.Broadcast{event: "message_read"}, 200
+    end
+
+    test "broadcast message_read part normalement quand reader.read_receipts=true", %{
+      conversation: conversation,
+      user2_id: user2_id,
+      message: message
+    } do
+      put_privacy_override(fn ^user2_id ->
+        {:ok, %{read_receipts: true, last_seen_privacy: nil, online_status: nil}}
+      end)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      ConversationServer.mark_read(conversation.id, user2_id, message.id)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "message_read",
+                       payload: payload
+                     },
+                     500
+
+      assert payload[:userId] == user2_id or payload["userId"] == user2_id
+    end
+
+    test "broadcast message_read fail-open sur erreur user-service", %{
+      conversation: conversation,
+      user2_id: user2_id,
+      message: message
+    } do
+      # user-service indispo -> on broadcast quand meme (regle de
+      # privacy, pas de securite : on degrade pas la fonctionnalite)
+      put_privacy_override(fn _id -> {:error, :transient} end)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      ConversationServer.mark_read(conversation.id, user2_id, message.id)
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "message_read"}, 500
+    end
+  end
+
+  # WHISPR-1304: mark_unread symetrique a mark_read
+  describe "mark_unread (WHISPR-1304)" do
+    setup %{conversation: conversation, user1_id: user1_id} do
+      start_supervised!({ConversationServer, conversation.id})
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "test_message",
+          client_random: 88_888
+        })
+
+      {:ok, _} = Messages.mark_message_read(message.id, user1_id)
+
+      %{message: message}
+    end
+
+    test "broadcast message_unread sur le topic conversation et chaque user:", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id,
+      message: message
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user2_id}")
+
+      ConversationServer.mark_unread(conversation.id, user1_id, message.id)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "conversation:" <> _,
+                       event: "message_unread"
+                     },
+                     500
+
+      # fanout user:* pour que ConversationsListScreen remette l'item
+      # en non-lu meme sans ChatScreen ouverte
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> _,
+                       event: "message_unread"
+                     },
+                     500
+    end
+
+    test "broadcast message_unread est skip quand reader.read_receipts=false", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      message: message
+    } do
+      put_privacy_override(fn ^user1_id ->
+        {:ok, %{read_receipts: false, last_seen_privacy: nil, online_status: nil}}
+      end)
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "conversation:#{conversation.id}")
+
+      ConversationServer.mark_unread(conversation.id, user1_id, message.id)
+
+      refute_receive %Phoenix.Socket.Broadcast{event: "message_unread"}, 200
+    end
+  end
+
+  # Helper WHISPR-1304: pose un override get_privacy_settings/1 dans
+  # l'Application env (visible cross-process) et nettoie en fin de test.
+  defp put_privacy_override(fun) do
+    previous =
+      Application.get_env(:whispr_messaging, :mock_user_service_client_overrides, %{})
+
+    Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, %{
+      get_privacy_settings: fun
+    })
+
+    ExUnit.Callbacks.on_exit(fn ->
+      Application.put_env(:whispr_messaging, :mock_user_service_client_overrides, previous)
+    end)
   end
 
   describe "conversation settings" do

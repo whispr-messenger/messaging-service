@@ -61,6 +61,17 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   end
 
   @doc """
+  Changeset for rewinding `last_read_at` (WHISPR-1304 mark_unread).
+  Reset le timestamp a la valeur passee (typiquement juste avant le
+  `sent_at` du message qu'on remarque non-lu) ou a `nil` si le user
+  n'avait jamais lu avant.
+  """
+  def rewind_read_changeset(member, timestamp) do
+    member
+    |> cast(%{last_read_at: timestamp}, [:last_read_at])
+  end
+
+  @doc """
   Changeset for deactivating a member (leaving conversation).
   """
   def deactivate_changeset(member) do
