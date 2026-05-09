@@ -65,6 +65,52 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"] == []
     end
 
+    # WHISPR-848: la liste doit exposer memberUserIds pour les conversations
+    # directes, et les fetcher en batch (1 requete au lieu de N).
+    test "exposes memberUserIds on each direct conversation in the listing", %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      user3_id: user3_id
+    } do
+      {:ok, direct1} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, direct2} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      {:ok, group} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Team"},
+          is_active: true
+        })
+
+      Conversations.add_conversation_member(direct1.id, user1_id)
+      Conversations.add_conversation_member(direct1.id, user2_id)
+      Conversations.add_conversation_member(direct2.id, user1_id)
+      Conversations.add_conversation_member(direct2.id, user3_id)
+      Conversations.add_conversation_member(group.id, user1_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations")
+        |> json_response(200)
+
+      rendered_direct1 = Enum.find(response["data"], fn c -> c["id"] == direct1.id end)
+      rendered_direct2 = Enum.find(response["data"], fn c -> c["id"] == direct2.id end)
+      rendered_group = Enum.find(response["data"], fn c -> c["id"] == group.id end)
+
+      assert Enum.sort(rendered_direct1["memberUserIds"]) == Enum.sort([user1_id, user2_id])
+      assert Enum.sort(rendered_direct2["memberUserIds"]) == Enum.sort([user1_id, user3_id])
+      # Les conversations groupes ne doivent pas exposer memberUserIds dans
+      # le listing pour rester compatibles avec le format existant.
+      refute Map.has_key?(rendered_group, "memberUserIds")
+    end
+
     test "supports filtering by type", %{user1_id: user1_id} do
       # Create direct and group conversations
       {:ok, direct_conv} =

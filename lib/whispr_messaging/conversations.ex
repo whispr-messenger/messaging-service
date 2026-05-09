@@ -221,6 +221,25 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Lists active member user_ids for several conversations in a single query.
+
+  Retourne un map `%{conversation_id => [user_id, ...]}`. Permet d'eviter le
+  N+1 quand on rend une liste de conversations directes (WHISPR-848).
+  """
+  def list_members_for_conversations([]), do: %{}
+
+  def list_members_for_conversations(conversation_ids) when is_list(conversation_ids) do
+    from(m in ConversationMember,
+      where: m.conversation_id in ^conversation_ids,
+      where: m.is_active == true,
+      order_by: [asc: m.joined_at],
+      select: {m.conversation_id, m.user_id}
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {conv_id, _} -> conv_id end, fn {_, user_id} -> user_id end)
+  end
+
+  @doc """
   Counts active members in a conversation.
   """
   def count_conversation_members(conversation_id) do

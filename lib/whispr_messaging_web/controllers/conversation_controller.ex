@@ -991,10 +991,22 @@ defmodule WhisprMessagingWeb.ConversationController do
   # Private rendering functions
 
   defp render_conversations(conversations, authorization) do
-    Enum.map(conversations, &render_conversation(&1, authorization))
+    # WHISPR-848: batch-fetch les member_ids des conversations directes en une
+    # seule requete au lieu d'une requete par conversation dans le rendu.
+    members_by_conv =
+      conversations
+      |> Enum.filter(fn conv -> conv.type == "direct" end)
+      |> Enum.map(& &1.id)
+      |> Conversations.list_members_for_conversations()
+
+    Enum.map(conversations, &render_conversation(&1, authorization, members_by_conv))
   end
 
   defp render_conversation(conversation, authorization) do
+    render_conversation(conversation, authorization, %{})
+  end
+
+  defp render_conversation(conversation, authorization, members_by_conv) do
     member_info = Map.get(conversation, :member_info)
 
     settings =
@@ -1024,7 +1036,7 @@ defmodule WhisprMessagingWeb.ConversationController do
     })
     |> Map.put("unreadCount", Map.get(conversation, :unread_count, 0))
     |> Map.put("lastMessage", render_last_message(Map.get(conversation, :last_message)))
-    |> maybe_add_member_ids(conversation)
+    |> maybe_add_member_ids(conversation, members_by_conv)
   end
 
   defp render_last_message(nil), do: nil
@@ -1050,11 +1062,19 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp safe_binary_content(content), do: to_string(content)
 
-  defp maybe_add_member_ids(rendered, conversation) do
+  defp maybe_add_member_ids(rendered, conversation, members_by_conv) do
     if conversation.type == "direct" do
       member_ids =
-        WhisprMessaging.Conversations.list_conversation_members(conversation.id)
-        |> Enum.map(& &1.user_id)
+        case Map.fetch(members_by_conv, conversation.id) do
+          {:ok, ids} ->
+            ids
+
+          :error ->
+            # Fallback pour les call-sites qui rendent une seule conversation
+            # sans pre-fetch (show, create, ...). Conserve l'ancien comportement.
+            Conversations.list_conversation_members(conversation.id)
+            |> Enum.map(& &1.user_id)
+        end
 
       Map.put(rendered, "memberUserIds", member_ids)
     else
@@ -1064,10 +1084,13 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   defp render_conversation_with_members(conversation, member_info, authorization) do
     member_user_ids = Enum.map(conversation.members, & &1.user_id)
+    # WHISPR-848: les members sont deja preload via get_conversation_with_members,
+    # on les reutilise pour eviter une requete redondante dans maybe_add_member_ids.
+    members_by_conv = %{conversation.id => member_user_ids}
 
     base =
       conversation
-      |> render_conversation(authorization)
+      |> render_conversation(authorization, members_by_conv)
       |> Map.put("members", Enum.map(conversation.members, &render_member/1))
       |> Map.put("memberCount", length(conversation.members))
       |> Map.put("memberUserIds", member_user_ids)
