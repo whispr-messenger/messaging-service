@@ -1,11 +1,11 @@
 defmodule WhisprMessaging.Services.UserService do
   @moduledoc """
-  Interface for interacting with the User Service.
+  Facade pour parler avec user-service.
 
-  Direct-conversation authorisation goes through the internal HTTP endpoint
+  L'autorisation des conversations directes passe par l'endpoint interne
   `GET {USER_SERVICE_INTERNAL_URL}/contacts/check?ownerId=...&contactId=...`,
-  which returns `{ "isContact": bool, "isBlocked": bool }` in a single round
-  trip — no pagination, no client-side scan.
+  qui renvoie `{ "isContact": bool, "isBlocked": bool }` en un seul
+  aller-retour - pas de pagination, pas de scan cote client.
   """
 
   @default_internal_url "http://user-service:3011/internal/v1"
@@ -25,11 +25,12 @@ defmodule WhisprMessaging.Services.UserService do
   end
 
   @doc """
-  Returns `{:ok, true}` when `owner_id` and `other_user_id` are mutual contacts
-  and neither has blocked the other, `{:ok, false}` otherwise. The
-  `_authorization_header` argument is kept for backwards compatibility with
-  existing call sites but is unused: the internal endpoint authenticates the
-  caller via the `x-internal-token` shared secret, not the end-user JWT.
+  Renvoie `{:ok, true}` quand `owner_id` et `other_user_id` sont contacts
+  mutuels et qu'aucun n'a bloque l'autre, `{:ok, false}` sinon.
+  L'argument `_authorization_header` est garde par compat avec les
+  call sites existants mais n'est plus utilise : l'endpoint interne
+  s'authentifie via le secret partage `x-internal-token`, pas le JWT
+  end-user.
   """
   def check_users_are_contacts(owner_id, other_user_id, _authorization_header \\ nil) do
     owner = String.trim(to_string(owner_id))
@@ -79,23 +80,24 @@ defmodule WhisprMessaging.Services.UserService do
   defp handle_check_response({:error, _reason}), do: {:error, :request_failed}
 
   @doc """
-  Checks if a user exists.
+  Verifie l'existence d'un utilisateur.
 
-  Delegates to the module configured under
-  `:whispr_messaging, :user_service_client` (defaults to
-  `WhisprMessaging.Services.HttpUserServiceClient`). See the behaviour
-  `WhisprMessaging.Services.UserServiceBehaviour` for the contract.
+  Delegue au module configure dans
+  `:whispr_messaging, :user_service_client` (defaut :
+  `WhisprMessaging.Services.HttpUserServiceClient`). Voir le behaviour
+  `WhisprMessaging.Services.UserServiceBehaviour` pour le contrat.
   """
   def check_user_exists(user_id) do
     client().check_user_exists(user_id)
   end
 
   @doc """
-  Checks if a user is blocked by another user.
+  Verifie si un utilisateur est bloque par un autre.
 
-  Returns `{:ok, true}` when blocked, `{:ok, false}` otherwise. On transient
-  errors callers must fail-closed (assume blocked) — this function returns
-  `{:error, _}` in that case so the surrounding `with` chain short-circuits.
+  Renvoie `{:ok, true}` si bloque, `{:ok, false}` sinon. Sur erreur
+  transitoire les appelants doivent fail-closed (considerer comme
+  bloque) : cette fonction renvoie `{:error, _}` dans ce cas pour que
+  la chaine `with` court-circuite.
   """
   def check_user_blocked(blocker_id, blocked_id) do
     client().check_user_blocked(blocker_id, blocked_id)

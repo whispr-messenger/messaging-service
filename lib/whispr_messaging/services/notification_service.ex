@@ -1,17 +1,16 @@
 defmodule WhisprMessaging.Services.NotificationService do
   @moduledoc """
-  Interface for interacting with the Notification Service via gRPC.
-  Currently a stub implementation.
+  Facade pour parler a notification-service en gRPC.
+  Stub temporaire en attendant l'integration reelle.
   """
 
   require Logger
 
   @doc """
-  Queues push notifications for offline users.
+  Met en file d'attente des push notifications pour les users offline.
   """
   def queue_push_notifications(user_ids, message) do
-    # Stub: logs until gRPC integration with notification service is done
-    # For now, just log the notifications
+    # stub : on log juste tant que la couche gRPC n'est pas branchee
     Logger.debug("Queuing push notifications",
       user_count: length(user_ids),
       message_id: message.id,
