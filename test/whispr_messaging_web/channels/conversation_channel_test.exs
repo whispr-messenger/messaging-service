@@ -559,4 +559,39 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       # This is tested indirectly through the presence system
     end
   end
+
+  describe "typing timeout cleanup (WHISPR-1352)" do
+    test "untracks typing presence on :stop_typing message", %{
+      socket: socket,
+      conversation: conversation,
+      user_id: user_id
+    } do
+      {:ok, _, joined_socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
+
+      typing_key = "typing:#{user_id}"
+      topic = "conversation:#{conversation.id}"
+
+      {:ok, _ref} =
+        WhisprMessagingWeb.Presence.track(joined_socket, typing_key, %{
+          typing: true,
+          conversation_id: conversation.id,
+          started_at: System.system_time(:second)
+        })
+
+      assert Map.has_key?(WhisprMessagingWeb.Presence.list(topic), typing_key)
+
+      # Simule le timeout: le channel doit traiter le message et untrack.
+      send(joined_socket.channel_pid, {:stop_typing, user_id, conversation.id})
+
+      # Laisse le channel process traiter le handle_info de facon synchrone.
+      _ = :sys.get_state(joined_socket.channel_pid)
+
+      refute Map.has_key?(WhisprMessagingWeb.Presence.list(topic), typing_key)
+    end
+  end
 end

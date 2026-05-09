@@ -59,15 +59,4 @@ defmodule WhisprMessagingWeb.PresenceTest do
       assert [] == Presence.get_conversation_users(Ecto.UUID.generate())
     end
   end
-
-  describe "handle_info/2" do
-    test "ignores stop_typing messages without crashing" do
-      assert {:noreply, %{}} ==
-               Presence.handle_info({:stop_typing, "u-1", "c-1"}, %{})
-    end
-
-    test "ignores unrecognised messages" do
-      assert {:noreply, :state} == Presence.handle_info(:something_else, :state)
-    end
-  end
 end
