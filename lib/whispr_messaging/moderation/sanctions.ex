@@ -8,6 +8,7 @@ defmodule WhisprMessaging.Moderation.Sanctions do
 
   import WhisprMessaging.Moderation.Helpers, only: [tap_ok: 2, redis_publish: 2]
 
+  alias WhisprMessaging.Conversations
   alias WhisprMessaging.Moderation.ConversationSanction
   alias WhisprMessaging.Repo
 
@@ -104,33 +105,56 @@ defmodule WhisprMessaging.Moderation.Sanctions do
   # ---------------------------------------------------------------------------
 
   defp broadcast_sanction_event(%{type: "mute"} = sanction) do
-    WhisprMessagingWeb.Endpoint.broadcast(
-      "conversation:#{sanction.conversation_id}",
-      "moderation:user_muted",
-      %{
-        user_id: sanction.user_id,
-        reason: sanction.reason,
-        expires_at: sanction.expires_at && DateTime.to_iso8601(sanction.expires_at)
-      }
-    )
+    payload = %{
+      conversation_id: sanction.conversation_id,
+      user_id: sanction.user_id,
+      reason: sanction.reason,
+      expires_at: sanction.expires_at && DateTime.to_iso8601(sanction.expires_at)
+    }
+
+    fanout_to_members(sanction.conversation_id, "moderation:user_muted", payload)
   end
 
   defp broadcast_sanction_event(%{type: "kick"} = sanction) do
-    WhisprMessagingWeb.Endpoint.broadcast(
-      "conversation:#{sanction.conversation_id}",
-      "moderation:user_kicked",
-      %{user_id: sanction.user_id, reason: sanction.reason}
-    )
+    payload = %{
+      conversation_id: sanction.conversation_id,
+      user_id: sanction.user_id,
+      reason: sanction.reason
+    }
+
+    fanout_to_members(sanction.conversation_id, "moderation:user_kicked", payload)
   end
 
   defp broadcast_sanction_event(_), do: :ok
 
   defp broadcast_sanction_lifted(sanction) do
+    payload = %{
+      conversation_id: sanction.conversation_id,
+      user_id: sanction.user_id,
+      sanction_type: sanction.type
+    }
+
+    fanout_to_members(sanction.conversation_id, "moderation:sanction_lifted", payload)
+  end
+
+  # Diffuse l event sur le topic conversation:* (pour les ChatScreen ouvertes)
+  # ET sur le topic user:* de chaque membre pour que ConversationsListScreen
+  # reflete le mute/kick/lift meme quand la ChatScreen n est pas ouverte.
+  # Le user cible (mute/kick) recoit aussi l event sur son propre user:*
+  # pour mettre a jour sa vue immediatement (meme pattern que message_deleted -
+  # WHISPR-1293/1301). Si l appel DB echoue, on ne casse pas le flux principal.
+  defp fanout_to_members(conversation_id, event, payload) do
     WhisprMessagingWeb.Endpoint.broadcast(
-      "conversation:#{sanction.conversation_id}",
-      "moderation:sanction_lifted",
-      %{user_id: sanction.user_id, sanction_type: sanction.type}
+      "conversation:#{conversation_id}",
+      event,
+      payload
     )
+
+    conversation_id
+    |> Conversations.list_conversation_members()
+    |> Enum.each(fn member ->
+      WhisprMessagingWeb.Endpoint.broadcast("user:#{member.user_id}", event, payload)
+    end)
   end
 
   # ---------------------------------------------------------------------------

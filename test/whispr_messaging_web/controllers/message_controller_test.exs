@@ -425,6 +425,58 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       assert broadcast_msg["id"] == message.id
     end
 
+    test "edit fanout sur user:* de chaque membre (WHISPR-1307)", %{
+      message: message,
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user1_id}")
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user2_id}")
+
+      update_attrs = %{
+        "content" => "fanout_content",
+        "metadata" => %{"edited" => true}
+      }
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      _response =
+        put(
+          conn,
+          ~p"/messaging/api/v1/messages/#{message.id}",
+          update_attrs
+        )
+        |> json_response(200)
+
+      # Le sender doit recevoir l event sur son canal user:*
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> sender_topic,
+                       event: "message_edited",
+                       payload: %{message: payload_sender}
+                     },
+                     1_000
+
+      assert sender_topic == user1_id
+      assert payload_sender["id"] == message.id
+      assert payload_sender["conversationId"] == conversation.id
+
+      # L autre membre du groupe doit aussi recevoir l event meme sans avoir
+      # la ChatScreen ouverte sur cette conversation.
+      assert_receive %Phoenix.Socket.Broadcast{
+                       topic: "user:" <> recipient_topic,
+                       event: "message_edited",
+                       payload: %{message: payload_recipient}
+                     },
+                     1_000
+
+      assert recipient_topic == user2_id
+      assert payload_recipient["id"] == message.id
+    end
+
     test "returns 404 for non-existent message", %{user1_id: user1_id} do
       fake_id = Ecto.UUID.generate()
 
