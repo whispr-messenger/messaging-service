@@ -634,4 +634,91 @@ defmodule WhisprMessaging.ConversationsTest do
       assert Enum.count(results) <= 3
     end
   end
+
+  describe "leave_conversation/2 - TOCTOU (WHISPR-1418)" do
+    test "single admin quit promotes oldest remaining member" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "G"},
+          is_active: true
+        })
+
+      admin_id = Ecto.UUID.generate()
+      m1_id = Ecto.UUID.generate()
+      m2_id = Ecto.UUID.generate()
+
+      {:ok, admin} =
+        Conversations.add_conversation_member(conv.id, admin_id, %{"role" => "admin"})
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, m1_id)
+      # m2 ajoute apres m1 -> m1 doit etre promu (oldest remaining)
+      {:ok, _} = Conversations.add_conversation_member(conv.id, m2_id)
+
+      assert {:ok, result} = Conversations.leave_conversation(conv.id, admin_id)
+      assert result.member.id == admin.id
+      assert result.member.is_active == false
+      assert result.auto_promoted != nil
+      assert result.auto_promoted.user_id == m1_id
+    end
+
+    test "second admin quit after first admin already left does not re-promote" do
+      # ne pas oublier : apres le fix, le 2eme admin re-query l'etat APRES
+      # lock, donc il voit que l'autre admin est deja parti et il est seul
+      # admin -> trigger normal auto-promote (pas spurious)
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "G"},
+          is_active: true
+        })
+
+      a1_id = Ecto.UUID.generate()
+      a2_id = Ecto.UUID.generate()
+      m1_id = Ecto.UUID.generate()
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, a1_id, %{"role" => "admin"})
+      {:ok, _} = Conversations.add_conversation_member(conv.id, a2_id, %{"role" => "admin"})
+      {:ok, _} = Conversations.add_conversation_member(conv.id, m1_id)
+
+      # premier admin quit : l'autre admin reste -> pas de promotion
+      assert {:ok, r1} = Conversations.leave_conversation(conv.id, a1_id)
+      assert r1.auto_promoted == nil
+
+      # deuxieme admin quit : il est seul admin -> promote m1
+      assert {:ok, r2} = Conversations.leave_conversation(conv.id, a2_id)
+      assert r2.auto_promoted != nil
+      assert r2.auto_promoted.user_id == m1_id
+    end
+
+    test "non-admin leave does not trigger auto-promote" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "G"},
+          is_active: true
+        })
+
+      admin_id = Ecto.UUID.generate()
+      m1_id = Ecto.UUID.generate()
+
+      {:ok, _} = Conversations.add_conversation_member(conv.id, admin_id, %{"role" => "admin"})
+      {:ok, _} = Conversations.add_conversation_member(conv.id, m1_id)
+
+      assert {:ok, result} = Conversations.leave_conversation(conv.id, m1_id)
+      assert result.auto_promoted == nil
+    end
+
+    test "leaving non-member returns :not_member" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "G"},
+          is_active: true
+        })
+
+      stranger_id = Ecto.UUID.generate()
+      assert {:error, :not_member} = Conversations.leave_conversation(conv.id, stranger_id)
+    end
+  end
 end
