@@ -245,8 +245,9 @@ defmodule WhisprMessaging.Messages.Message do
   Creates a system message (notifications, member changes, etc.).
   """
   def create_system_message(conversation_id, content, metadata \\ %{}) do
-    # System messages use a deterministic client_random based on timestamp
-    client_random = DateTime.utc_now() |> DateTime.to_unix(:microsecond) |> rem(2_147_483_647)
+    # System messages utilisent un client_random base sur le timestamp microseconde
+    # rem sur 2^32 pour rester dans le range Uint32 (colonne bigint depuis WHISPR-1447)
+    client_random = DateTime.utc_now() |> DateTime.to_unix(:microsecond) |> rem(4_294_967_296)
 
     %__MODULE__{}
     |> changeset(%{
