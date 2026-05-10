@@ -10,6 +10,7 @@ defmodule WhisprMessaging.Messages do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Events.MessagingEvents
+  alias WhisprMessaging.Notifications.InboxDispatcher
 
   alias WhisprMessaging.Messages.{
     DeliveryStatus,
@@ -59,6 +60,7 @@ defmodule WhisprMessaging.Messages do
             # Preload associations for channels
             message = Repo.preload(message, [:conversation, :reply_to])
             publish_new_message_async(message)
+            dispatch_inbox_events_async(message)
             {:ok, message}
 
           error ->
@@ -89,6 +91,28 @@ defmodule WhisprMessaging.Messages do
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
       members = Conversations.list_conversation_members(conversation_id)
       MessagingEvents.publish_new_message(message, members)
+    end)
+  end
+
+  # Fire-and-forget inbox events (mentions + replies). Uses a swappable
+  # dispatcher so tests can run synchronously without sandbox leaks.
+  defp dispatch_inbox_events_async(%Message{} = message) do
+    dispatcher =
+      Application.get_env(
+        :whispr_messaging,
+        :inbox_events_dispatcher,
+        &default_inbox_events_dispatcher/1
+      )
+
+    dispatcher.(message)
+    :ok
+  end
+
+  defp default_inbox_events_dispatcher(%Message{conversation_id: conversation_id} = message) do
+    Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
+      members = Conversations.list_conversation_members(conversation_id)
+      InboxDispatcher.dispatch_mentions(message, members)
+      InboxDispatcher.dispatch_reply(message)
     end)
   end
 
