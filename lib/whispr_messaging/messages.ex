@@ -209,6 +209,91 @@ defmodule WhisprMessaging.Messages do
   defp maybe_filter_message_type(query, _), do: query
 
   @doc """
+  Searches messages via `metadata->>'plaintext_preview'` ILIKE across all
+  conversations the user is a member of (WHISPR-1444).
+
+  Cursor pagination by `(sent_at desc, id desc)` — pass the `id` of the last
+  result as `cursor` to get the next page.
+
+  Options:
+    * `:conversation_id` — restrict to one conversation (anti-IDOR: membership
+      is still re-checked via the JOIN so a non-member gets nothing)
+    * `:limit` — 1-50, default 20
+    * `:cursor` — UUID of the last message from the previous page
+  """
+  def search_messages_preview(user_id, query, opts \\ []) do
+    raw_limit = Keyword.get(opts, :limit, 20)
+    limit = raw_limit |> max(1) |> min(50)
+    conversation_id = Keyword.get(opts, :conversation_id)
+    cursor = Keyword.get(opts, :cursor)
+
+    escaped = query |> to_string() |> String.replace(~r/[\\%_]/, "\\\\\\0")
+    like_query = "%#{escaped}%"
+
+    base =
+      from(m in Message,
+        join: cm in WhisprMessaging.Conversations.ConversationMember,
+        on:
+          cm.conversation_id == m.conversation_id and cm.user_id == ^user_id and
+            cm.is_active == true,
+        left_join: umd in UserMessageDeletion,
+        on: umd.message_id == m.id and umd.user_id == ^user_id,
+        join: c in WhisprMessaging.Conversations.Conversation,
+        on: c.id == m.conversation_id,
+        where:
+          ilike(fragment("(?->>'plaintext_preview')", m.metadata), ^like_query) and
+            m.is_deleted == false,
+        where: is_nil(umd.id),
+        order_by: [desc: m.sent_at, desc: m.id],
+        limit: ^(limit + 1),
+        select: %{
+          id: m.id,
+          conversation_id: m.conversation_id,
+          conversation_name: fragment("(?->>'name')", c.metadata),
+          sender_id: m.sender_id,
+          sender_username: fragment("(?->>'sender_username')", m.metadata),
+          plaintext_preview: fragment("(?->>'plaintext_preview')", m.metadata),
+          sent_at: m.sent_at
+        }
+      )
+
+    base
+    |> maybe_filter_preview_conversation(conversation_id)
+    |> maybe_apply_cursor(cursor)
+    |> Repo.all()
+    |> paginate_preview_results(limit)
+  end
+
+  defp maybe_filter_preview_conversation(query, nil), do: query
+
+  defp maybe_filter_preview_conversation(query, conversation_id) do
+    from(row in query, where: row.conversation_id == ^conversation_id)
+  end
+
+  # Le curseur est l'id du dernier message retourné - on filtre par (sent_at, id) desc
+  defp maybe_apply_cursor(query, nil), do: query
+
+  defp maybe_apply_cursor(query, cursor_id) do
+    from(row in query,
+      join: cursor_msg in Message,
+      on: cursor_msg.id == ^cursor_id,
+      where:
+        row.sent_at < cursor_msg.sent_at or
+          (row.sent_at == cursor_msg.sent_at and row.id < cursor_msg.id)
+    )
+  end
+
+  defp paginate_preview_results(rows, limit) do
+    if length(rows) > limit do
+      items = Enum.take(rows, limit)
+      next_cursor = List.last(items).id
+      {items, next_cursor}
+    else
+      {rows, nil}
+    end
+  end
+
+  @doc """
   Builds a short highlight preview around the first case-insensitive match of
   `query` in `content`. Returns `{excerpt, match_start_within_excerpt,
   match_length}` or `nil` if the match can't be located (can happen when the
