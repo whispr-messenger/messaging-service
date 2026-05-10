@@ -884,4 +884,206 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
                |> json_response(404)
     end
   end
+
+  describe "GET /messaging/api/v1/messages/search (WHISPR-1444)" do
+    setup %{conversation: conversation, user1_id: user1_id} do
+      # Message avec plaintext_preview pour la recherche
+      {:ok, msg_match} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "encrypted_blob",
+          metadata: %{
+            "plaintext_preview" => "hello world from whispr",
+            "sender_username" => "alice"
+          },
+          client_random: 80_001
+        })
+
+      # Message sans preview — ne doit pas apparaitre dans les résultats
+      {:ok, _msg_no_preview} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "encrypted_other",
+          metadata: %{},
+          client_random: 80_002
+        })
+
+      %{msg_match: msg_match}
+    end
+
+    test "retourne les messages dont le plaintext_preview contient le terme", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      msg_match: msg_match
+    } do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=hello")
+        |> json_response(200)
+
+      assert %{"items" => items, "next_cursor" => _} = response
+      ids = Enum.map(items, & &1["id"])
+      assert msg_match.id in ids
+      # Le preview ne doit pas dépasser 100 chars
+      Enum.each(items, fn item ->
+        if item["preview"], do: assert(String.length(item["preview"]) <= 100)
+      end)
+
+      # La conversation_id doit être renseignée
+      matching = Enum.find(items, &(&1["id"] == msg_match.id))
+      assert matching["conversation_id"] == conversation.id
+    end
+
+    test "anti-IDOR : un user non membre ne voit pas les messages d'une autre conv", %{
+      msg_match: msg_match
+    } do
+      outsider = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(outsider)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=hello")
+        |> json_response(200)
+
+      ids = response["items"] |> Enum.map(& &1["id"])
+      refute msg_match.id in ids
+    end
+
+    test "retourne 400 si la query est trop courte (< 2 chars)", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=a")
+        |> json_response(400)
+
+      assert response["error"] == "query too short"
+    end
+
+    test "retourne 400 pour une query vide", %{user1_id: user1_id} do
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=")
+        |> json_response(400)
+
+      assert response["error"] == "query too short"
+    end
+
+    test "retourne 401 sans token", %{} do
+      conn = build_conn() |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=hello")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+
+    test "pagination par cursor", %{conversation: conversation, user1_id: user1_id} do
+      # Créer plusieurs messages pour tester la pagination
+      for i <- 1..5 do
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "enc_#{i}",
+          metadata: %{"plaintext_preview" => "pagination test #{i}"},
+          client_random: 81_000 + i
+        })
+      end
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      # Page 1 : limit 2
+      page1 =
+        get(conn, ~p"/messaging/api/v1/messages/search?q=pagination+test&limit=2")
+        |> json_response(200)
+
+      assert length(page1["items"]) == 2
+      cursor = page1["next_cursor"]
+      assert is_binary(cursor)
+
+      # Page 2 : utiliser le cursor
+      page2 =
+        get(
+          conn,
+          ~p"/messaging/api/v1/messages/search?q=pagination+test&limit=2&cursor=#{cursor}"
+        )
+        |> json_response(200)
+
+      refute Enum.empty?(page2["items"])
+      # Pas de doublon entre les deux pages
+      ids1 = Enum.map(page1["items"], & &1["id"])
+      ids2 = Enum.map(page2["items"], & &1["id"])
+      assert MapSet.disjoint?(MapSet.new(ids1), MapSet.new(ids2))
+    end
+
+    test "filtrage par conversation_id", %{
+      conversation: conversation,
+      user1_id: user1_id,
+      user2_id: user2_id,
+      msg_match: msg_match
+    } do
+      # Deuxième conversation dont user1 est aussi membre
+      {:ok, conv2} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user1_id)
+      {:ok, _} = Conversations.add_conversation_member(conv2.id, user2_id)
+
+      {:ok, _msg_conv2} =
+        Messages.create_message(%{
+          conversation_id: conv2.id,
+          sender_id: user1_id,
+          message_type: "text",
+          content: "enc_conv2",
+          metadata: %{"plaintext_preview" => "hello from conv2"},
+          client_random: 82_001
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      # Filtrer sur la conv1 uniquement
+      response =
+        get(
+          conn,
+          ~p"/messaging/api/v1/messages/search?q=hello&conversation_id=#{conversation.id}"
+        )
+        |> json_response(200)
+
+      ids = Enum.map(response["items"], & &1["id"])
+      assert msg_match.id in ids
+      # Les résultats de conv2 ne doivent pas apparaitre
+      Enum.each(response["items"], fn item ->
+        assert item["conversation_id"] == conversation.id
+      end)
+    end
+  end
 end
