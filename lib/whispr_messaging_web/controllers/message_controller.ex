@@ -222,58 +222,77 @@ defmodule WhisprMessagingWeb.MessageController do
   end
 
   @doc """
-  Searches messages by content across all conversations the user participates in.
+  Searches messages via metadata.plaintext_preview across all conversations the
+  user is a member of (WHISPR-1444).
 
-  GET /api/messages/search?query=...&limit=50&offset=0
-       &conversation_id=...&from=ISO8601&to=ISO8601&message_type=text|media|system
+  GET /messaging/api/v1/messages/search?q=<query>&conversation_id=<opt>&limit=1-50&cursor=<msg_id>
 
-  (WHISPR-1061) Filters and a `match_preview` highlight are optional — the
-  response shape stays the same as before when no filters are provided.
+  Returns `{items, next_cursor}` with cursor pagination by (sent_at desc, id desc).
+  Requires `q` to be at least 2 characters.
   """
   def search(conn, params) do
     user_id = conn.assigns[:user_id]
-    query = Map.get(params, "query", "")
-    limit = params |> Map.get("limit", 50) |> parse_int(50) |> min(100) |> max(1)
-    offset = params |> Map.get("offset", 0) |> parse_int(0) |> max(0)
+    query = Map.get(params, "q", "")
+    limit = params |> Map.get("limit", "20") |> parse_int(20) |> min(50) |> max(1)
+    cursor = Map.get(params, "cursor")
+    conversation_id = Map.get(params, "conversation_id")
 
-    if String.trim(query) == "" do
-      json(conn, [])
-    else
-      opts =
-        [limit: limit, offset: offset]
-        |> maybe_put_opt(:conversation_id, Map.get(params, "conversation_id"))
-        |> maybe_put_opt(:from_datetime, parse_iso8601(Map.get(params, "from")))
-        |> maybe_put_opt(:to_datetime, parse_iso8601(Map.get(params, "to")))
-        |> maybe_put_opt(:message_type, Map.get(params, "message_type"))
+    cond do
+      is_nil(user_id) ->
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Unauthorized"})
 
-      messages = Messages.search_messages_global(user_id, query, opts)
+      String.length(String.trim(query)) < 2 ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "query too short"})
 
-      json(
-        conn,
-        Enum.map(messages, fn msg ->
-          msg
-          |> render_message()
-          |> Map.put(:match_preview, Messages.build_match_preview(msg.content, query))
-        end)
-      )
+      true ->
+        opts =
+          [limit: limit]
+          |> maybe_put_opt(:conversation_id, conversation_id)
+          |> maybe_put_opt(:cursor, cursor)
+
+        {items, next_cursor} = Messages.search_messages_preview(user_id, query, opts)
+
+        json(conn, %{
+          items:
+            Enum.map(items, fn msg ->
+              %{
+                id: msg.id,
+                conversation_id: msg.conversation_id,
+                conversation_name: msg.conversation_name,
+                sender_id: msg.sender_id,
+                sender_username: msg.sender_username,
+                preview: build_truncated_preview(msg.plaintext_preview, query),
+                sent_at: msg.sent_at
+              }
+            end),
+          next_cursor: next_cursor
+        })
+    end
+  end
+
+  # Extrait jusqu'à 100 caractères autour du match pour le preview affiché
+  defp build_truncated_preview(nil, _query), do: nil
+
+  defp build_truncated_preview(preview, _query) when byte_size(preview) <= 100, do: preview
+
+  defp build_truncated_preview(preview, query) do
+    case :binary.match(String.downcase(preview), String.downcase(query)) do
+      {start, _len} ->
+        from = max(0, start - 30)
+        String.slice(preview, from, 100)
+
+      :nomatch ->
+        String.slice(preview, 0, 100)
     end
   end
 
   defp maybe_put_opt(opts, _key, nil), do: opts
   defp maybe_put_opt(opts, _key, ""), do: opts
   defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
-
-  defp parse_iso8601(nil), do: nil
-  defp parse_iso8601(""), do: nil
-
-  defp parse_iso8601(value) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, dt, _} -> dt
-      _ -> nil
-    end
-  end
-
-  defp parse_iso8601(_), do: nil
 
   defp parse_int(value, _default) when is_integer(value), do: value
 
