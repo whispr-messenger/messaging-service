@@ -83,6 +83,56 @@ defmodule WhisprMessaging.MessagesTest do
       assert {:error, %Ecto.Changeset{}} = Messages.create_message(attrs)
     end
 
+    # WHISPR-1447 : la colonne est bigint, les valeurs Uint32 > int4 max doivent persister
+    test "create_message/1 accepts client_random above int4 max (Uint32 range)", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      # 2923178123 est la valeur exacte du crash rapporte dans WHISPR-1447
+      assert {:ok, msg} =
+               Messages.create_message(%{
+                 conversation_id: conversation.id,
+                 sender_id: user1_id,
+                 message_type: "text",
+                 content: "encrypted",
+                 client_random: 2_923_178_123
+               })
+
+      assert msg.client_random == 2_923_178_123
+    end
+
+    test "create_message/1 accepts client_random at int4 boundary (2^31 - 1)", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      assert {:ok, msg} =
+               Messages.create_message(%{
+                 conversation_id: conversation.id,
+                 sender_id: user1_id,
+                 message_type: "text",
+                 content: "encrypted",
+                 client_random: 2_147_483_647
+               })
+
+      assert msg.client_random == 2_147_483_647
+    end
+
+    test "create_message/1 accepts client_random at Uint32 max (2^32 - 1)", %{
+      conversation: conversation,
+      user1_id: user1_id
+    } do
+      assert {:ok, msg} =
+               Messages.create_message(%{
+                 conversation_id: conversation.id,
+                 sender_id: user1_id,
+                 message_type: "text",
+                 content: "encrypted",
+                 client_random: 4_294_967_295
+               })
+
+      assert msg.client_random == 4_294_967_295
+    end
+
     test "get_message/1 returns message when it exists", %{
       conversation: conversation,
       user1_id: user1_id
