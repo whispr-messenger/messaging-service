@@ -893,7 +893,7 @@ defmodule WhisprMessaging.Messages do
       "message_type" => source.message_type,
       "content" => source.content,
       "metadata" => Map.put(source.metadata || %{}, "forwarded", true),
-      "client_random" => :erlang.unique_integer([:positive]) |> rem(2_147_483_647),
+      "client_random" => :erlang.unique_integer([:positive]) |> rem(4_294_967_296),
       "forwarded_from_id" => source.id
     }
   end
