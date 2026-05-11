@@ -1,5 +1,9 @@
 defmodule WhisprMessaging.MessagesTest do
-  use WhisprMessaging.DataCase, async: true
+  # async: false a cause du describe "new_message redis publish (WHISPR-1158)"
+  # qui mute Application.put_env(:whispr_messaging, :messaging_events_publisher)
+  # et :new_message_dispatcher. Ce shared global state cree une race avec les
+  # autres tests qui inserent des message_reactions en parallele (cf WHISPR-1158).
+  use WhisprMessaging.DataCase, async: false
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Messages.Message
