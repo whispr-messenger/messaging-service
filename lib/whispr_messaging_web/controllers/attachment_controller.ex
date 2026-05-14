@@ -328,6 +328,12 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
+  # `upload.path` est un fichier temporaire Plug.Upload (server-controlled),
+  # et `file_path` est construit à partir d'un UUID + `@upload_dir` constant,
+  # donc aucune traversal n'est possible. Sobelow ne peut pas le prouver
+  # statiquement — annotation au lieu d'un fingerprint dans `.sobelow-skips`
+  # pour survivre aux line drifts.
+  @sobelow_skip ["Traversal.FileModule"]
   defp save_file(upload) do
     # Ensure upload directory exists
     File.mkdir_p!(@upload_dir)
@@ -364,6 +370,11 @@ defmodule WhisprMessagingWeb.AttachmentController do
     Path.join(@upload_dir, Path.basename(storage_url))
   end
 
+  # `file_path` provient toujours de `local_path/1` qui passe par `Path.basename`,
+  # donc la composante répertoire est strippée avant d'être jointe à `@upload_dir`.
+  # Pas de traversal possible. Annotation plutôt qu'un fingerprint pour la
+  # robustesse aux refactors.
+  @sobelow_skip ["Traversal.FileModule"]
   defp read_file(file_path) do
     case File.read(file_path) do
       {:ok, content} -> {:ok, content}
@@ -372,6 +383,9 @@ defmodule WhisprMessagingWeb.AttachmentController do
     end
   end
 
+  # Voir la justification sur `read_file/1` : `file_path` est dérivé de
+  # `Path.basename` + `@upload_dir`, traversal impossible.
+  @sobelow_skip ["Traversal.FileModule"]
   defp delete_file(file_path) do
     case File.rm(file_path) do
       :ok -> :ok

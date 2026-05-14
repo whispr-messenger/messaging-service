@@ -12,6 +12,12 @@
   # (module attribute dans options de socket — cf. endpoint.ex). La check
   # Config.CSWH lit les options en s'attendant à une liste keyword inline,
   # pas à un `{:@, ...}`. À réactiver dès qu'un fix upstream sort.
-  ignore: ["Config.CSWH"],
+  #
+  # Config.HTTPS: HTTPS termination is handled at the nginx-ingress layer
+  # (cf. infrastructure/k8s/whispr/preprod/messaging-service/), the Phoenix
+  # Endpoint runs behind the proxy and does not need `force_ssl` set. Using
+  # a fingerprint-based skip in `.sobelow-skips` was brittle because each
+  # `config/prod.exs` edit shifted the hash; the ignore here is stable.
+  ignore: ["Config.CSWH", "Config.HTTPS"],
   ignore_files: []
 ]
