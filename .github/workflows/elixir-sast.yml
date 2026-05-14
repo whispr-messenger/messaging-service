@@ -102,10 +102,20 @@ jobs:
       # mix_audit ne produit pas de SARIF nativement. On capture la sortie
       # dans un fichier et on l'expose comme artefact pour l'auditeur ;
       # le exit code non-nul bloque la CI en cas de CVE détectée.
+      #
+      # Ignored advisories (à passer en revue régulièrement) :
+      #
+      #   GHSA-rhv4-8758-jx7v — decimal < 3.0.0 : DoS par exponent non borné
+      #     dans Decimal.new. Le fix est dans decimal 3.0.0 mais ecto ~> 3.13
+      #     épingle decimal ~> 2.0, donc un bump direct casserait le runtime
+      #     Ecto. Pas exploitable depuis l'input utilisateur dans ce service
+      #     (les message bodies sont binaires E2EE, pas de champ :decimal côté
+      #     API publique). À retirer dès qu'une release ecto supporte decimal
+      #     3.x ; suivi sur ticket Jira dédié.
       - name: Run mix_audit
         run: |
           set -o pipefail
-          mix deps.audit 2>&1 | tee mix-audit-results.txt
+          mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v 2>&1 | tee mix-audit-results.txt
 
       - name: Upload mix_audit results
         if: always()
