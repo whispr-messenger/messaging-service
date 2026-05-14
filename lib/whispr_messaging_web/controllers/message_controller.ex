@@ -200,11 +200,9 @@ defmodule WhisprMessagingWeb.MessageController do
     # au helper de fanout + au publish Redis pour eviter une double query.
     members = Conversations.list_conversation_members(conversation_id)
     fanout_user_channels(members, "new_message", %{message: serialized}, message.sender_id)
-
-    # WHISPR-1109: publish on Redis so notification-service can bump the
-    # badge counter of every recipient. The REST path never hits the
-    # GenServer, so the publish has to live here too.
-    MessagingEvents.publish_new_message(message, members)
+    # Redis publish to notification-service is owned by `Messages.create_message`
+    # (via `publish_new_message_async/1`) — calling it again here used to
+    # produce duplicate events / double push notifications.
   end
 
   # Fanout d un event sur le canal `user:<id>` de chaque membre, en excluant

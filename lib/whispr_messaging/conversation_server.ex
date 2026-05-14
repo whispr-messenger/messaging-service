@@ -625,10 +625,9 @@ defmodule WhisprMessaging.ConversationServer do
       end
     end)
 
-    # WHISPR-1109 follow-up: publish to Redis so notification-service can
-    # increment unread badges for every recipient. Fire-and-forget — any
-    # Redis error is logged but must never crash the GenServer.
-    MessagingEvents.publish_new_message(message, state.members)
+    # Redis publish to notification-service is owned by `Messages.create_message`
+    # (via `publish_new_message_async/1`) — calling it again here used to
+    # produce duplicate events / double push notifications.
   end
 
   defp notify_offline_members(message, state) do

@@ -12,8 +12,6 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
 
   use GenServer
 
-  alias WhisprMessaging.Conversations
-  alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.ScheduledMessage
   alias WhisprMessaging.Repo
@@ -113,10 +111,9 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
           %{message: WhisprMessaging.ConversationServer.serialize_message(message)}
         )
 
-        # WHISPR-1109: emit the same Redis event the REST and WS paths do
-        # so scheduled deliveries also bump recipient badges.
-        members = Conversations.list_conversation_members(sm.conversation_id)
-        MessagingEvents.publish_new_message(message, members)
+        # Redis publish to notification-service is owned by `Messages.create_message`
+        # (via `publish_new_message_async/1`) — calling it again here used to
+        # produce duplicate events / double push notifications.
 
         :ok
 
