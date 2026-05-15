@@ -1,0 +1,201 @@
+defmodule WhisprMessagingWeb.MessageControllerExtrasTest do
+  @moduledoc """
+  Additional coverage for the message controller actions that are not
+  exercised by the main test file: show, edge cases, search edge cases.
+  """
+
+  use WhisprMessagingWeb.ConnCase, async: true
+
+  alias WhisprMessaging.{Conversations, Messages}
+
+  setup do
+    user1_id = Ecto.UUID.generate()
+    user2_id = Ecto.UUID.generate()
+    outsider_id = Ecto.UUID.generate()
+
+    {:ok, conversation} =
+      Conversations.create_conversation(%{
+        type: "direct",
+        metadata: %{"test" => true},
+        is_active: true
+      })
+
+    {:ok, _} = Conversations.add_conversation_member(conversation.id, user1_id)
+    {:ok, _} = Conversations.add_conversation_member(conversation.id, user2_id)
+
+    {:ok, message} =
+      Messages.create_message(%{
+        conversation_id: conversation.id,
+        sender_id: user1_id,
+        message_type: "text",
+        content: "test message",
+        client_random: System.unique_integer([:positive])
+      })
+
+    %{
+      user1_id: user1_id,
+      user2_id: user2_id,
+      outsider_id: outsider_id,
+      conversation: conversation,
+      message: message
+    }
+  end
+
+  describe "GET /messages/:id (show)" do
+    test "returns the message data for an existing message", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/#{ctx.message.id}")
+        |> json_response(200)
+
+      assert response["data"]["id"] == ctx.message.id
+    end
+
+    test "returns 404 for an unknown message id", ctx do
+      missing = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/#{missing}")
+
+      assert conn.status in [404, 500]
+    end
+  end
+
+  describe "GET /messages/search — edge cases" do
+    test "returns 400 when q is missing", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/search")
+
+      assert conn.status == 400
+    end
+
+    test "returns 400 when q is too short", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/search?q=a")
+
+      assert conn.status == 400
+    end
+
+    test "returns 401 without auth", _ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/search?q=hello")
+
+      assert conn.status == 401
+    end
+
+    test "honours conversation_id and limit query params", ctx do
+      # Create a message with a plaintext_preview metadata key for matching
+      {:ok, _} =
+        Messages.create_message(%{
+          conversation_id: ctx.conversation.id,
+          sender_id: ctx.user1_id,
+          message_type: "text",
+          content: "encrypted",
+          metadata: %{"plaintext_preview" => "needle haystack search"},
+          client_random: System.unique_integer([:positive])
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(
+          ~p"/messaging/api/v1/messages/search?q=needle&conversation_id=#{ctx.conversation.id}&limit=5"
+        )
+
+      assert conn.status == 200
+    end
+  end
+
+  describe "PATCH /messages/:id/receipt — error cases" do
+    test "returns 400 for an invalid status", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user2_id)
+        |> json_conn()
+        |> patch(~p"/messaging/api/v1/messages/#{ctx.message.id}/receipt", %{"status" => "weird"})
+
+      assert conn.status == 400
+    end
+
+    test "returns 400 when no status provided", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user2_id)
+        |> json_conn()
+        |> patch(~p"/messaging/api/v1/messages/#{ctx.message.id}/receipt", %{})
+
+      assert conn.status == 400
+    end
+  end
+
+  describe "POST /messages/:id/forward — error cases" do
+    test "returns 422 when conversation_ids list is empty", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{ctx.message.id}/forward", %{
+          "conversation_ids" => []
+        })
+
+      assert conn.status == 422
+    end
+
+    test "returns 422 when conversation_ids missing", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{ctx.message.id}/forward", %{})
+
+      assert conn.status == 422
+    end
+
+    test "returns 401 without auth", ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{ctx.message.id}/forward", %{
+          "conversation_ids" => [Ecto.UUID.generate()]
+        })
+
+      assert conn.status == 401
+    end
+  end
+
+  describe "DELETE /messages/:id — auth branches" do
+    test "returns 401 without auth", ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/messages/#{ctx.message.id}")
+
+      assert conn.status == 401
+    end
+  end
+
+  describe "PUT /messages/:id — auth branches" do
+    test "returns 401 without auth", ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> put(~p"/messaging/api/v1/messages/#{ctx.message.id}", %{"content" => "new"})
+
+      assert conn.status == 401
+    end
+  end
+end

@@ -365,6 +365,60 @@ defmodule WhisprMessagingWeb.ConversationControllerExtrasTest do
     end
   end
 
+  describe "POST /conversations — error branches" do
+    test "returns 400 for invalid/missing type", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations", %{"foo" => "bar"})
+
+      assert conn.status in [400, 422]
+    end
+
+    test "returns 400 when creating a group without name", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations", %{
+          "type" => "group",
+          "user_ids" => [Ecto.UUID.generate(), Ecto.UUID.generate()]
+        })
+
+      assert conn.status in [400, 422]
+    end
+
+    test "returns 422 when creating a group with insufficient members", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations", %{
+          "type" => "group",
+          "name" => "TinyGroup",
+          "user_ids" => [ctx.user_id]
+        })
+
+      assert conn.status in [422]
+    end
+  end
+
+  describe "PUT /conversations/:id — metadata merging" do
+    test "merges new metadata into existing metadata", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> put(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}", %{
+          "metadata" => %{"description" => "Updated description"}
+        })
+        |> json_response(200)
+
+      assert response["data"]["metadata"]["description"] == "Updated description"
+    end
+  end
+
   describe "PUT /conversations/:id/settings" do
     test "updates the user's per-conversation settings", ctx do
       response =

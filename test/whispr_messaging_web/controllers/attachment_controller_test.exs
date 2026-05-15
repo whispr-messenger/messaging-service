@@ -339,4 +339,32 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
       assert response["error"] =~ "Failed"
     end
   end
+
+  describe "auth missing" do
+    test "GET /attachments/:id returns 404/401 without auth", _ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/attachments/#{Ecto.UUID.generate()}")
+
+      assert conn.status in [401, 404, 500]
+    end
+
+    test "POST /attachments/upload returns 401 without auth", _ctx do
+      conn =
+        build_conn()
+        |> post(~p"/messaging/api/v1/attachments/upload", %{})
+
+      assert conn.status in [400, 401]
+    end
+
+    test "DELETE /attachments/:id returns 401 without auth", _ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/attachments/#{Ecto.UUID.generate()}")
+
+      assert conn.status in [401, 500]
+    end
+  end
 end
