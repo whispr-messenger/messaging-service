@@ -181,5 +181,69 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
 
       assert is_nil(response["data"]["expires_at"])
     end
+
+    test "accepts camelCase parameters (userId, expiresAt)", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "userId" => ctx.user_id,
+          "type" => "shadow_restrict",
+          "reason" => "spam",
+          "expiresAt" => DateTime.utc_now() |> DateTime.add(3600) |> DateTime.to_iso8601()
+        })
+        |> json_response(201)
+
+      assert response["data"]["user_id"] == ctx.user_id
+      assert response["data"]["type"] == "shadow_restrict"
+      assert response["data"]["expires_at"] != nil
+    end
+
+    test "supports kick type", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "kick",
+          "reason" => "abusive behavior"
+        })
+        |> json_response(201)
+
+      assert response["data"]["type"] == "kick"
+    end
+  end
+
+  describe "GET /messaging/api/v1/conversations/:id/sanctions — pagination/filters" do
+    test "returns active sanctions only", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      # Create + lift one sanction
+      %{"data" => %{"id" => sanction_id}} =
+        post(conn, ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "mute",
+          "reason" => "Test"
+        })
+        |> json_response(201)
+
+      delete(
+        conn,
+        ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{sanction_id}"
+      )
+      |> json_response(200)
+
+      # Active list shouldn't include it
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions")
+        |> json_response(200)
+
+      assert Enum.all?(response["data"], &(&1["active"] == true))
+    end
   end
 end

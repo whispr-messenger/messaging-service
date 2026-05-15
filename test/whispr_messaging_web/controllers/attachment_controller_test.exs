@@ -372,6 +372,90 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
 
       assert conn.status == 201
     end
+
+    test "accepts GIF image", ctx do
+      upload = upload("anim.gif", "image/gif", "GIF89a")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts WebP image", ctx do
+      upload = upload("img.webp", "image/webp", "RIFF")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts WAV audio", ctx do
+      upload = upload("audio.wav", "audio/wav", "RIFF")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts MOV video", ctx do
+      upload = upload("video.mov", "video/quicktime", "x")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts text/csv", ctx do
+      upload = upload("data.csv", "text/csv", "a,b,c\n1,2,3")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts MS Word document", ctx do
+      upload = upload("doc.doc", "application/msword", "doc-bytes")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
   end
 
   describe "POST /messages/:message_id/attachments (metadata-only)" do
