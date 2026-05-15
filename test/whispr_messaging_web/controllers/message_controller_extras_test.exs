@@ -299,4 +299,71 @@ defmodule WhisprMessagingWeb.MessageControllerExtrasTest do
       assert response["data"] != nil
     end
   end
+
+  describe "POST /messages/:id/forward — happy path" do
+    test "forwards a message to a target conversation", ctx do
+      {:ok, target} =
+        WhisprMessaging.Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = WhisprMessaging.Conversations.add_conversation_member(target.id, ctx.user1_id)
+
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{ctx.message.id}/forward", %{
+          "conversation_ids" => [target.id]
+        })
+        |> json_response(201)
+
+      assert is_list(response["data"])
+      assert length(response["data"]) == 1
+    end
+
+    test "returns 404 for unknown source message", ctx do
+      missing = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{missing}/forward", %{
+          "conversation_ids" => [ctx.conversation.id]
+        })
+
+      assert conn.status == 404
+    end
+  end
+
+  describe "DELETE /messages/:id" do
+    test "soft-deletes a message for the caller (no delete_for_everyone)", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user2_id)
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/messages/#{ctx.message.id}")
+        |> json_response(200)
+
+      assert response["data"]["id"] == ctx.message.id
+    end
+
+    test "delete_for_everyone=true broadcasts message_deleted", ctx do
+      Phoenix.PubSub.subscribe(
+        WhisprMessaging.PubSub,
+        "conversation:#{ctx.conversation.id}"
+      )
+
+      build_conn()
+      |> authenticated_conn(ctx.user1_id)
+      |> json_conn()
+      |> delete(~p"/messaging/api/v1/messages/#{ctx.message.id}?delete_for_everyone=true")
+      |> json_response(200)
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "message_deleted"}, 1_000
+    end
+  end
 end
