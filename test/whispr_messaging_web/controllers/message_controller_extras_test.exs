@@ -339,6 +339,41 @@ defmodule WhisprMessagingWeb.MessageControllerExtrasTest do
     end
   end
 
+  describe "POST /conversations/:id/messages — body shapes" do
+    test "supports message wrapper in body", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages", %{
+          "message" => %{
+            "content" => "wrapped",
+            "message_type" => "text",
+            "client_random" => System.unique_integer([:positive])
+          }
+        })
+        |> json_response(201)
+
+      assert response["data"]["content"] == "wrapped"
+    end
+
+    test "TTL ephemeral message supports ttl_seconds", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages", %{
+          "content" => "ephemeral",
+          "message_type" => "text",
+          "client_random" => System.unique_integer([:positive]),
+          "ttl_seconds" => 60
+        })
+        |> json_response(201)
+
+      assert response["data"]["expires_at"] != nil or response["data"]["expiresAt"] != nil
+    end
+  end
+
   describe "DELETE /messages/:id" do
     test "soft-deletes a message for the caller (no delete_for_everyone)", ctx do
       response =
