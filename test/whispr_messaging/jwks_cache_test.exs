@@ -152,5 +152,20 @@ defmodule WhisprMessaging.JwksCacheTest do
         assert {:error, :not_loaded} = JwksCache.get_signing_key("test-kid-1")
       end
     end
+
+    test "treats JSON without 'keys' field as :invalid_document" do
+      bad_body = Jason.encode!(%{"not_keys" => []})
+
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: bad_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(100)
+
+        assert {:error, :not_loaded} = JwksCache.get_signing_key("test-kid-1")
+      end
+    end
+
   end
 end

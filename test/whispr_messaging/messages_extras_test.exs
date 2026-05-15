@@ -400,6 +400,44 @@ defmodule WhisprMessaging.MessagesExtrasTest do
     end
   end
 
+  describe "get_reaction_summary/1" do
+    test "returns an empty map when no reactions" do
+      assert Messages.get_reaction_summary(Ecto.UUID.generate()) == %{}
+    end
+
+    test "groups reactions by emoji with counts" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "reactable",
+          client_random: System.unique_integer([:positive])
+        })
+
+      {:ok, _} = Messages.add_reaction(msg.id, u1, "👍")
+      {:ok, _} = Messages.add_reaction(msg.id, u2, "👍")
+      {:ok, _} = Messages.add_reaction(msg.id, u1, "❤️")
+
+      summary = Messages.get_reaction_summary(msg.id)
+      assert summary["👍"] == 2
+      assert summary["❤️"] == 1
+    end
+  end
+
+  describe "remove_reaction/3 — error path" do
+    test "returns :not_found for an unknown user/reaction pair" do
+      assert {:error, :not_found} =
+               Messages.remove_reaction(
+                 Ecto.UUID.generate(),
+                 Ecto.UUID.generate(),
+                 "❌"
+               )
+    end
+  end
+
   describe "delete_message/3" do
     test "soft-deletes a message for the user (delete_for_everyone=false)" do
       {u1, _u2, conv} = setup_two_user_conv()
