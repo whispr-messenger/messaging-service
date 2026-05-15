@@ -365,6 +365,35 @@ defmodule WhisprMessagingWeb.ConversationControllerExtrasTest do
     end
   end
 
+  describe "POST /conversations — type=direct error branches" do
+    test "returns 400 when both other_user_id and user_ids are absent", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations", %{
+          "type" => "direct",
+          "metadata" => %{}
+        })
+
+      assert conn.status in [400, 422]
+    end
+
+    test "returns 403 when neither user_id matches the caller", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations", %{
+          "type" => "direct",
+          "user_ids" => [Ecto.UUID.generate(), Ecto.UUID.generate()],
+          "metadata" => %{}
+        })
+
+      assert conn.status in [403, 422]
+    end
+  end
+
   describe "POST /conversations — error branches" do
     test "returns 400 for invalid/missing type", ctx do
       conn =

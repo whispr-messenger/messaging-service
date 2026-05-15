@@ -302,6 +302,78 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
     end
   end
 
+  describe "POST /attachments/upload — every supported MIME type" do
+    test "accepts JPEG image", ctx do
+      upload = upload("photo.jpg", "image/jpeg", "x")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts PDF document", ctx do
+      upload = upload("doc.pdf", "application/pdf", "x")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts MP4 video", ctx do
+      upload = upload("video.mp4", "video/mp4", "x")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts MP3 audio", ctx do
+      upload = upload("audio.mp3", "audio/mpeg", "x")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+
+    test "accepts text/plain", ctx do
+      upload = upload("readme.txt", "text/plain", "hello")
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> post(~p"/messaging/api/v1/attachments/upload", %{
+          "file" => upload,
+          "message_id" => ctx.message.id
+        })
+
+      assert conn.status == 201
+    end
+  end
+
   describe "POST /messages/:message_id/attachments (metadata-only)" do
     test "creates an attachment record from JSON metadata", ctx do
       response =
