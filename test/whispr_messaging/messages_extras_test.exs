@@ -148,6 +148,30 @@ defmodule WhisprMessaging.MessagesExtrasTest do
     end
   end
 
+  describe "forward_message/3 — happy path" do
+    test "forwards a message to a target conversation the user belongs to" do
+      {u1, _u2, source_conv} = setup_two_user_conv()
+      {_u3, _u4, target_conv} = setup_two_user_conv()
+      {:ok, _} = Conversations.add_conversation_member(target_conv.id, u1)
+
+      {:ok, source} =
+        Messages.create_message(%{
+          conversation_id: source_conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "fan out",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:ok, [forwarded]} =
+               Messages.forward_message(source.id, [target_conv.id], u1)
+
+      assert forwarded.conversation_id == target_conv.id
+      assert forwarded.metadata["forwarded"] == true
+      assert forwarded.forwarded_from_id == source.id
+    end
+  end
+
   describe "forward_message/3" do
     test "returns {:error, :forbidden} when caller is not a member of source" do
       {u1, _u2, conv1} = setup_two_user_conv()
