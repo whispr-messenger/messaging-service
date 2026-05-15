@@ -67,4 +67,39 @@ defmodule WhisprMessaging.JsonFormatterTest do
     assert payload["params"] == %{"query" => "hello", "limit" => 10}
     assert payload["tags"] == ["a", "b"]
   end
+
+  test "supports tuples in metadata (converted to lists)" do
+    output = JsonFormatter.format(:info, "ok", @ts, pair: {1, "two"})
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert payload["pair"] == [1, "two"]
+  end
+
+  test "supports nil values in metadata" do
+    output = JsonFormatter.format(:info, "ok", @ts, optional: nil)
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert is_nil(payload["optional"])
+  end
+
+  test "binary keys in metadata maps are preserved" do
+    output = JsonFormatter.format(:info, "ok", @ts, config: %{"binary_key" => "value"})
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert payload["config"] == %{"binary_key" => "value"}
+  end
+
+  test "non-stringifiable values are inspected" do
+    output = JsonFormatter.format(:info, "ok", @ts, fun: fn -> 1 end)
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert is_binary(payload["fun"])
+  end
+
+  test "handles binary message (iodata_to_string fallback)" do
+    output = JsonFormatter.format(:info, ["a", :atom, "b"], @ts, [])
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert is_binary(payload["message"])
+  end
 end
