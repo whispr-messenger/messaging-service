@@ -438,6 +438,61 @@ defmodule WhisprMessaging.MessagesExtrasTest do
     end
   end
 
+  describe "mark_message_delivered/3" do
+    test "marks delivered_at on the delivery_status row" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:ok, ds} = Messages.mark_message_delivered(msg.id, u2)
+      assert ds.delivered_at != nil
+    end
+
+    test "is idempotent" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      {:ok, _} = Messages.mark_message_delivered(msg.id, u2)
+      assert {:ok, _} = Messages.mark_message_delivered(msg.id, u2)
+    end
+  end
+
+  describe "get_message_delivery_status/2 — actual statuses" do
+    test "returns the actual status when a delivery_status row exists" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      {:ok, _} = Messages.mark_message_delivered(msg.id, u2)
+      assert "delivered" = Messages.get_message_delivery_status(msg.id, u2)
+
+      {:ok, _} = Messages.mark_message_read(msg.id, u2)
+      assert "read" = Messages.get_message_delivery_status(msg.id, u2)
+    end
+  end
+
   describe "delete_message/3" do
     test "soft-deletes a message for the user (delete_for_everyone=false)" do
       {u1, _u2, conv} = setup_two_user_conv()

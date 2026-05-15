@@ -115,6 +115,49 @@ defmodule WhisprMessagingWeb.ConversationControllerRenderTest do
     end
   end
 
+  describe "GET /conversations — limit parsing" do
+    test "honours valid limit", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations?limit=10")
+
+      assert conn.status == 200
+    end
+
+    test "clamps limit to 100 max", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations?limit=999")
+        |> json_response(200)
+
+      assert response["meta"]["count"] <= 100
+    end
+
+    test "defaults limit to 50 for invalid input", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations?limit=not_int")
+
+      assert conn.status == 200
+    end
+
+    test "defaults limit to 50 for negative input", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations?limit=-5")
+
+      assert conn.status == 200
+    end
+  end
+
   describe "settings exposure on render" do
     test "is_muted, is_pinned, is_archived default to false on read", ctx do
       response =

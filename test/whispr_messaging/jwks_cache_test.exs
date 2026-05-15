@@ -36,7 +36,13 @@ defmodule WhisprMessaging.JwksCacheTest do
     {:ok, pid} = JwksCache.start_link(start_refresh: false)
 
     on_exit(fn ->
-      if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000)
+      if Process.alive?(pid) do
+        try do
+          GenServer.stop(pid, :normal, 1_000)
+        catch
+          :exit, _ -> :ok
+        end
+      end
     end)
 
     :ok
