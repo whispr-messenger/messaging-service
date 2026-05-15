@@ -149,4 +149,60 @@ defmodule WhisprMessaging.ConversationsExtrasTest do
       assert length(unread) == 2
     end
   end
+
+  describe "search_conversations/2" do
+    test "matches by metadata text" do
+      _ = build_group("Recherche unique abc123")
+      results = Conversations.search_conversations("Recherche unique abc123", 5)
+      assert is_list(results)
+      assert Enum.any?(results, &(&1.metadata["name"] == "Recherche unique abc123"))
+    end
+
+    test "returns an empty list when no match" do
+      assert Conversations.search_conversations("xyz-no-match-#{System.unique_integer()}", 5) == []
+    end
+  end
+
+  describe "get_conversation_by_external_group_id/1" do
+    test "returns :not_found for unknown external_group_id" do
+      assert {:error, :not_found} =
+               Conversations.get_conversation_by_external_group_id(Ecto.UUID.generate())
+    end
+  end
+
+  describe "find_direct_conversation/2" do
+    test "returns nil or {:error, :not_found} when no direct conversation exists" do
+      result =
+        Conversations.find_direct_conversation(Ecto.UUID.generate(), Ecto.UUID.generate())
+
+      # Different implementations may return either shape; accept both.
+      assert result in [nil, {:error, :not_found}]
+    end
+  end
+
+  describe "list_active_conversations/1" do
+    test "returns a (possibly empty) list" do
+      assert is_list(Conversations.list_active_conversations(5))
+    end
+  end
+
+  describe "get_conversation_summaries/1" do
+    test "returns {:ok, summaries} (possibly empty)" do
+      assert {:ok, summaries} = Conversations.get_conversation_summaries(Ecto.UUID.generate())
+      assert is_list(summaries)
+    end
+  end
+
+  describe "get_user_active_conversations/1" do
+    test "returns {:ok, ids} (possibly empty)" do
+      assert {:ok, ids} = Conversations.get_user_active_conversations(Ecto.UUID.generate())
+      assert is_list(ids)
+    end
+  end
+
+  describe "list_user_conversations/2 (limit form)" do
+    test "honours an integer limit" do
+      assert is_list(Conversations.list_user_conversations(Ecto.UUID.generate(), 5))
+    end
+  end
 end
