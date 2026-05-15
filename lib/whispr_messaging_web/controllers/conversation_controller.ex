@@ -984,101 +984,27 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  # Private rendering functions
+  # Rendering helpers are factored out into ConversationRendering so they can
+  # be unit-tested in isolation. Local thin wrappers keep call sites unchanged.
 
-  defp render_conversations(conversations, authorization) do
-    Enum.map(conversations, &render_conversation(&1, authorization))
-  end
+  alias WhisprMessagingWeb.ConversationRendering
 
-  defp render_conversation(conversation, authorization) do
-    member_info = Map.get(conversation, :member_info)
+  defp render_conversations(conversations, authorization),
+    do: ConversationRendering.render_conversations(conversations, authorization)
 
-    settings =
-      if member_info do
-        member_info.settings || %{}
-      else
-        %{}
-      end
+  defp render_conversation(conversation, authorization),
+    do: ConversationRendering.render_conversation(conversation, authorization)
 
-    # WHISPR-1256: rewrite media URLs (group_icon_url, picture_url, …) stored
-    # in conversation metadata to presigned S3 URLs the web client can render
-    # without an Authorization header.
-    metadata = MediaClient.presign_metadata_urls(conversation.metadata, authorization)
+  defp render_conversation_with_members(conversation, member_info, authorization),
+    do:
+      ConversationRendering.render_conversation_with_members(
+        conversation,
+        member_info,
+        authorization
+      )
 
-    camelize_keys(%{
-      id: conversation.id,
-      type: conversation.type,
-      name: Map.get(metadata || %{}, "name"),
-      external_group_id: conversation.external_group_id,
-      metadata: metadata,
-      is_active: conversation.is_active,
-      is_pinned: Map.get(settings, "is_pinned", false),
-      is_archived: Map.get(settings, "is_archived", false),
-      is_muted: Map.get(settings, "is_muted", false),
-      inserted_at: conversation.inserted_at,
-      updated_at: conversation.updated_at
-    })
-    |> Map.put("unreadCount", Map.get(conversation, :unread_count, 0))
-    |> Map.put("lastMessage", render_last_message(Map.get(conversation, :last_message)))
-    |> maybe_add_member_ids(conversation)
-  end
-
-  defp render_last_message(nil), do: nil
-
-  defp render_last_message(message) do
-    camelize_keys(%{
-      id: message.id,
-      sender_id: message.sender_id,
-      content: safe_binary_content(message.content),
-      message_type: message.message_type,
-      sent_at: message.sent_at,
-      is_deleted: message.is_deleted
-    })
-  end
-
-  # Ensure binary content is safe for JSON encoding.
-  # Content stored as BYTEA may not always be valid UTF-8.
-  defp safe_binary_content(nil), do: nil
-
-  defp safe_binary_content(content) when is_binary(content) do
-    if String.valid?(content), do: content, else: Base.encode64(content)
-  end
-
-  defp safe_binary_content(content), do: to_string(content)
-
-  defp maybe_add_member_ids(rendered, conversation) do
-    if conversation.type == "direct" do
-      member_ids =
-        WhisprMessaging.Conversations.list_conversation_members(conversation.id)
-        |> Enum.map(& &1.user_id)
-
-      Map.put(rendered, "memberUserIds", member_ids)
-    else
-      rendered
-    end
-  end
-
-  defp render_conversation_with_members(conversation, member_info, authorization) do
-    member_user_ids = Enum.map(conversation.members, & &1.user_id)
-
-    base =
-      conversation
-      |> render_conversation(authorization)
-      |> Map.put("members", Enum.map(conversation.members, &render_member/1))
-      |> Map.put("memberCount", length(conversation.members))
-      |> Map.put("memberUserIds", member_user_ids)
-
-    if member_info do
-      settings = member_info.settings || %{}
-
-      base
-      |> Map.put("isMuted", Map.get(settings, "is_muted", false))
-      |> Map.put("isPinned", Map.get(settings, "is_pinned", false))
-      |> Map.put("isArchived", Map.get(settings, "is_archived", false))
-    else
-      base
-    end
-  end
+  defp filter_by_type(conversations, type),
+    do: ConversationRendering.filter_by_type(conversations, type)
 
   defp maybe_broadcast_settings_updated(user_id, conversation_id, attrs, settings) do
     if Map.has_key?(attrs, "is_muted") do
@@ -1094,23 +1020,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  defp render_member(member) do
-    camelize_keys(%{
-      user_id: member.user_id,
-      role: Map.get(member.settings || %{}, "role", "member"),
-      joined_at: member.joined_at,
-      is_active: member.is_active
-    })
-  end
+  defp render_member(member), do: ConversationRendering.render_member(member)
 
   defp authorization_header(conn) do
     conn |> get_req_header("authorization") |> List.first()
-  end
-
-  defp filter_by_type(conversations, nil), do: conversations
-
-  defp filter_by_type(conversations, type) do
-    Enum.filter(conversations, fn conv -> conv.type == type end)
   end
 
   defp user_is_member?(conversation, user_id) do

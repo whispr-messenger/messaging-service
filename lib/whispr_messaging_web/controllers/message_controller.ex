@@ -605,81 +605,14 @@ defmodule WhisprMessagingWeb.MessageController do
     end)
   end
 
-  # Private rendering functions
+  # Rendering / parsing helpers are factored out into MessageRendering for
+  # testability. Local thin wrappers keep call sites unchanged.
 
-  defp render_messages(messages) do
-    Enum.map(messages, &render_message/1)
-  end
+  alias WhisprMessagingWeb.MessageRendering
 
-  defp render_message(message) do
-    alias WhisprMessaging.Messages.DeliveryStatus
-
-    base = %{
-      id: message.id,
-      conversation_id: message.conversation_id,
-      sender_id: message.sender_id,
-      content: safe_binary_content(message.content),
-      message_type: message.message_type,
-      metadata: message.metadata,
-      reply_to_id: message.reply_to_id,
-      forwarded_from_id: Map.get(message, :forwarded_from_id),
-      is_edited: message.edited_at != nil,
-      edited_at: message.edited_at,
-      is_deleted: message.is_deleted,
-      is_ephemeral: not is_nil(message.expires_at),
-      expires_at: message.expires_at,
-      sent_at: message.sent_at,
-      inserted_at: message.inserted_at,
-      updated_at: message.updated_at
-    }
-
-    result =
-      case message do
-        %{delivery_statuses: statuses} when is_list(statuses) ->
-          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
-
-        _ ->
-          Map.put(base, :delivery_status, "sent")
-      end
-
-    result =
-      case message do
-        %{reply_to: %WhisprMessaging.Messages.Message{} = parent} ->
-          Map.put(result, :reply_to, render_reply_context(parent))
-
-        _ ->
-          result
-      end
-
-    camelize_keys(result)
-  end
-
-  defp render_reply_context(parent_message) do
-    %{
-      id: parent_message.id,
-      sender_id: parent_message.sender_id,
-      content: safe_binary_content(parent_message.content),
-      message_type: parent_message.message_type,
-      is_deleted: parent_message.is_deleted
-    }
-  end
-
-  # Convert ttl_seconds convenience param to an explicit expires_at timestamp.
-  # If both are provided, expires_at takes precedence.
-  defp resolve_ttl_seconds(%{"expires_at" => _} = params), do: params
-
-  defp resolve_ttl_seconds(%{"ttl_seconds" => ttl} = params) when is_integer(ttl) and ttl > 0 do
-    expires_at =
-      DateTime.utc_now()
-      |> DateTime.add(ttl, :second)
-      |> DateTime.truncate(:second)
-
-    params
-    |> Map.put("expires_at", expires_at)
-    |> Map.delete("ttl_seconds")
-  end
-
-  defp resolve_ttl_seconds(params), do: params
+  defp render_messages(messages), do: MessageRendering.render_messages(messages)
+  defp render_message(message), do: MessageRendering.render_message(message)
+  defp resolve_ttl_seconds(params), do: MessageRendering.resolve_ttl_seconds(params)
 
   # Swagger Schema Definitions
   def swagger_definitions do
