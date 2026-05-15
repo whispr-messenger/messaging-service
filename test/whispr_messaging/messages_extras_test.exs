@@ -327,4 +327,124 @@ defmodule WhisprMessaging.MessagesExtrasTest do
       assert msg.message_type == "system"
     end
   end
+
+  describe "mark_conversation_read/3 — direct integration" do
+    test "marks all unread messages of a user as read" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      # u1 sends 3 messages
+      Enum.each(1..3, fn i ->
+        {:ok, msg} =
+          Messages.create_message(%{
+            conversation_id: conv.id,
+            sender_id: u1,
+            message_type: "text",
+            content: "msg-#{i}",
+            client_random: System.unique_integer([:positive])
+          })
+
+        # Create delivery_status rows for u2 (recipient)
+        {:ok, _} = Messages.mark_message_delivered(msg.id, u2)
+      end)
+
+      assert {:ok, count} = Messages.mark_conversation_read(conv.id, u2)
+      assert count == 3
+    end
+
+    test "mark_message_read on unknown message raises a foreign-key error" do
+      assert_raise Ecto.ConstraintError, fn ->
+        Messages.mark_message_read(Ecto.UUID.generate(), Ecto.UUID.generate())
+      end
+    end
+  end
+
+  describe "list_messages_after/3" do
+    test "returns a list" do
+      {_u1, _u2, conv} = setup_two_user_conv()
+      ts = DateTime.utc_now() |> DateTime.add(-3600, :second)
+      assert is_list(Messages.list_messages_after(conv.id, ts))
+    end
+  end
+
+  describe "edit_message/4" do
+    test "edits a message of the sender" do
+      {u1, _u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "old",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:ok, edited} = Messages.edit_message(msg.id, u1, "new")
+      assert edited.content == "new"
+      assert edited.edited_at != nil
+    end
+
+    test "returns :forbidden when another user tries to edit" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:error, :forbidden} = Messages.edit_message(msg.id, u2, "hacked")
+    end
+  end
+
+  describe "delete_message/3" do
+    test "soft-deletes a message for the user (delete_for_everyone=false)" do
+      {u1, _u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:ok, _} = Messages.delete_message(msg.id, u1, false)
+    end
+
+    test "deletes a message for everyone when the sender requests it" do
+      {u1, _u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:ok, deleted} = Messages.delete_message(msg.id, u1, true)
+      assert deleted.is_deleted == true
+    end
+
+    test "returns :forbidden when non-sender requests delete_for_everyone" do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, msg} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "x",
+          client_random: System.unique_integer([:positive])
+        })
+
+      assert {:error, :forbidden} = Messages.delete_message(msg.id, u2, true)
+    end
+  end
 end
