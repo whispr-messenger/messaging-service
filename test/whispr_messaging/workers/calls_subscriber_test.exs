@@ -94,6 +94,60 @@ defmodule WhisprMessaging.Workers.CallsSubscriberTest do
       refute_receive %Phoenix.Socket.Broadcast{event: "incoming_call"}, 50
     end
   end
+
+  describe "start_link/1 and message handling" do
+    test "starts and is alive" do
+      {:ok, pid} = CallsSubscriber.start_link([])
+      assert Process.alive?(pid)
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+    end
+
+    test "incoming :message on whispr:calls:initiated triggers broadcast" do
+      {:ok, pid} = CallsSubscriber.start_link([])
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+
+      initiator = "init-#{System.unique_integer([:positive])}"
+      callee = "callee-#{System.unique_integer([:positive])}"
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{callee}")
+
+      payload =
+        Jason.encode!(%{
+          "call_id" => "call-msg",
+          "initiator_id" => initiator,
+          "participant_ids" => [initiator, callee]
+        })
+
+      send(
+        pid,
+        {:redix_pubsub, :ignored, make_ref(), :message,
+         %{channel: "whispr:calls:initiated", payload: payload}}
+      )
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "incoming_call"}, 1_000
+    end
+
+    test ":subscribed messages do not crash" do
+      {:ok, pid} = CallsSubscriber.start_link([])
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+
+      send(
+        pid,
+        {:redix_pubsub, :ignored, make_ref(), :subscribed, %{channel: "whispr:calls:initiated"}}
+      )
+
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+
+    test "unrelated messages do not crash" do
+      {:ok, pid} = CallsSubscriber.start_link([])
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+
+      send(pid, :random_message)
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+  end
 end
 
 # WHISPR-1429 : tests du guard handle_participant_left avec acces DB.

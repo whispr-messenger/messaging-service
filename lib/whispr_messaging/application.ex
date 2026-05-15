@@ -18,7 +18,7 @@ defmodule WhisprMessaging.Application do
     # Store application start time
     :persistent_term.put(:app_start_time, System.monotonic_time(:second))
 
-    children = base_children() ++ env_specific_children()
+    children = base_children() ++ env_specific_children() ++ optional_children()
 
     opts = [strategy: :one_for_one, name: WhisprMessaging.Supervisor]
 
@@ -41,10 +41,6 @@ defmodule WhisprMessaging.Application do
       # HTTP client pool (used by JwksCache to fetch JWKS)
       {Finch, name: WhisprMessaging.Finch},
 
-      # JWKS public-key cache — must start before the Endpoint so that
-      # the Authenticate plug can call JwksCache.get_signing_key/0
-      WhisprMessaging.JwksCache,
-
       # PubSub for Phoenix Channels
       {Phoenix.PubSub, name: WhisprMessaging.PubSub},
 
@@ -56,19 +52,8 @@ defmodule WhisprMessaging.Application do
       WhisprMessaging.ConversationSupervisor,
       {Task.Supervisor, name: WhisprMessaging.TaskSupervisor},
 
-      # Background workers
-      WhisprMessaging.Workers.EphemeralMessageCleaner,
-      WhisprMessaging.Workers.ScheduledMessageWorker,
-
       # Presence tracking
       WhisprMessagingWeb.Presence,
-
-      # Moderation workers
-      WhisprMessaging.Workers.SanctionExpiryWorker,
-      WhisprMessaging.Workers.ModerationSubscriber,
-
-      # Calls relay — bridges calls-service Redis events to user channels
-      WhisprMessaging.Workers.CallsSubscriber,
 
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
@@ -82,6 +67,25 @@ defmodule WhisprMessaging.Application do
       # gRPC server disabled for now - needs config update
       # {GRPC.Server.Supervisor, grpc_server_config()}
     ]
+  end
+
+  # Children that are started in dev/prod but NOT in :test, because tests
+  # manage their lifecycle explicitly (start_supervised!/start_link) for
+  # determinism and to avoid the supervisor restart cascade tripping over
+  # tests that stop these processes.
+  defp optional_children do
+    if Mix.env() == :test do
+      []
+    else
+      [
+        WhisprMessaging.JwksCache,
+        WhisprMessaging.Workers.EphemeralMessageCleaner,
+        WhisprMessaging.Workers.ScheduledMessageWorker,
+        WhisprMessaging.Workers.SanctionExpiryWorker,
+        WhisprMessaging.Workers.ModerationSubscriber,
+        WhisprMessaging.Workers.CallsSubscriber
+      ]
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

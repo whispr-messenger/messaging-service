@@ -70,21 +70,29 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   defp verify_jwt(token) do
-    # Extract kid from token header to select the correct cached key
-    kid = peek_kid(token)
-
-    with {:ok, pem} <- JwksCache.get_signing_key(kid),
-         {:ok, claims} <- validate_token(token, pem),
-         {:ok, user_id} <- extract_sub(claims) do
-      {:ok, user_id}
-    else
-      {:error, :not_loaded} ->
-        Logger.warning("JWKS key not yet loaded, rejecting request", domain: :auth)
+    # Extract kid from token header to select the correct cached key.
+    # If the token is malformed or has no kid, reject immediately without
+    # touching JwksCache — this avoids a GenServer call on every malformed
+    # request and produces a deterministic 401 even if the cache is down.
+    case peek_kid(token) do
+      nil ->
+        Logger.debug("JWT rejected: missing or unreadable kid header", domain: :auth)
         {:error, :unauthorized}
 
-      {:error, reason} ->
-        Logger.debug("JWT validation failed", reason: inspect(reason), domain: :auth)
-        {:error, :unauthorized}
+      kid ->
+        with {:ok, pem} <- JwksCache.get_signing_key(kid),
+             {:ok, claims} <- validate_token(token, pem),
+             {:ok, user_id} <- extract_sub(claims) do
+          {:ok, user_id}
+        else
+          {:error, :not_loaded} ->
+            Logger.warning("JWKS key not yet loaded, rejecting request", domain: :auth)
+            {:error, :unauthorized}
+
+          {:error, reason} ->
+            Logger.debug("JWT validation failed", reason: inspect(reason), domain: :auth)
+            {:error, :unauthorized}
+        end
     end
   end
 

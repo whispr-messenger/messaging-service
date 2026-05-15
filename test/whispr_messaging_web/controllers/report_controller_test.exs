@@ -157,6 +157,153 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
     end
   end
 
+  describe "GET /messaging/api/v1/reports/:id (show)" do
+    setup ctx do
+      reporter_conn =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+
+      %{"data" => %{"id" => report_id}} =
+        post(reporter_conn, ~p"/messaging/api/v1/reports", %{
+          "reported_user_id" => ctx.reported_user_id,
+          "category" => "spam"
+        })
+        |> json_response(201)
+
+      Map.put(ctx, :report_id, report_id)
+    end
+
+    test "the reporter can fetch their own report", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/reports/#{ctx.report_id}")
+        |> json_response(200)
+
+      assert response["data"]["id"] == ctx.report_id
+    end
+
+    test "admin can fetch any report", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/reports/#{ctx.report_id}")
+        |> json_response(200)
+
+      assert response["data"]["id"] == ctx.report_id
+    end
+
+    test "returns 404 for an unknown report id", ctx do
+      missing = Ecto.UUID.generate()
+
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/reports/#{missing}")
+        |> json_response(404)
+
+      assert response["error"] == "Report not found"
+    end
+  end
+
+  describe "GET /messaging/api/v1/reports/stats (admin)" do
+    test "returns stats for admin", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/reports/stats")
+        |> json_response(200)
+
+      assert is_map(response["data"])
+    end
+  end
+
+  describe "GET /messaging/api/v1/reports/queue (admin filters)" do
+    test "honours limit and offset parameters", ctx do
+      reporter_conn =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+
+      post(reporter_conn, ~p"/messaging/api/v1/reports", %{
+        "reported_user_id" => ctx.reported_user_id,
+        "category" => "spam"
+      })
+
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/reports/queue?limit=5&offset=0&status=pending&category=spam")
+        |> json_response(200)
+
+      assert is_list(response["data"])
+    end
+  end
+
+  describe "create rejects self-report and unknown category" do
+    test "rejects an unknown category", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/reports", %{
+          "reported_user_id" => ctx.reported_user_id,
+          "category" => "ninja"
+        })
+        |> json_response(400)
+
+      assert is_map(response["error"])
+    end
+  end
+
+  describe "create accepts camelCase aliases" do
+    test "honours reportedUserId / conversationId / messageId", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/reports", %{
+          "reportedUserId" => ctx.reported_user_id,
+          "conversationId" => ctx.conversation.id,
+          "messageId" => ctx.message.id,
+          "category" => "harassment"
+        })
+        |> json_response(201)
+
+      assert response["data"]["reported_user_id"] == ctx.reported_user_id
+      assert response["data"]["category"] == "harassment"
+    end
+  end
+
+  describe "GET /messaging/api/v1/reports (index pagination)" do
+    test "supports limit/offset on index", ctx do
+      reporter_conn =
+        build_conn()
+        |> authenticated_conn(ctx.reporter_id)
+        |> json_conn()
+
+      Enum.each(1..3, fn _ ->
+        post(reporter_conn, ~p"/messaging/api/v1/reports", %{
+          "reported_user_id" => ctx.reported_user_id,
+          "category" => "spam"
+        })
+      end)
+
+      response =
+        get(reporter_conn, ~p"/messaging/api/v1/reports?limit=2&offset=0")
+        |> json_response(200)
+
+      assert is_list(response["data"])
+      assert length(response["data"]) <= 2
+    end
+  end
+
   describe "PUT /messaging/api/v1/reports/:id/resolve" do
     test "admin resolves a report", ctx do
       reporter_conn =

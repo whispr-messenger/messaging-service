@@ -52,19 +52,27 @@ defmodule WhisprMessagingWeb.UserSocket do
   end
 
   defp verify_jwt(token) do
-    kid = peek_kid(token)
+    case peek_kid(token) do
+      nil ->
+        Logger.debug("Socket JWT rejected: missing or unreadable kid header", domain: :socket)
+        {:error, :missing_kid}
 
-    with {:ok, pem} <- JwksCache.get_signing_key(kid),
-         {:ok, claims} <- validate_token(token, pem),
-         {:ok, user_id} <- extract_sub(claims) do
-      {:ok, user_id}
-    else
-      {:error, :not_loaded} ->
-        Logger.warning("JWKS key not yet loaded, rejecting socket connection", domain: :socket)
-        {:error, :jwks_not_loaded}
+      kid ->
+        with {:ok, pem} <- JwksCache.get_signing_key(kid),
+             {:ok, claims} <- validate_token(token, pem),
+             {:ok, user_id} <- extract_sub(claims) do
+          {:ok, user_id}
+        else
+          {:error, :not_loaded} ->
+            Logger.warning("JWKS key not yet loaded, rejecting socket connection",
+              domain: :socket
+            )
 
-      {:error, reason} ->
-        {:error, reason}
+            {:error, :jwks_not_loaded}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 

@@ -86,5 +86,100 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
 
       assert response["message"] == "Sanction lifted"
     end
+
+    test "returns 404 for unknown sanction id", ctx do
+      missing = Ecto.UUID.generate()
+
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{missing}")
+        |> json_response(404)
+
+      assert response["error"] == "Sanction not found"
+    end
+
+    test "returns 409 when trying to lift an already-lifted sanction", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      %{"data" => %{"id" => sanction_id}} =
+        post(conn, ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "mute",
+          "reason" => "Test"
+        })
+        |> json_response(201)
+
+      # First lift succeeds
+      delete(
+        conn,
+        ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{sanction_id}"
+      )
+      |> json_response(200)
+
+      # Second lift conflicts
+      response =
+        delete(
+          conn,
+          ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions/#{sanction_id}"
+        )
+        |> json_response(409)
+
+      assert response["error"] == "Sanction already lifted"
+    end
+  end
+
+  describe "POST /messaging/api/v1/conversations/:id/sanctions — validation" do
+    test "returns 4xx for an invalid sanction type", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "exile",
+          "reason" => "x"
+        })
+
+      assert conn.status in [400, 422]
+      body = Jason.decode!(conn.resp_body)
+      errors = body["error"] || body["errors"]
+      assert errors["type"] |> Enum.any?(&(&1 =~ "is invalid"))
+    end
+
+    test "accepts a permanent sanction (no expires_at)", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "mute",
+          "reason" => "permanent"
+        })
+        |> json_response(201)
+
+      assert is_nil(response["data"]["expires_at"])
+    end
+
+    test "ignores malformed expires_at (parsed as nil)", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/sanctions", %{
+          "user_id" => ctx.user_id,
+          "type" => "mute",
+          "reason" => "x",
+          "expires_at" => "2026-13-99T99:99:99Z"
+        })
+        |> json_response(201)
+
+      assert is_nil(response["data"]["expires_at"])
+    end
   end
 end

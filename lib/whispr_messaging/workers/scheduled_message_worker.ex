@@ -27,17 +27,32 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorker do
   end
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
     Logger.metadata(domain: :scheduled_message_worker)
-    schedule_poll()
-    {:ok, %{}}
+    skip_timer = Keyword.get(opts, :skip_timer, false)
+    unless skip_timer, do: schedule_poll()
+    {:ok, %{skip_timer: skip_timer}}
   end
 
   @impl true
   def handle_info(:poll, state) do
     dispatch_due_messages()
-    schedule_poll()
+    unless state.skip_timer, do: schedule_poll()
     {:noreply, state}
+  end
+
+  @doc """
+  Synchronously dispatch any due scheduled messages. Used by tests with
+  `skip_timer: true` to drive the worker deterministically.
+  """
+  def dispatch_now do
+    GenServer.call(__MODULE__, :dispatch_now)
+  end
+
+  @impl true
+  def handle_call(:dispatch_now, _from, state) do
+    dispatch_due_messages()
+    {:reply, :ok, state}
   end
 
   defp schedule_poll do

@@ -76,4 +76,68 @@ defmodule WhisprMessaging.Workers.ModerationSubscriberTest do
       refute_receive %Phoenix.Socket.Broadcast{event: "blocked_image_decision"}, 50
     end
   end
+
+  describe "start_link/1 and lifecycle" do
+    test "starts a GenServer process" do
+      {:ok, pid} = ModerationSubscriber.start_link([])
+      assert Process.alive?(pid)
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+    end
+  end
+
+  describe "handle_info/2 (via send/2)" do
+    setup do
+      {:ok, pid} = ModerationSubscriber.start_link([])
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000) end)
+      %{pid: pid}
+    end
+
+    test ":subscribed events are silently acknowledged", %{pid: pid} do
+      send(
+        pid,
+        {:redix_pubsub, :ignored, make_ref(), :subscribed,
+         %{channel: "whispr:moderation:blocked_image_approved"}}
+      )
+
+      # Process should still be alive after handling the message
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+
+    test "message events trigger a background task", %{pid: pid} do
+      user_id = "test-#{System.unique_integer([:positive])}"
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, "user:#{user_id}")
+
+      payload =
+        Jason.encode!(%{
+          "appealId" => "appeal-msg",
+          "userId" => user_id
+        })
+
+      send(
+        pid,
+        {:redix_pubsub, :ignored, make_ref(), :message,
+         %{channel: "whispr:moderation:blocked_image_approved", payload: payload}}
+      )
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "blocked_image_decision"}, 1_000
+    end
+
+    test "ignores unknown messages", %{pid: pid} do
+      send(pid, :something_random)
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+
+    test "invalid JSON payload is logged but does not crash the process", %{pid: pid} do
+      send(
+        pid,
+        {:redix_pubsub, :ignored, make_ref(), :message,
+         %{channel: "whispr:moderation:blocked_image_approved", payload: "{not json}"}}
+      )
+
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+  end
 end
