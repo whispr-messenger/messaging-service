@@ -226,4 +226,23 @@ defmodule WhisprMessagingWeb.DraftControllerTest do
       assert response["error"] == "Forbidden"
     end
   end
+
+  describe "POST /messages/drafts — nested draft body" do
+    test "supports the draft wrapper", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/drafts", %{
+          "draft" => %{
+            "conversation_id" => ctx.conversation.id,
+            "content" => "wrapped-body",
+            "metadata" => %{"x" => 1}
+          }
+        })
+        |> json_response(200)
+
+      assert response["data"]["content"] == "wrapped-body"
+    end
+  end
 end

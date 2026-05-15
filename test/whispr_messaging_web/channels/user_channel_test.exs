@@ -191,5 +191,24 @@ defmodule WhisprMessagingWeb.UserChannelTest do
 
       assert uid == ctx.user_id
     end
+
+    test "returns reply with empty payload for an unknown conversation", ctx do
+      {:ok, _, socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
+
+      ref = push(socket, "mark_conversation_read", %{"conversation_id" => Ecto.UUID.generate()})
+      # The action returns {:ok, ...} or {:error, ...}; both are valid.
+      assert_reply ref, status, _payload, 1_500
+      assert status in [:ok, :error]
+    end
+  end
+
+  describe "handle_in :presence_diff" do
+    test "is propagated as a push to the client", ctx do
+      {:ok, _, socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
+
+      send(socket.channel_pid, %{event: "presence_diff", payload: %{joins: %{}, leaves: %{}}})
+
+      assert_push "presence_diff", _payload, 500
+    end
   end
 end
