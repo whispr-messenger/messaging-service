@@ -198,4 +198,105 @@ defmodule WhisprMessagingWeb.MessageControllerExtrasTest do
       assert conn.status == 401
     end
   end
+
+  describe "POST /messages — invalid signature returns 422" do
+    test "returns 422 with malformed base64 signature", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages", %{
+          "content" => "encrypted",
+          "message_type" => "text",
+          "client_random" => System.unique_integer([:positive]),
+          "signature" => "not valid base64!!!",
+          "sender_public_key" => Base.encode64(:crypto.strong_rand_bytes(32))
+        })
+
+      assert conn.status == 422
+    end
+
+    test "returns 422 when only signature is provided", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages", %{
+          "content" => "encrypted",
+          "message_type" => "text",
+          "client_random" => System.unique_integer([:positive]),
+          "signature" => Base.encode64(:crypto.strong_rand_bytes(64))
+        })
+
+      assert conn.status == 422
+    end
+
+    test "returns 422 with wrong key length", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages", %{
+          "content" => "encrypted",
+          "message_type" => "text",
+          "client_random" => System.unique_integer([:positive]),
+          "signature" => Base.encode64(:crypto.strong_rand_bytes(64)),
+          "sender_public_key" => Base.encode64(:crypto.strong_rand_bytes(16))
+        })
+
+      assert conn.status == 422
+    end
+  end
+
+  describe "GET /conversations/:id/messages — branches" do
+    test "supports before_timestamp param", ctx do
+      now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages?before_timestamp=#{now}")
+
+      assert conn.status == 200
+    end
+
+    test "honours custom limit", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages?limit=5")
+
+      assert conn.status == 200
+    end
+  end
+
+  describe "PATCH /messages/:id/receipt — happy paths" do
+    test "marks delivered for the calling user", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user2_id)
+        |> json_conn()
+        |> patch(~p"/messaging/api/v1/messages/#{ctx.message.id}/receipt", %{
+          "status" => "delivered"
+        })
+        |> json_response(200)
+
+      assert response["data"] != nil
+    end
+
+    test "marks read for the calling user", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user2_id)
+        |> json_conn()
+        |> patch(~p"/messaging/api/v1/messages/#{ctx.message.id}/receipt", %{
+          "status" => "read"
+        })
+        |> json_response(200)
+
+      assert response["data"] != nil
+    end
+  end
 end
