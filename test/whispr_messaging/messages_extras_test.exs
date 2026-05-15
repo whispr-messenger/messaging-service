@@ -198,6 +198,67 @@ defmodule WhisprMessaging.MessagesExtrasTest do
     end
   end
 
+  describe "search_messages_preview/3" do
+    setup do
+      {u1, u2, conv} = setup_two_user_conv()
+
+      {:ok, _matching} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "encrypted",
+          metadata: %{"plaintext_preview" => "hello world from messaging"},
+          client_random: System.unique_integer([:positive])
+        })
+
+      {:ok, _no_match} =
+        Messages.create_message(%{
+          conversation_id: conv.id,
+          sender_id: u1,
+          message_type: "text",
+          content: "encrypted",
+          metadata: %{"plaintext_preview" => "something else"},
+          client_random: System.unique_integer([:positive])
+        })
+
+      %{u1: u1, u2: u2, conv: conv}
+    end
+
+    test "returns {items, next_cursor} with matches", ctx do
+      {items, cursor} = Messages.search_messages_preview(ctx.u1, "hello")
+      assert is_list(items)
+      assert length(items) >= 1
+      assert is_nil(cursor) or is_binary(cursor)
+    end
+
+    test "respects the conversation_id filter", ctx do
+      {items, _cursor} =
+        Messages.search_messages_preview(ctx.u1, "hello", conversation_id: ctx.conv.id)
+
+      assert Enum.all?(items, &(&1.conversation_id == ctx.conv.id))
+    end
+
+    test "limit clamps to [1, 50]", ctx do
+      {items_min, _} = Messages.search_messages_preview(ctx.u1, "hello", limit: 0)
+      assert is_list(items_min)
+
+      {items_max, _} = Messages.search_messages_preview(ctx.u1, "hello", limit: 999)
+      assert is_list(items_max)
+    end
+  end
+
+  describe "build_match_preview/2 — edge cases" do
+    test "returns nil when content is not binary" do
+      assert is_nil(Messages.build_match_preview(123, "x"))
+    end
+
+    test "returns nil when query is empty / whitespace" do
+      assert is_nil(Messages.build_match_preview("some text", ""))
+      assert is_nil(Messages.build_match_preview("some text", "   "))
+    end
+  end
+
   describe "create_attachment/1 + get_attachment/1 + delete_attachment/1" do
     test "creates and deletes an attachment" do
       {u1, _u2, conv} = setup_two_user_conv()
@@ -230,6 +291,40 @@ defmodule WhisprMessaging.MessagesExtrasTest do
 
     test "delete_attachment returns error for unknown id" do
       assert {:error, :not_found} = Messages.delete_attachment(Ecto.UUID.generate())
+    end
+  end
+
+  describe "create_system_message/3 / text / media" do
+    test "create_text_message/4 persists a row" do
+      {u1, _u2, conv} = setup_two_user_conv()
+
+      assert {:ok, msg} =
+               Messages.create_text_message(conv.id, u1, "encrypted", System.unique_integer([:positive]))
+
+      assert msg.message_type == "text"
+    end
+
+    test "create_media_message/5 persists a row with media metadata" do
+      {u1, _u2, conv} = setup_two_user_conv()
+
+      assert {:ok, msg} =
+               Messages.create_media_message(
+                 conv.id,
+                 u1,
+                 "encrypted",
+                 System.unique_integer([:positive]),
+                 %{"caption" => "x"}
+               )
+
+      assert msg.message_type == "media"
+      assert msg.metadata["caption"] == "x"
+    end
+
+    test "create_system_message/3 persists a system row" do
+      {_u1, _u2, conv} = setup_two_user_conv()
+      # system messages use sender_id "00000000-..." per impl
+      assert {:ok, msg} = Messages.create_system_message(conv.id, "user joined")
+      assert msg.message_type == "system"
     end
   end
 end

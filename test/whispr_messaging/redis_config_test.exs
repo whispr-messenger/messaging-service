@@ -11,13 +11,13 @@ defmodule WhisprMessaging.RedisConfigTest do
 
   describe "parse_sentinels/1" do
     test "parses a list of host:port pairs" do
-      assert RedisConfig.parse_sentinels("s1:26_379,s2:26_380") == [
+      assert RedisConfig.parse_sentinels("s1:26379,s2:26380") == [
                [host: "s1", port: 26_379],
                [host: "s2", port: 26_380]
              ]
     end
 
-    test "defaults to port 26_379 when missing" do
+    test "defaults to port 26379 when missing" do
       assert RedisConfig.parse_sentinels("only-host") == [[host: "only-host", port: 26_379]]
     end
 
@@ -77,7 +77,7 @@ defmodule WhisprMessaging.RedisConfigTest do
     test "builds sentinel-shaped options" do
       Application.put_env(:whispr_messaging, :redis,
         mode: "sentinel",
-        sentinels: "s1:26_379,s2:26_380",
+        sentinels: "s1:26379,s2:26380",
         master_name: "mymaster",
         database: 1,
         password: "p",
@@ -107,7 +107,7 @@ defmodule WhisprMessaging.RedisConfigTest do
     end
 
     test "raises when master_name is missing" do
-      Application.put_env(:whispr_messaging, :redis, mode: "sentinel", sentinels: "s1:26_379")
+      Application.put_env(:whispr_messaging, :redis, mode: "sentinel", sentinels: "s1:26379")
 
       assert_raise RuntimeError, ~r/REDIS_MASTER_NAME/, fn ->
         RedisConfig.build()

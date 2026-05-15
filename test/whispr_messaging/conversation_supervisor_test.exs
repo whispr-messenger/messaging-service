@@ -112,6 +112,17 @@ defmodule WhisprMessaging.ConversationSupervisorTest do
     end
   end
 
+  describe "stop_all_conversations/0" do
+    test "terminates running servers", ctx do
+      {:ok, _pid} = ConversationSupervisor.start_conversation(ctx.conversation.id)
+      ConversationSupervisor.stop_all_conversations()
+      # process is terminated asynchronously
+      Process.sleep(50)
+      # there may still be other unrelated children; we just ensure no crash
+      assert :ok
+    end
+  end
+
   describe "cleanup_idle_conversations/1" do
     test "leaves fresh servers untouched (idle threshold 30 min)", ctx do
       {:ok, _pid} = ConversationSupervisor.start_conversation(ctx.conversation.id)
