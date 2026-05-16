@@ -16,24 +16,43 @@ defmodule WhisprMessaging.Workers.SanctionExpiryWorker do
   end
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
     Logger.metadata(domain: :sanction_expiry_worker)
-    schedule_tick()
-    {:ok, %{}}
+    skip_timer = Keyword.get(opts, :skip_timer, false)
+    unless skip_timer, do: schedule_tick()
+    {:ok, %{skip_timer: skip_timer}}
   end
 
   @impl true
   def handle_info(:tick, state) do
-    case Sanctions.expire_sanctions() do
-      {:ok, count} when count > 0 ->
-        Logger.info("Sanctions expired", count: count)
-
-      _ ->
-        :ok
-    end
-
-    schedule_tick()
+    expire_now_impl()
+    unless state.skip_timer, do: schedule_tick()
     {:noreply, state}
+  end
+
+  @doc """
+  Synchronously expire any due sanctions. Used by tests to drive the worker
+  deterministically without waiting for the timer.
+  """
+  def expire_now do
+    GenServer.call(__MODULE__, :expire_now)
+  end
+
+  @impl true
+  def handle_call(:expire_now, _from, state) do
+    result = expire_now_impl()
+    {:reply, result, state}
+  end
+
+  defp expire_now_impl do
+    case Sanctions.expire_sanctions() do
+      {:ok, count} = ok ->
+        if count > 0, do: Logger.info("Sanctions expired", count: count)
+        ok
+
+      other ->
+        other
+    end
   end
 
   defp schedule_tick do

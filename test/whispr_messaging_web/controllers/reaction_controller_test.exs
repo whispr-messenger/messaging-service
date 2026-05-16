@@ -117,4 +117,76 @@ defmodule WhisprMessagingWeb.ReactionControllerTest do
       assert payload["reaction"] == "👍"
     end
   end
+
+  describe "GET /messaging/api/v1/messages/:id/reactions (index)" do
+    test "returns the list of reactions with summary", ctx do
+      # Add a couple of reactions
+      {:ok, _} = Messages.add_reaction(ctx.message.id, ctx.user1_id, "👍")
+      {:ok, _} = Messages.add_reaction(ctx.message.id, ctx.user2_id, "❤️")
+
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/#{ctx.message.id}/reactions")
+        |> json_response(200)
+
+      assert is_list(response["data"])
+      assert length(response["data"]) == 2
+      assert response["meta"]["messageId"] == ctx.message.id
+    end
+
+    test "returns empty data when no reactions", ctx do
+      response =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/#{ctx.message.id}/reactions")
+        |> json_response(200)
+
+      assert response["data"] == []
+    end
+  end
+
+  describe "auth & error branches" do
+    test "POST without auth returns 401", ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{ctx.message.id}/reactions", %{"reaction" => "👍"})
+
+      assert conn.status == 401
+    end
+
+    test "POST on unknown message returns 404", ctx do
+      missing = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> post(~p"/messaging/api/v1/messages/#{missing}/reactions", %{"reaction" => "👍"})
+
+      assert conn.status == 404
+    end
+
+    test "DELETE without auth returns 401", ctx do
+      conn =
+        build_conn()
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/messages/#{ctx.message.id}/reactions/👍")
+
+      assert conn.status == 401
+    end
+
+    test "DELETE for a non-existent reaction returns 404", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user1_id)
+        |> json_conn()
+        |> delete(~p"/messaging/api/v1/messages/#{ctx.message.id}/reactions/💯")
+
+      assert conn.status == 404
+    end
+  end
 end

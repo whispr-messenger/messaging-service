@@ -106,8 +106,13 @@ jobs:
       ####################################################################################################
       # Unit and Integration Tests
       ####################################################################################################
-      - name: Run tests
-        run: mix coveralls.xml
+      - name: Run tests with coverage threshold (75% minimum)
+        # The threshold is configured in coveralls.json (minimum_coverage: 75).
+        # Use `mix coveralls` (not coveralls.xml) so the threshold check fires;
+        # we then generate the XML report explicitly for Codecov.
+        run: |
+          mix coveralls
+          mix coveralls.xml
         env:
           MIX_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whispr_messaging_test

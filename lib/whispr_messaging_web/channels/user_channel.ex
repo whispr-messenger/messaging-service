@@ -109,15 +109,9 @@ defmodule WhisprMessagingWeb.UserChannel do
   # Handle conversation list request
   def handle_in("get_conversations", _payload, socket) do
     user_id = socket.assigns.user_id
-
-    case Conversations.list_user_conversations(user_id) do
-      {:ok, conversations} ->
-        serialized_conversations = Enum.map(conversations, &serialize_conversation_summary/1)
-        {:reply, {:ok, %{conversations: serialized_conversations}}, socket}
-
-      {:error, reason} ->
-        {:reply, {:error, %{reason: reason}}, socket}
-    end
+    conversations = Conversations.list_user_conversations(user_id)
+    serialized = Enum.map(conversations, &serialize_conversation_summary/1)
+    {:reply, {:ok, %{conversations: serialized}}, socket}
   end
 
   # Handle unread messages request

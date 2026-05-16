@@ -14,6 +14,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   alias WhisprMessaging.ConversationSupervisor
   alias WhisprMessaging.Messages
   alias WhisprMessaging.Messages.Message
+  alias WhisprMessagingWeb.ChannelHelpers
   alias WhisprMessagingWeb.Presence
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
@@ -451,34 +452,10 @@ defmodule WhisprMessagingWeb.ConversationChannel do
     camelize_keys(result)
   end
 
-  defp serialize_reply_context(%Message{} = parent) do
-    %{
-      id: parent.id,
-      sender_id: parent.sender_id,
-      content: safe_binary_content(parent.content),
-      message_type: parent.message_type,
-      is_deleted: parent.is_deleted
-    }
-  end
+  defp serialize_reply_context(parent), do: ChannelHelpers.serialize_reply_context(parent)
+  defp serialize_reaction(reaction), do: ChannelHelpers.serialize_reaction(reaction)
 
-  defp serialize_reaction(reaction) do
-    camelize_keys(%{
-      id: reaction.id,
-      message_id: reaction.message_id,
-      user_id: reaction.user_id,
-      reaction: reaction.reaction,
-      inserted_at: reaction.inserted_at
-    })
-  end
+  defp maybe_put(map, key, value), do: ChannelHelpers.maybe_put(map, key, value)
 
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  defp format_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
-  end
+  defp format_changeset_errors(changeset), do: ChannelHelpers.format_changeset_errors(changeset)
 end

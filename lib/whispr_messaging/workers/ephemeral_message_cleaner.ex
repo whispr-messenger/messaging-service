@@ -36,8 +36,9 @@ defmodule WhisprMessaging.Workers.EphemeralMessageCleaner do
   def init(opts) do
     Logger.metadata(domain: :ephemeral_message_cleaner)
     interval = Keyword.get(opts, :interval_ms, @default_interval_ms)
-    schedule_cleanup(interval)
-    {:ok, %{interval_ms: interval}}
+    skip_timer = Keyword.get(opts, :skip_timer, false)
+    unless skip_timer, do: schedule_cleanup(interval)
+    {:ok, %{interval_ms: interval, skip_timer: skip_timer}}
   end
 
   @impl true
@@ -48,8 +49,22 @@ defmodule WhisprMessaging.Workers.EphemeralMessageCleaner do
       Logger.info("Expired messages deleted", count: deleted_count)
     end
 
-    schedule_cleanup(state.interval_ms)
+    unless state.skip_timer, do: schedule_cleanup(state.interval_ms)
     {:noreply, state}
+  end
+
+  @doc """
+  Synchronously delete all currently expired messages. Used by tests to drive
+  the worker deterministically without waiting for the timer.
+  """
+  def cleanup_now do
+    GenServer.call(__MODULE__, :cleanup_now)
+  end
+
+  @impl true
+  def handle_call(:cleanup_now, _from, state) do
+    deleted_count = delete_expired_messages()
+    {:reply, {:ok, deleted_count}, state}
   end
 
   # ---------------------------------------------------------------------------

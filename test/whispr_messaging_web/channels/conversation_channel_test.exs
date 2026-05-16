@@ -373,6 +373,28 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       assert broadcast_user_id == user_id
       assert broadcast_conversation_id == conversation.id
     end
+
+    test "user_typing event with typing=true is acknowledged (no reply)", %{socket: socket} do
+      # `user_typing` returns :noreply — we just verify that pushing it does
+      # not crash the channel.
+      ref = push(socket, "user_typing", %{"typing" => true})
+      refute_reply ref, _, _, 50
+    end
+
+    test "user_typing event with typing=false is acknowledged (no reply)", %{socket: socket} do
+      ref = push(socket, "user_typing", %{"typing" => false})
+      refute_reply ref, _, _, 50
+    end
+
+    test "mark_read event with a message_id is acknowledged (no reply)", %{socket: socket} do
+      ref = push(socket, "mark_read", %{"message_id" => Ecto.UUID.generate()})
+      refute_reply ref, _, _, 50
+    end
+
+    test "mark_read event without message_id is acknowledged (no reply)", %{socket: socket} do
+      ref = push(socket, "mark_read", %{})
+      refute_reply ref, _, _, 50
+    end
   end
 
   describe "reactions" do

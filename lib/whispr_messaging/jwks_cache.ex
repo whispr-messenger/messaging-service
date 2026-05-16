@@ -56,9 +56,12 @@ defmodule WhisprMessaging.JwksCache do
     refresh_ms =
       Keyword.get(opts, :refresh_ms, Keyword.get(jwks_cfg, :refresh_ms, @default_refresh_ms))
 
+    start_refresh =
+      Keyword.get(opts, :start_refresh, Keyword.get(jwks_cfg, :start_refresh, true))
+
     Logger.metadata(domain: :jwks_cache)
     state = %{url: url, refresh_ms: refresh_ms, keys: %{}}
-    send(self(), :refresh)
+    if start_refresh, do: send(self(), :refresh)
     {:ok, state}
   end
 

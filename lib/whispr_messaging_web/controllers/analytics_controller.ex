@@ -14,6 +14,7 @@ defmodule WhisprMessagingWeb.AnalyticsController do
 
   alias PhoenixSwagger.Path.PathObject
   alias WhisprMessaging.Moderation.Analytics
+  alias WhisprMessagingWeb.ParamHelpers
 
   action_fallback WhisprMessagingWeb.FallbackController
 
@@ -349,33 +350,10 @@ defmodule WhisprMessagingWeb.AnalyticsController do
   # Helpers
   # ---------------------------------------------------------------------------
 
-  defp parse_bounded_int(nil, default, _min, _max), do: default
+  defp parse_bounded_int(val, default, min_val, max_val),
+    do: ParamHelpers.parse_bounded_int(val, default, min_val, max_val)
 
-  defp parse_bounded_int(val, default, min_val, max_val) when is_binary(val) do
-    case Integer.parse(val) do
-      {int, _} -> max(min_val, min(int, max_val))
-      :error -> default
-    end
-  end
+  defp parse_optional_int(val), do: ParamHelpers.parse_optional_int(val)
 
-  defp parse_bounded_int(val, _default, min_val, max_val) when is_integer(val) do
-    max(min_val, min(val, max_val))
-  end
-
-  defp parse_bounded_int(_val, default, _min, _max), do: default
-
-  defp parse_optional_int(nil), do: nil
-
-  defp parse_optional_int(val) when is_binary(val) do
-    case Integer.parse(val) do
-      {int, _} -> int
-      :error -> nil
-    end
-  end
-
-  defp parse_optional_int(val) when is_integer(val), do: val
-  defp parse_optional_int(_), do: nil
-
-  defp maybe_add_opt(opts, _key, nil), do: opts
-  defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
+  defp maybe_add_opt(opts, key, value), do: ParamHelpers.maybe_add_opt(opts, key, value)
 end

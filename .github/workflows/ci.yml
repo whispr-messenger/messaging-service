@@ -2,7 +2,9 @@ name: 🚀 CI Pipeline
 
 on:
   push:
-    branches: [main, develop, deploy/preprod]
+    # Run CI on every branch — the CD pipeline (cd.yml) filters on
+    # [main, deploy/avant-preprod, deploy/preprod] via workflow_run, so a
+    # successful CI on a feature branch never triggers a deployment.
     paths-ignore:
       - '**.md'
       - 'documentation/**'

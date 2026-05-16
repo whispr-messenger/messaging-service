@@ -1,0 +1,11 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 75,
+    "treat_no_relevant_lines_as_covered": true
+  },
+  "skip_files": [
+    "lib/whispr_messaging/release.ex",
+    "test/support/",
+    "deps/"
+  ]
+}

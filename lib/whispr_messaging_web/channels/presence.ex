@@ -13,6 +13,8 @@ defmodule WhisprMessagingWeb.Presence do
 
   require Logger
 
+  alias WhisprMessagingWeb.PresenceHelpers
+
   @doc """
   Tracks a user's presence in a specific context (conversation or global).
   """
@@ -142,51 +144,10 @@ defmodule WhisprMessagingWeb.Presence do
 
   # Private helper functions
 
-  defp get_current_status(metas) do
-    # Priority: online > away > busy > offline
-    # If multiple sessions, take the highest priority status
-    metas
-    |> Enum.map(&Map.get(&1, :status, "online"))
-    |> Enum.reduce("offline", fn status, acc ->
-      case {status, acc} do
-        {"online", _} -> "online"
-        {"away", "offline"} -> "away"
-        {"away", "busy"} -> "away"
-        {"busy", "offline"} -> "busy"
-        {_, current} -> current
-      end
-    end)
-  end
-
-  defp get_latest_online_at(metas) do
-    metas
-    |> Enum.map(&Map.get(&1, :online_at, 0))
-    |> Enum.max(fn -> 0 end)
-  end
-
-  defp get_latest_typing_start(metas) do
-    metas
-    |> Enum.map(&Map.get(&1, :started_at, 0))
-    |> Enum.max(fn -> 0 end)
-  end
-
-  defp enrich_metas(metas, user_id) do
-    # Add computed fields to presence metadata
-    Enum.map(metas, fn meta ->
-      meta
-      |> Map.put(:user_id, user_id)
-      |> Map.put_new(:device_info, get_device_info(meta))
-    end)
-  end
-
-  defp get_device_info(meta) do
-    # Extract device information from metadata
-    # This could include user agent parsing, platform detection, etc.
-    %{
-      platform: Map.get(meta, :platform, "unknown"),
-      version: Map.get(meta, :version, "unknown")
-    }
-  end
+  defp get_current_status(metas), do: PresenceHelpers.current_status(metas)
+  defp get_latest_online_at(metas), do: PresenceHelpers.latest_online_at(metas)
+  defp get_latest_typing_start(metas), do: PresenceHelpers.latest_typing_start(metas)
+  defp enrich_metas(metas, user_id), do: PresenceHelpers.enrich_metas(metas, user_id)
 
   # GenServer callbacks for cleanup tasks
 

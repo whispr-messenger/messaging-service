@@ -12,6 +12,7 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Conversations.ConversationMember
+  alias WhisprMessagingWeb.ConversationAuthorization
   alias WhisprMessagingWeb.Endpoint
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
@@ -389,26 +390,11 @@ defmodule WhisprMessagingWeb.ConversationMemberController do
   # Internal helpers
   # ---------------------------------------------------------------------------
 
-  defp admin?(_conversation_id, nil), do: false
+  defp admin?(conversation_id, user_id),
+    do: ConversationAuthorization.admin?(conversation_id, user_id)
 
-  defp admin?(conversation_id, user_id) do
-    case Conversations.get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} = member ->
-        Conversations.member_role(member) == "admin"
-
-      _ ->
-        false
-    end
-  end
-
-  defp active_member?(_conversation_id, nil), do: false
-
-  defp active_member?(conversation_id, user_id) do
-    case Conversations.get_conversation_member(conversation_id, user_id) do
-      %ConversationMember{is_active: true} -> true
-      _ -> false
-    end
-  end
+  defp active_member?(conversation_id, user_id),
+    do: ConversationAuthorization.active_member?(conversation_id, user_id)
 
   defp check_not_self_remove(user_id, user_id) when not is_nil(user_id),
     do: {:error, :self_remove}
