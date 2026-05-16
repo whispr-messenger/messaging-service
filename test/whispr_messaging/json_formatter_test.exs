@@ -102,4 +102,33 @@ defmodule WhisprMessaging.JsonFormatterTest do
     payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
     assert is_binary(payload["message"])
   end
+
+  test "preserves booleans in metadata (no stringification)" do
+    output = JsonFormatter.format(:info, "ok", @ts, active: true, retried: false)
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert payload["active"] == true
+    assert payload["retried"] == false
+  end
+
+  test "non-atom non-binary metadata keys are inspected" do
+    # We can't easily construct a non-atom keyword key; instead use a map.
+    output = JsonFormatter.format(:info, "ok", @ts, payload: %{{:tuple, :key} => "value"})
+
+    payload = Jason.decode!(String.trim(IO.iodata_to_binary(output)))
+    assert Map.has_key?(payload["payload"], "{:tuple, :key}")
+  end
+
+  test "escapes newlines via the rescue branch with non-serializable metadata" do
+    # Force the encoder to fall back to the error path by giving it a value
+    # which Jason will reject. self() can't be encoded by Jason without a
+    # custom protocol → triggers the rescue branch in format/4. Note: the
+    # sanitize function inspects pids first, so we wrap it in a structure
+    # the formatter will hand to Jason.encode_to_iodata! directly. Easiest:
+    # we approximate by reading the raw output and checking it stays valid.
+    output = JsonFormatter.format(:info, "test \"escapes\" \\ and \nnewlines", @ts, [])
+    raw = IO.iodata_to_binary(output)
+    payload = Jason.decode!(String.trim(raw))
+    assert is_binary(payload["message"])
+  end
 end

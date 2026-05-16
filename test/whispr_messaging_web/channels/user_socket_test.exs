@@ -1,6 +1,9 @@
 defmodule WhisprMessagingWeb.UserSocketTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
+  import Mock
+
+  alias WhisprMessaging.JwksCache
   alias WhisprMessagingWeb.UserSocket
 
   describe "valid_aud?/1 (WHISPR-1214)" do
@@ -62,6 +65,50 @@ defmodule WhisprMessagingWeb.UserSocketTest do
     test "returns user_socket:<user_id> based on assigns.user_id" do
       socket = %Phoenix.Socket{assigns: %{user_id: "alice"}}
       assert UserSocket.id(socket) == "user_socket:alice"
+    end
+  end
+
+  describe "verify_jwt via connect/3 — JWKS-backed branches" do
+    # Build a JWT with the kid header but a bogus signature so the JWKS path
+    # is taken (peek_kid succeeds → get_signing_key is consulted).
+    defp build_kid_token(kid) do
+      header = Base.url_encode64(Jason.encode!(%{"alg" => "ES256", "kid" => kid}), padding: false)
+
+      payload =
+        Base.url_encode64(Jason.encode!(%{"sub" => "user-1", "exp" => 9_999_999_999}),
+          padding: false
+        )
+
+      "#{header}.#{payload}.bogus-signature"
+    end
+
+    test "rejects with :jwks_not_loaded when JwksCache has no key for the kid" do
+      with_mock JwksCache, [:passthrough], get_signing_key: fn _kid -> {:error, :not_loaded} end do
+        token = build_kid_token("unknown-kid")
+
+        assert :error = UserSocket.connect(%{"token" => token}, %Phoenix.Socket{}, %{})
+      end
+    end
+
+    test "rejects when JwksCache returns an unexpected error" do
+      with_mock JwksCache, [:passthrough], get_signing_key: fn _kid -> {:error, :boom} end do
+        token = build_kid_token("any-kid")
+
+        assert :error = UserSocket.connect(%{"token" => token}, %Phoenix.Socket{}, %{})
+      end
+    end
+
+    test "rejects when signature verification fails even with a valid pem" do
+      bogus_pem =
+        "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n" <>
+          "wA4yclQ3Zf3D7Cwr1nIcF24w0HiKpc2cgYZ1zhmYJWFCRiM+RNJEZ4QzVx6cIqpV\n" <>
+          "P4ABjA9oqFf2Y6vVrZ1MEQ==\n-----END PUBLIC KEY-----\n"
+
+      with_mock JwksCache, [:passthrough], get_signing_key: fn _kid -> {:ok, bogus_pem} end do
+        token = build_kid_token("valid-kid")
+
+        assert :error = UserSocket.connect(%{"token" => token}, %Phoenix.Socket{}, %{})
+      end
     end
   end
 

@@ -94,9 +94,7 @@ defmodule WhisprMessagingWeb.UserChannelTest do
   end
 
   describe "handle_in get_conversations" do
-    @tag :skip
-    test "replies with the list of conversations for the current user (UserChannel currently expects {:ok, list} but Conversations.list_user_conversations returns a bare list)",
-         ctx do
+    test "replies with the list of conversations for the current user", ctx do
       {:ok, _, socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
 
       ref = push(socket, "get_conversations", %{})
@@ -113,6 +111,35 @@ defmodule WhisprMessagingWeb.UserChannelTest do
       ref = push(socket, "get_unread_messages", %{})
       assert_reply ref, :ok, %{unread_messages: list}, 1_500
       assert is_list(list)
+    end
+
+    test "serializes returned messages into the public summary shape", ctx do
+      # Other user sends a message; current user has not read it yet so it'll
+      # show up in get_unread_messages_for_user/1, exercising the
+      # `{_delivery_status, message}` projection branch.
+      {:ok, _msg} =
+        Messages.create_message(%{
+          conversation_id: ctx.conversation.id,
+          sender_id: ctx.other_user_id,
+          message_type: "text",
+          content: "hello unread",
+          client_random: 24_680
+        })
+
+      {:ok, _, socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
+
+      ref = push(socket, "get_unread_messages", %{})
+      assert_reply ref, :ok, %{unread_messages: list}, 1_500
+      assert is_list(list)
+
+      if list != [] do
+        msg = hd(list)
+        assert Map.has_key?(msg, :id)
+        assert Map.has_key?(msg, :conversation_id)
+        assert Map.has_key?(msg, :sender_id)
+        assert Map.has_key?(msg, :message_type)
+        assert Map.has_key?(msg, :sent_at)
+      end
     end
   end
 

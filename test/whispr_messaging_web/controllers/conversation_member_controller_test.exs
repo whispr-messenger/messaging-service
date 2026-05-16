@@ -146,6 +146,43 @@ defmodule WhisprMessagingWeb.ConversationMemberControllerTest do
       })
       |> json_response(403)
     end
+
+    test "cannot add a member to a direct conversation (422)", ctx do
+      # Build a fresh direct conversation with the admin as a member; direct
+      # conversations don't accept new members regardless of role.
+      {:ok, direct} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(direct.id, ctx.admin_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      conn
+      |> post(~p"/messaging/api/v1/conversations/#{direct.id}/members", %{
+        "user_id" => ctx.new_user_id
+      })
+      |> json_response(422)
+    end
+
+    test "returns 404 when adding to a non-existent conversation", ctx do
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.admin_id)
+        |> json_conn()
+
+      conn
+      |> post(~p"/messaging/api/v1/conversations/#{Ecto.UUID.generate()}/members", %{
+        "user_id" => ctx.new_user_id
+      })
+      |> json_response(404)
+    end
   end
 
   describe "DELETE /conversations/:id/members/:user_id" do

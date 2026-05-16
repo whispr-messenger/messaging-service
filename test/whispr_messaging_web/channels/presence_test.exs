@@ -93,6 +93,108 @@ defmodule WhisprMessagingWeb.PresenceTest do
     end
   end
 
+  describe "track_user/3 + list_users/1 + get_user_status/1 (real tracking)" do
+    test "tracks a user globally and exposes them via list_users/get_user_status/user_online?" do
+      user_id = Ecto.UUID.generate()
+      topic = "user:#{user_id}"
+
+      # Subscribe the test process so Presence dispatches messages we can
+      # observe and so untracking happens automatically when this test exits.
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, topic)
+      {:ok, _} = Presence.track(self(), topic, user_id, %{status: "online", online_at: 1234})
+
+      # Allow Presence to emit the join broadcast before we query state.
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}, 500
+
+      users = Presence.list_users(topic)
+      assert [%{user_id: ^user_id, status: "online", device_count: 1}] = users
+
+      assert Presence.user_online?(user_id) == true
+      assert Presence.get_user_status(user_id) == "online"
+
+      # untrack via Phoenix.Presence so the test process is clean
+      Presence.untrack(self(), topic, user_id)
+    end
+
+    test "track_typing/3 records a typing entry that appears in get_typing_users" do
+      conv_id = Ecto.UUID.generate()
+      user_id = Ecto.UUID.generate()
+      topic = "conversation:#{conv_id}"
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, topic)
+
+      # Build a minimal Phoenix.Socket whose pubsub_server / topic match what
+      # Presence.track expects when called via the wrapper.
+      socket = %Phoenix.Socket{
+        topic: topic,
+        channel_pid: self(),
+        pubsub_server: WhisprMessaging.PubSub,
+        joined: true,
+        ref: "1",
+        transport: :test,
+        endpoint: WhisprMessagingWeb.Endpoint,
+        handler: WhisprMessagingWeb.UserSocket
+      }
+
+      # `track_typing/3` schedules a self-message; we don't care about it here.
+      _ = Presence.track_typing(socket, user_id, conv_id)
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}, 500
+      typing = Presence.get_typing_users(conv_id)
+      assert [%{user_id: ^user_id}] = typing
+
+      # Drain the auto-scheduled :stop_typing message so the mailbox is clean.
+      receive do
+        {:stop_typing, _, _} -> :ok
+      after
+        0 -> :ok
+      end
+
+      Presence.untrack(self(), topic, "typing:#{user_id}")
+    end
+
+    test "get_conversation_users/1 returns tracked users in conversation:<id>" do
+      conv_id = Ecto.UUID.generate()
+      user_id = Ecto.UUID.generate()
+      topic = "conversation:#{conv_id}"
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, topic)
+      {:ok, _} = Presence.track(self(), topic, user_id, %{status: "online", online_at: 9})
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}, 500
+
+      users = Presence.get_conversation_users(conv_id)
+      assert [%{user_id: ^user_id, status: "online"}] = users
+
+      Presence.untrack(self(), topic, user_id)
+    end
+
+    test "update_user/3 modifies the meta of a tracked user" do
+      user_id = Ecto.UUID.generate()
+      topic = "user:#{user_id}"
+
+      Phoenix.PubSub.subscribe(WhisprMessaging.PubSub, topic)
+      {:ok, _} = Presence.track(self(), topic, user_id, %{status: "online", online_at: 1})
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}, 500
+
+      socket = %Phoenix.Socket{
+        topic: topic,
+        channel_pid: self(),
+        pubsub_server: WhisprMessaging.PubSub,
+        joined: true,
+        ref: "2",
+        transport: :test,
+        endpoint: WhisprMessagingWeb.Endpoint,
+        handler: WhisprMessagingWeb.UserSocket
+      }
+
+      {:ok, _} = Presence.update_user(socket, user_id, %{status: "away", online_at: 2})
+      assert_receive %Phoenix.Socket.Broadcast{event: "presence_diff"}, 500
+
+      assert Presence.get_user_status(user_id) == "away"
+      Presence.untrack(self(), topic, user_id)
+    end
+  end
+
   describe "fetch/2 — additional shapes" do
     test "single online status maps to 'online'" do
       input = %{

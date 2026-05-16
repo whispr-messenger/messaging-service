@@ -228,6 +228,71 @@ defmodule WhisprMessaging.Messages.MessageAttachmentTest do
     end
   end
 
+  describe "queries and helper constructors" do
+    test "delete_changeset/1 marks is_deleted to true" do
+      cs = MessageAttachment.delete_changeset(build())
+      assert cs.changes.is_deleted == true
+    end
+
+    test "by_message_query/1 builds an Ecto query for the given message" do
+      msg_id = Ecto.UUID.generate()
+      q = MessageAttachment.by_message_query(msg_id)
+      assert %Ecto.Query{} = q
+    end
+
+    test "by_file_type_query/2 builds an Ecto query filtered by file_type" do
+      msg_id = Ecto.UUID.generate()
+      q = MessageAttachment.by_file_type_query(msg_id, "image")
+      assert %Ecto.Query{} = q
+    end
+
+    test "conversation_storage_size_query/1 builds an Ecto query" do
+      conv_id = Ecto.UUID.generate()
+      q = MessageAttachment.conversation_storage_size_query(conv_id)
+      assert %Ecto.Query{} = q
+    end
+
+    test "older_than_query/1 builds an Ecto query filtered by date" do
+      q = MessageAttachment.older_than_query(DateTime.utc_now())
+      assert %Ecto.Query{} = q
+    end
+
+    test "create_attachment/2 returns a changeset with message_id injected" do
+      msg_id = Ecto.UUID.generate()
+
+      cs =
+        MessageAttachment.create_attachment(msg_id, %{
+          filename: "ok.png",
+          file_type: "image",
+          file_size: 1,
+          mime_type: "image/png",
+          storage_url: "/x"
+        })
+
+      assert %Ecto.Changeset{} = cs
+      assert get_change(cs, :message_id) == msg_id
+    end
+  end
+
+  describe "validate_file_size via changeset" do
+    test "adds an error when file_size exceeds the type-specific max" do
+      attrs = %{
+        message_id: Ecto.UUID.generate(),
+        filename: "huge.png",
+        file_type: "image",
+        # 200MB — over default 100MB
+        file_size: 200 * 1024 * 1024,
+        mime_type: "image/png",
+        storage_url: "/x"
+      }
+
+      cs = MessageAttachment.changeset(%MessageAttachment{}, attrs)
+      assert "exceeds" <> _ = errors_on(cs)[:file_size] |> List.first()
+    end
+  end
+
+  defp get_change(changeset, field), do: Ecto.Changeset.get_change(changeset, field)
+
   # Convert changeset errors into a map of lists (mimics DataCase.errors_on/1)
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->

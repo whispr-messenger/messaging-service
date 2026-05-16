@@ -158,11 +158,19 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
   end
 
   describe "GET /attachments/:id/download" do
-    @tag :skip
-    test "streams the attachment file content (controller calls attachment.file_path which is absent from schema)",
-         ctx do
+    test "streams the attachment file content", ctx do
+      # The controller derives the local filesystem path from the
+      # `storage_url` field (request-path form, e.g. "/uploads/<uuid>").
+      # We mimic that here: write a file under priv/static/uploads/<uuid>
+      # so the controller's `attachment_local_path/1` finds it.
+      upload_dir = "priv/static/uploads"
+      File.mkdir_p!(upload_dir)
+      uid = "#{Ecto.UUID.generate()}.txt"
+      file_path = Path.join(upload_dir, uid)
       file_body = "decoded content"
-      path = write_tmp("download.txt", file_body)
+      File.write!(file_path, file_body)
+
+      on_exit(fn -> File.rm(file_path) end)
 
       {:ok, attachment} =
         Messages.create_attachment(%{
@@ -171,7 +179,7 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
           file_type: "document",
           file_size: byte_size(file_body),
           mime_type: "text/plain",
-          storage_url: path
+          storage_url: "/uploads/#{uid}"
         })
 
       conn =
@@ -180,6 +188,7 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
         |> get(~p"/messaging/api/v1/attachments/#{attachment.id}/download")
 
       assert conn.status == 200
+      assert conn.resp_body == file_body
     end
 
     test "returns 404 for unknown attachment", ctx do
@@ -192,12 +201,53 @@ defmodule WhisprMessagingWeb.AttachmentControllerTest do
 
       assert conn.status in [404, 500]
     end
+
+    test "returns 403 when a non-member tries to download", ctx do
+      # Owner uploads an attachment; outsider tries to download.
+      {:ok, attachment} =
+        Messages.create_attachment(%{
+          message_id: ctx.message.id,
+          filename: "private.txt",
+          file_type: "document",
+          file_size: 3,
+          mime_type: "text/plain",
+          storage_url: "/uploads/private"
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.outsider_id)
+        |> get(~p"/messaging/api/v1/attachments/#{attachment.id}/download")
+
+      assert conn.status == 403
+    end
+
+    test "returns 404 when the stored file does not exist on disk", ctx do
+      # storage_url points to a path that doesn't exist on disk.
+      {:ok, attachment} =
+        Messages.create_attachment(%{
+          message_id: ctx.message.id,
+          filename: "missing.txt",
+          file_type: "document",
+          file_size: 1,
+          mime_type: "text/plain",
+          storage_url: "/uploads/does-not-exist-#{Ecto.UUID.generate()}.txt"
+        })
+
+      conn =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> get(~p"/messaging/api/v1/attachments/#{attachment.id}/download")
+
+      assert conn.status in [404, 500]
+    end
   end
 
   describe "DELETE /attachments/:id" do
-    @tag :skip
-    test "deletes the user's own attachment (controller currently calls attachment.file_path which is absent from schema)",
-         ctx do
+    test "deletes the user's own attachment", ctx do
+      # The controller deletes the file at the path derived from storage_url
+      # (request-path form). delete_file/1 treats :enoent as success, so an
+      # absent file is fine — we only need a valid DB record here.
       {:ok, attachment} =
         Messages.create_attachment(%{
           message_id: ctx.message.id,

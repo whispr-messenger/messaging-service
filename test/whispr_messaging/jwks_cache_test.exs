@@ -124,6 +124,24 @@ defmodule WhisprMessaging.JwksCacheTest do
       end
     end
 
+    test "get_signing_key(nil) returns the first cached key when keys are loaded" do
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: @valid_jwks_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(200)
+
+        assert {:ok, pem} = JwksCache.get_signing_key(nil)
+        assert is_binary(pem)
+        assert String.starts_with?(pem, "-----BEGIN")
+      end
+    end
+
+    test "get_signing_key(nil) returns :not_loaded when no keys are cached yet" do
+      assert {:error, :not_loaded} = JwksCache.get_signing_key(nil)
+    end
+
     test "skips JWK entries that are not EC P-256 signing keys" do
       mixed_body =
         Jason.encode!(%{
@@ -156,6 +174,27 @@ defmodule WhisprMessaging.JwksCacheTest do
         Process.sleep(100)
 
         assert {:error, :not_loaded} = JwksCache.get_signing_key("test-kid-1")
+      end
+    end
+
+    test "JWKS response with no usable EC P-256 keys keeps state empty" do
+      # The body parses fine but contains zero usable keys (only RSA + wrong curve)
+      empty_body =
+        Jason.encode!(%{
+          "keys" => [
+            %{"kty" => "RSA", "kid" => "rsa-1", "use" => "sig"},
+            %{"kty" => "EC", "crv" => "P-384", "kid" => "wrong-curve", "use" => "sig"}
+          ]
+        })
+
+      with_mock Finch, [:passthrough],
+        request: fn _req, _name, _opts ->
+          {:ok, %Finch.Response{status: 200, body: empty_body, headers: []}}
+        end do
+        send(JwksCache, :refresh)
+        Process.sleep(150)
+
+        assert {:error, :not_loaded} = JwksCache.get_signing_key("rsa-1")
       end
     end
 

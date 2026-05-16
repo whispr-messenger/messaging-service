@@ -156,5 +156,86 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
 
       assert {:error, :invalid_key_length} = SignatureVerifier.verify(attrs)
     end
+
+    test "returns error for wrong signature length" do
+      {pub, _priv} = generate_key_pair()
+      # Build a 32-byte signature that decodes to half of the expected 64
+      short_sig = :crypto.strong_rand_bytes(32)
+
+      attrs = %{
+        "content" => "x",
+        "conversation_id" => Ecto.UUID.generate(),
+        "client_random" => 1,
+        "signature" => Base.encode64(short_sig),
+        "sender_public_key" => Base.encode64(pub)
+      }
+
+      assert {:error, :invalid_signature_length} = SignatureVerifier.verify(attrs)
+    end
+  end
+
+  describe "verify_trusted_key/2" do
+    test "returns :ok immediately when sender_id is nil (backward compat)" do
+      assert :ok = SignatureVerifier.verify_trusted_key(nil, "some_key_b64")
+    end
+
+    test "registers a key via TOFU on first call" do
+      sender_id = Ecto.UUID.generate()
+      key_b64 = Base.encode64(:crypto.strong_rand_bytes(32))
+
+      assert :ok = SignatureVerifier.verify_trusted_key(sender_id, key_b64)
+
+      stored = Repo.get_by(SenderPublicKey, user_id: sender_id)
+      assert stored.public_key == key_b64
+    end
+
+    test "returns :ok when the provided key matches the stored one" do
+      sender_id = Ecto.UUID.generate()
+      key_b64 = Base.encode64(:crypto.strong_rand_bytes(32))
+      :ok = SignatureVerifier.verify_trusted_key(sender_id, key_b64)
+      assert :ok = SignatureVerifier.verify_trusted_key(sender_id, key_b64)
+    end
+
+    test "returns :untrusted_public_key when the key has changed" do
+      sender_id = Ecto.UUID.generate()
+      key1 = Base.encode64(:crypto.strong_rand_bytes(32))
+      key2 = Base.encode64(:crypto.strong_rand_bytes(32))
+      :ok = SignatureVerifier.verify_trusted_key(sender_id, key1)
+
+      assert {:error, :untrusted_public_key} =
+               SignatureVerifier.verify_trusted_key(sender_id, key2)
+    end
+  end
+
+  describe "build_signed_data/1" do
+    test "accepts atom keys as a fallback" do
+      out =
+        SignatureVerifier.build_signed_data(%{
+          content: "abc",
+          conversation_id: Ecto.UUID.generate(),
+          client_random: 7
+        })
+
+      assert is_binary(out)
+    end
+
+    test "uses '' / '' / 0 as defaults when keys are missing" do
+      out = SignatureVerifier.build_signed_data(%{})
+      # 0 attrs → just <<0::big-32>> = 4 bytes (content "" + conv_id "" + 32-bit 0)
+      assert byte_size(out) == 4
+    end
+
+    test "passes through a non-UUID conversation_id as raw bytes" do
+      out =
+        SignatureVerifier.build_signed_data(%{
+          "content" => "x",
+          "conversation_id" => "not-a-uuid",
+          "client_random" => 1
+        })
+
+      assert is_binary(out)
+      # "x" (1) + "not-a-uuid" (10) + 4 bytes
+      assert byte_size(out) == 15
+    end
   end
 end
