@@ -11,7 +11,9 @@ defmodule WhisprMessagingWeb.MessageController do
   alias WhisprMessaging.ConversationServer
   alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Messages
+  alias WhisprMessagingWeb.ChannelHelpers
   alias WhisprMessagingWeb.Endpoint
+  alias WhisprMessagingWeb.MessageRendering
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -274,36 +276,13 @@ defmodule WhisprMessagingWeb.MessageController do
     end
   end
 
-  # Extrait jusqu'à 100 caractères autour du match pour le preview affiché
-  defp build_truncated_preview(nil, _query), do: nil
+  defp build_truncated_preview(preview, query),
+    do: MessageRendering.build_truncated_preview(preview, query)
 
-  defp build_truncated_preview(preview, _query) when byte_size(preview) <= 100, do: preview
+  defp maybe_put_opt(opts, key, value),
+    do: MessageRendering.maybe_put_opt(opts, key, value)
 
-  defp build_truncated_preview(preview, query) do
-    case :binary.match(String.downcase(preview), String.downcase(query)) do
-      {start, _len} ->
-        from = max(0, start - 30)
-        String.slice(preview, from, 100)
-
-      :nomatch ->
-        String.slice(preview, 0, 100)
-    end
-  end
-
-  defp maybe_put_opt(opts, _key, nil), do: opts
-  defp maybe_put_opt(opts, _key, ""), do: opts
-  defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
-
-  defp parse_int(value, _default) when is_integer(value), do: value
-
-  defp parse_int(value, default) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(_, default), do: default
+  defp parse_int(value, default), do: MessageRendering.parse_int(value, default)
 
   @doc """
   Gets a single message by ID.
@@ -579,12 +558,9 @@ defmodule WhisprMessagingWeb.MessageController do
     end
   end
 
-  defp ensure_receipt_user(nil), do: :unauthorized
-  defp ensure_receipt_user(_user_id), do: :ok
+  defp ensure_receipt_user(user_id), do: MessageRendering.ensure_receipt_user(user_id)
 
-  defp valid_receipt_status("delivered"), do: true
-  defp valid_receipt_status("read"), do: true
-  defp valid_receipt_status(_), do: false
+  defp valid_receipt_status(status), do: MessageRendering.valid_receipt_status(status)
 
   defp apply_receipt(message_id, user_id, "delivered"),
     do: Messages.mark_message_delivered(message_id, user_id)
@@ -597,18 +573,11 @@ defmodule WhisprMessagingWeb.MessageController do
     Messages.mark_message_read(message_id, user_id)
   end
 
-  defp changeset_errors(%Ecto.Changeset{} = changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {k, v}, acc ->
-        String.replace(acc, "%{#{k}}", to_string(v))
-      end)
-    end)
-  end
+  defp changeset_errors(changeset),
+    do: ChannelHelpers.format_changeset_errors(changeset)
 
   # Rendering / parsing helpers are factored out into MessageRendering for
   # testability. Local thin wrappers keep call sites unchanged.
-
-  alias WhisprMessagingWeb.MessageRendering
 
   defp render_messages(messages), do: MessageRendering.render_messages(messages)
   defp render_message(message), do: MessageRendering.render_message(message)

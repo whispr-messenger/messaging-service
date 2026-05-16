@@ -10,6 +10,7 @@ defmodule WhisprMessagingWeb.ReportController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Moderation.Reports
+  alias WhisprMessagingWeb.ReportHelpers
 
   action_fallback WhisprMessagingWeb.FallbackController
 
@@ -375,56 +376,22 @@ defmodule WhisprMessagingWeb.ReportController do
   # Serialization
   # ---------------------------------------------------------------------------
 
-  defp serialize_report(report) do
-    %{
-      id: report.id,
-      reporter_id: report.reporter_id,
-      reported_user_id: report.reported_user_id,
-      conversation_id: report.conversation_id,
-      message_id: report.message_id,
-      category: report.category,
-      description: report.description,
-      evidence: report.evidence,
-      status: report.status,
-      resolution: report.resolution,
-      auto_escalated: report.auto_escalated,
-      created_at: report.inserted_at && NaiveDateTime.to_iso8601(report.inserted_at),
-      updated_at: report.updated_at && NaiveDateTime.to_iso8601(report.updated_at)
-    }
-  end
+  defp serialize_report(report), do: ReportHelpers.serialize_report(report)
 
-  defp format_changeset_errors(%Ecto.Changeset{} = changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-  end
-
-  defp format_changeset_errors(error), do: inspect(error)
+  defp format_changeset_errors(error), do: ReportHelpers.format_changeset_errors(error)
 
   defp admin_or_moderator?(conn, user_id) do
-    # If the role was already resolved by the RequireAdmin plug, use it directly
-    case conn.assigns[:user_role] do
-      role when role in ["admin", "moderator"] ->
-        true
+    if ReportHelpers.admin_role?(conn.assigns[:user_role]) do
+      true
+    else
+      alias WhisprMessaging.Cache
 
-      _ ->
-        # Resolve inline via the same cache + user-service logic
-        alias WhisprMessaging.Cache
+      cache_key = "admin_role:#{user_id}"
 
-        cache_key = "admin_role:#{user_id}"
-
-        case Cache.get(cache_key) do
-          {:ok, %{"role" => role}} when role in ["admin", "moderator"] ->
-            true
-
-          {:ok, role} when role in ["admin", "moderator"] ->
-            true
-
-          _ ->
-            resolve_role_from_user_service(conn, user_id, cache_key)
-        end
+      case ReportHelpers.role_from_cache(Cache.get(cache_key)) do
+        :admin -> true
+        _ -> resolve_role_from_user_service(conn, user_id, cache_key)
+      end
     end
   end
 
@@ -459,21 +426,7 @@ defmodule WhisprMessagingWeb.ReportController do
     end
   end
 
-  defp fallback_admin_check(user_id) do
-    case System.get_env("ADMIN_USER_IDS") do
-      nil -> false
-      ids -> user_id in (ids |> String.split(",") |> Enum.map(&String.trim/1))
-    end
-  end
+  defp fallback_admin_check(user_id), do: ReportHelpers.fallback_admin_check(user_id)
 
-  defp parse_int(nil, default), do: default
-
-  defp parse_int(val, default) when is_binary(val) do
-    case Integer.parse(val) do
-      {int, _} -> int
-      :error -> default
-    end
-  end
-
-  defp parse_int(val, _default) when is_integer(val), do: val
+  defp parse_int(val, default), do: ReportHelpers.parse_int(val, default)
 end

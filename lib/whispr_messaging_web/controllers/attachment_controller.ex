@@ -8,6 +8,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
   use PhoenixSwagger
 
   alias WhisprMessaging.Messages
+  alias WhisprMessagingWeb.AttachmentRendering
+  alias WhisprMessagingWeb.AttachmentValidation
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -184,7 +186,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_access(message, user_id),
-         {:ok, file_content} <- read_file(attachment.file_path) do
+         {:ok, file_content} <- read_file(attachment_local_path(attachment)) do
       Logger.info("File downloaded", attachment_id: attachment.id, domain: :attachment)
 
       conn
@@ -271,7 +273,7 @@ defmodule WhisprMessagingWeb.AttachmentController do
     with {:ok, attachment} <- Messages.get_attachment(attachment_id),
          {:ok, message} <- Messages.get_message(attachment.message_id),
          :ok <- validate_user_permission(message, user_id),
-         :ok <- delete_file(attachment.file_path),
+         :ok <- delete_file(attachment_local_path(attachment)),
          {:ok, _} <- Messages.delete_attachment(attachment_id) do
       Logger.info("Attachment deleted", attachment_id: attachment_id, domain: :attachment)
 
@@ -300,29 +302,20 @@ defmodule WhisprMessagingWeb.AttachmentController do
   ## Private functions
   ####################################################################################################
 
-  defp validate_file_size(%{path: path}) do
-    case File.stat(path) do
-      {:ok, %{size: size}} when size <= @max_file_size -> :ok
-      {:ok, %{size: _}} -> {:error, :file_too_large}
-      {:error, _} -> {:error, :file_stat_failed}
-    end
-  end
+  # NOTE: AttachmentRendering / AttachmentValidation aliases are declared at
+  # the top of the module so they're visible to all the wrappers below.
 
-  defp validate_mime_type(mime_type) when mime_type in @allowed_mime_types, do: :ok
-  defp validate_mime_type(_), do: {:error, :invalid_mime_type}
+  # Validation helpers are factored out into AttachmentValidation for
+  # testability. Local thin wrappers keep call sites unchanged.
 
-  defp validate_user_permission(%{sender_id: sender_id}, user_id) when sender_id == user_id,
-    do: :ok
+  defp validate_file_size(upload), do: AttachmentValidation.validate_file_size(upload)
+  defp validate_mime_type(mime_type), do: AttachmentValidation.validate_mime_type(mime_type)
 
-  defp validate_user_permission(_, _), do: {:error, :unauthorized}
+  defp validate_user_permission(message, user_id),
+    do: AttachmentValidation.validate_user_permission(message, user_id)
 
-  defp validate_user_access(message, user_id) do
-    # Check if user is member of the conversation
-    case Messages.user_can_access_message?(message.conversation_id, user_id) do
-      true -> :ok
-      false -> {:error, :unauthorized}
-    end
-  end
+  defp validate_user_access(message, user_id),
+    do: AttachmentValidation.validate_user_access(message, user_id)
 
   defp save_file(upload) do
     # Ensure upload directory exists
@@ -354,45 +347,21 @@ defmodule WhisprMessagingWeb.AttachmentController do
     })
   end
 
-  defp read_file(file_path) do
-    case File.read(file_path) do
-      {:ok, content} -> {:ok, content}
-      {:error, :enoent} -> {:error, :file_not_found}
-      {:error, reason} -> {:error, reason}
-    end
-  end
+  defp read_file(file_path), do: AttachmentValidation.read_file(file_path)
 
-  defp delete_file(file_path) do
-    case File.rm(file_path) do
-      :ok -> :ok
-      # File already deleted
-      {:error, :enoent} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
-  end
+  defp delete_file(file_path), do: AttachmentValidation.delete_file(file_path)
 
-  defp normalize_file_type(type) when type in ["image", "video", "audio"], do: type
-  defp normalize_file_type("application"), do: "document"
-  defp normalize_file_type("text"), do: "document"
-  defp normalize_file_type(_), do: "document"
+  # Reconstructs the local filesystem path from an attachment's `storage_url`
+  # (which is the request-path form like "/uploads/<uuid>.png"). The schema
+  # does not carry the local path separately so we derive it from the URL.
+  defp attachment_local_path(%{storage_url: "/uploads/" <> rest}),
+    do: Path.join(@upload_dir, rest)
 
-  defp render_attachment(attachment) do
-    meta = attachment.metadata || %{}
+  defp attachment_local_path(%{storage_url: url}), do: url
 
-    camelize_keys(%{
-      id: attachment.id,
-      message_id: attachment.message_id,
-      media_id: meta["media_id"],
-      file_name: attachment.filename,
-      file_type: attachment.file_type,
-      file_url: attachment.storage_url,
-      file_size: attachment.file_size,
-      mime_type: attachment.mime_type,
-      thumbnail_url: attachment.thumbnail_url,
-      metadata: meta,
-      uploaded_at: attachment.inserted_at
-    })
-  end
+  defp normalize_file_type(type), do: AttachmentValidation.normalize_file_type(type)
+
+  defp render_attachment(attachment), do: AttachmentRendering.render(attachment)
 
   @doc """
   Lists attachments for a specific message.
@@ -423,21 +392,8 @@ defmodule WhisprMessagingWeb.AttachmentController do
     |> then(&save_attachment(conn, &1))
   end
 
-  defp build_attachment_attrs(params, message_id) do
-    meta = params["metadata"] || %{}
-    merged = Map.merge(meta, params)
-
-    %{
-      message_id: message_id,
-      filename: merged["filename"] || "file",
-      file_type: merged["media_type"] || "image",
-      mime_type: merged["mime_type"] || "application/octet-stream",
-      file_size: merged["size"] || 0,
-      storage_url: merged["media_url"] || "",
-      thumbnail_url: merged["thumbnail_url"],
-      metadata: meta
-    }
-  end
+  defp build_attachment_attrs(params, message_id),
+    do: AttachmentRendering.build_attachment_attrs(params, message_id)
 
   defp save_attachment(conn, attrs) do
     case Messages.create_attachment(attrs) do

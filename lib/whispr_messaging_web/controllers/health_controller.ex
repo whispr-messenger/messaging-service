@@ -13,6 +13,7 @@ defmodule WhisprMessagingWeb.HealthController do
   require Logger
 
   alias WhisprMessaging.Repo
+  alias WhisprMessagingWeb.HealthHelpers
 
   swagger_path :check do
     get("/health")
@@ -391,15 +392,7 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   @doc false
-  defp measure_check(check_fn) do
-    start_time = System.monotonic_time(:millisecond)
-    result = check_fn.()
-    duration = System.monotonic_time(:millisecond) - start_time
-
-    status = if result == :ok, do: "healthy", else: "unhealthy"
-
-    %{status: status, result: result, duration_ms: duration}
-  end
+  defp measure_check(check_fn), do: HealthHelpers.measure_check(check_fn)
 
   @doc false
   defp get_process_info do
@@ -457,19 +450,7 @@ defmodule WhisprMessagingWeb.HealthController do
   end
 
   @doc false
-  defp format_uptime(seconds) do
-    days = div(seconds, 86_400)
-    hours = div(rem(seconds, 86_400), 3_600)
-    minutes = div(rem(seconds, 3_600), 60)
-    secs = rem(seconds, 60)
-
-    cond do
-      days > 0 -> "#{days}d #{hours}h #{minutes}m #{secs}s"
-      hours > 0 -> "#{hours}h #{minutes}m #{secs}s"
-      minutes > 0 -> "#{minutes}m #{secs}s"
-      true -> "#{secs}s"
-    end
-  end
+  defp format_uptime(seconds), do: HealthHelpers.format_uptime(seconds)
 
   # Swagger Schema Definitions
   def swagger_definitions do

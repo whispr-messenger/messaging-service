@@ -9,6 +9,8 @@ defmodule WhisprMessagingWeb.ConversationController do
 
   alias WhisprMessaging.Conversations
   alias WhisprMessaging.Services.{MediaClient, UserService}
+  alias WhisprMessagingWeb.ConversationAuthorization
+  alias WhisprMessagingWeb.ConversationRendering
 
   import WhisprMessagingWeb.JsonHelpers, only: [camelize_keys: 1]
 
@@ -793,76 +795,10 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
-  @doc """
-  Adds a member to a conversation.
-  POST /api/v1/conversations/:id/members
-  """
-  def add_member(conn, %{"id" => id} = params) do
-    member_id = params["user_id"] || params["member_id"]
-    current_user_id = conn.assigns[:user_id]
-
-    with {:ok, conversation} <- Conversations.get_conversation(id) do
-      if conversation.type == "direct" do
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: "Cannot add members to a direct conversation"})
-      else
-        with true <- can_manage_members?(conversation, current_user_id),
-             {:ok, member} <- Conversations.add_conversation_member(id, member_id) do
-          conn
-          |> put_status(:created)
-          |> json(%{data: render_member(member)})
-        else
-          false ->
-            conn
-            |> put_status(:forbidden)
-            |> json(%{error: "Not authorized to add members"})
-
-          error ->
-            error
-        end
-      end
-    end
-  end
-
-  @doc """
-  Removes a member from a conversation.
-  DELETE /api/v1/conversations/:id/members/:user_id
-  """
-  def remove_member(conn, %{"id" => id, "user_id" => member_id}) do
-    current_user_id = conn.assigns[:user_id]
-
-    with {:ok, conversation} <- Conversations.get_conversation(id),
-         {:member_exists, {:ok, _member}} <-
-           {:member_exists,
-            Conversations.get_conversation_member(id, member_id)
-            |> case do
-              nil -> {:error, :not_found}
-              member -> {:ok, member}
-            end},
-         true <- can_manage_members?(conversation, current_user_id),
-         {:ok, _} <- Conversations.remove_conversation_member(id, member_id) do
-      send_resp(conn, :no_content, "")
-    else
-      {:member_exists, {:error, :not_found}} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "Member not found"})
-
-      false ->
-        conn
-        |> put_status(:forbidden)
-        |> json(%{error: "Not authorized to remove members"})
-
-      {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "Conversation not found"})
-
-      error ->
-        error
-    end
-  end
+  # NOTE: add_member/remove_member previously lived here but were never
+  # wired up via the router — the actual endpoints are served by
+  # `ConversationMemberController.create/3` and `delete/3`. Removed as
+  # dead code (WHISPR-1507 cleanup).
 
   # ---------------------------------------------------------------------------
   # Pin / Unpin (WHISPR-465)
@@ -987,8 +923,6 @@ defmodule WhisprMessagingWeb.ConversationController do
   # Rendering helpers are factored out into ConversationRendering so they can
   # be unit-tested in isolation. Local thin wrappers keep call sites unchanged.
 
-  alias WhisprMessagingWeb.ConversationRendering
-
   defp render_conversations(conversations, authorization),
     do: ConversationRendering.render_conversations(conversations, authorization)
 
@@ -1026,41 +960,20 @@ defmodule WhisprMessagingWeb.ConversationController do
     conn |> get_req_header("authorization") |> List.first()
   end
 
-  defp user_is_member?(conversation, user_id) do
-    Enum.any?(conversation.members, fn member -> member.user_id == user_id end)
-  end
+  # Authorization helpers are factored out into ConversationAuthorization for
+  # testability. Local thin wrappers keep call sites unchanged.
 
-  defp member?(conversation_id, user_id) do
-    case Conversations.get_conversation_member(conversation_id, user_id) do
-      nil -> false
-      _ -> true
-    end
-  end
+  defp user_is_member?(conversation, user_id),
+    do: ConversationAuthorization.user_is_member?(conversation, user_id)
 
-  defp can_manage_members?(_conversation, nil), do: false
+  defp member?(conversation_id, user_id),
+    do: ConversationAuthorization.member?(conversation_id, user_id)
 
-  defp can_manage_members?(conversation, user_id) do
-    case Conversations.get_conversation_member(conversation.id, user_id) do
-      %{settings: settings} ->
-        role = Map.get(settings || %{}, "role", "member")
-        role in ["admin", "owner"]
+  defp can_manage_members?(conversation, user_id),
+    do: ConversationAuthorization.can_manage_members?(conversation, user_id)
 
-      _ ->
-        false
-    end
-  end
-
-  # WHISPR-841: deleting a group requires admin role; direct conversations
-  # have no admin concept, so any active member may deactivate the thread.
-  defp can_delete_conversation?(_conversation, nil), do: false
-
-  defp can_delete_conversation?(%{type: "direct"} = conversation, user_id) do
-    member?(conversation.id, user_id)
-  end
-
-  defp can_delete_conversation?(conversation, user_id) do
-    can_manage_members?(conversation, user_id)
-  end
+  defp can_delete_conversation?(conversation, user_id),
+    do: ConversationAuthorization.can_delete_conversation?(conversation, user_id)
 
   # Swagger Schema Definitions
   def swagger_definitions do
@@ -1243,27 +1156,6 @@ defmodule WhisprMessagingWeb.ConversationController do
     end)
   end
 
-  # Parse a query string integer, clamping to [min, max] and falling back to a
-  # default on missing, malformed, or out-of-range input.
-  defp parse_int(value, default, opts) do
-    min_v = Keyword.get(opts, :min, 0)
-    max_v = Keyword.get(opts, :max, 1_000_000)
-
-    case parse_int_value(value) do
-      {:ok, n} when n >= min_v -> min(n, max_v)
-      _ -> default
-    end
-  end
-
-  defp parse_int_value(nil), do: :error
-  defp parse_int_value(n) when is_integer(n), do: {:ok, n}
-
-  defp parse_int_value(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {n, ""} -> {:ok, n}
-      _ -> :error
-    end
-  end
-
-  defp parse_int_value(_), do: :error
+  defp parse_int(value, default, opts),
+    do: WhisprMessagingWeb.ParamHelpers.parse_int_with_opts(value, default, opts)
 end

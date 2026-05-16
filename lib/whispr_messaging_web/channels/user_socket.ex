@@ -10,6 +10,7 @@ defmodule WhisprMessagingWeb.UserSocket do
   require Logger
 
   alias WhisprMessaging.JwksCache
+  alias WhisprMessagingWeb.SocketAuth
 
   # Channels
   channel "conversation:*", WhisprMessagingWeb.ConversationChannel
@@ -36,15 +37,9 @@ defmodule WhisprMessagingWeb.UserSocket do
   @impl true
   def id(socket), do: "user_socket:#{socket.assigns.user_id}"
 
-  # WHISPR-1214 — audiences acceptées sur la socket :
-  #   * `nil` : access tokens HTTP actuels (pas d'aud claim côté auth-service)
-  #   * `"whispr"` : audience HTTP historique
-  #   * `"ws"` : token court-vivant (60 s) émis par /tokens/ws-token
-  # Toute autre valeur est rejetée. Public uniquement pour le unit test.
+  # WHISPR-1214 — see SocketAuth.valid_aud?/1 for the spec.
   @doc false
-  def valid_aud?(nil), do: true
-  def valid_aud?(aud) when is_binary(aud), do: aud in ["whispr", "ws"]
-  def valid_aud?(_), do: false
+  defdelegate valid_aud?(aud), to: SocketAuth
 
   # JWT verification — same logic as WhisprMessagingWeb.Plugs.Authenticate
   if Mix.env() == :test do
@@ -88,16 +83,7 @@ defmodule WhisprMessagingWeb.UserSocket do
     |> Joken.Config.add_claim("aud", nil, &__MODULE__.valid_aud?/1)
   end
 
-  defp peek_kid(token) do
-    with [header_b64 | _] <- String.split(token, "."),
-         {:ok, json} <- Base.url_decode64(header_b64, padding: false),
-         {:ok, %{"kid" => kid}} when is_binary(kid) <- Jason.decode(json) do
-      kid
-    else
-      _ -> nil
-    end
-  end
+  defp peek_kid(token), do: SocketAuth.peek_kid(token)
 
-  defp extract_sub(%{"sub" => sub}) when is_binary(sub) and sub != "", do: {:ok, sub}
-  defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
+  defp extract_sub(claims), do: SocketAuth.extract_sub(claims)
 end
