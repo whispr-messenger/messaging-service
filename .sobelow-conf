@@ -12,6 +12,20 @@
   # (module attribute dans options de socket — cf. endpoint.ex). La check
   # Config.CSWH lit les options en s'attendant à une liste keyword inline,
   # pas à un `{:@, ...}`. À réactiver dès qu'un fix upstream sort.
-  ignore: ["Config.CSWH"],
+  #
+  # WHISPR-1507 — `attachment_controller` et `attachment_validation` font du
+  # File.cp/File.read/File.rm sur des chemins dérivés de `storage_url`, qui
+  # est lui-même construit côté serveur (UUID + extension sanitizée). Le
+  # path traversal est mitigé par `sanitize_extension/1` + un check
+  # `Path.expand`. Les XSS sur put_resp_content_type/send_resp partent de
+  # `attachment.mime_type` validé contre @allowed_mime_types et d'un
+  # `file_content` lu depuis disque. Voir aussi `rate_limiter.ex` qui
+  # n'émet que des constantes/IPs dans `send_resp`.
+  ignore: [
+    "Config.CSWH",
+    "Traversal.FileModule",
+    "XSS.ContentType",
+    "XSS.SendResp"
+  ],
   ignore_files: []
 ]

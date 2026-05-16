@@ -321,17 +321,40 @@ defmodule WhisprMessagingWeb.AttachmentController do
     # Ensure upload directory exists
     File.mkdir_p!(@upload_dir)
 
-    # Generate unique filename
-    file_extension = Path.extname(upload.filename)
+    # Generate unique filename. The extension is taken from the client-supplied
+    # filename, so we strip everything but alphanumerics to avoid path
+    # traversal sequences (Sobelow Traversal.FileModule) — the file body itself
+    # is identified by the random UUID, so the extension is purely cosmetic.
+    file_extension = sanitize_extension(Path.extname(upload.filename))
     unique_filename = "#{Ecto.UUID.generate()}#{file_extension}"
     file_path = Path.join(@upload_dir, unique_filename)
     file_url = "/uploads/#{unique_filename}"
 
-    case File.cp(upload.path, file_path) do
-      :ok -> {:ok, file_path, file_url}
-      {:error, reason} -> {:error, reason}
+    # Defense-in-depth: ensure the resolved destination still lives under
+    # @upload_dir even if the sanitizer ever lets something through.
+    expanded_dest = Path.expand(file_path)
+    expanded_root = Path.expand(@upload_dir)
+
+    if String.starts_with?(expanded_dest, expanded_root <> "/") do
+      case File.cp(upload.path, file_path) do
+        :ok -> {:ok, file_path, file_url}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :invalid_path}
     end
   end
+
+  defp sanitize_extension("." <> rest) do
+    cleaned = String.replace(rest, ~r/[^A-Za-z0-9]/, "")
+
+    case cleaned do
+      "" -> ""
+      ext -> "." <> ext
+    end
+  end
+
+  defp sanitize_extension(_), do: ""
 
   defp create_attachment_record(message_id, upload, file_path, file_url) do
     {:ok, %{size: file_size}} = File.stat(file_path)
