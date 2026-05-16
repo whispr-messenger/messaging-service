@@ -3,6 +3,7 @@ defmodule WhisprMessagingWeb.FallbackControllerTest do
 
   import Plug.Test
 
+  alias WhisprMessaging.Messages.Message
   alias WhisprMessagingWeb.FallbackController
 
   defp run(error) do
@@ -34,8 +35,8 @@ defmodule WhisprMessagingWeb.FallbackControllerTest do
 
   test "Ecto changeset returns 422 with details" do
     {:error, changeset} =
-      %WhisprMessaging.Messages.Message{}
-      |> WhisprMessaging.Messages.Message.changeset(%{})
+      %Message{}
+      |> Message.changeset(%{})
       |> Ecto.Changeset.apply_action(:insert)
 
     conn = run({:error, changeset})

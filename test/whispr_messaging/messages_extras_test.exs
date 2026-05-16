@@ -252,7 +252,7 @@ defmodule WhisprMessaging.MessagesExtrasTest do
     test "returns {items, next_cursor} with matches", ctx do
       {items, cursor} = Messages.search_messages_preview(ctx.u1, "hello")
       assert is_list(items)
-      assert length(items) >= 1
+      refute Enum.empty?(items)
       assert is_nil(cursor) or is_binary(cursor)
     end
 
