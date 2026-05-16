@@ -186,5 +186,17 @@ defmodule WhisprMessagingWeb.ReportHelpersTest do
     test "passes through an integer value" do
       assert ReportHelpers.parse_int(7, 0) == 7
     end
+
+    test "falls back to default for a list (e.g. repeated query param)" do
+      assert ReportHelpers.parse_int(["1", "2"], 5) == 5
+    end
+
+    test "falls back to default for a map (e.g. nested query param)" do
+      assert ReportHelpers.parse_int(%{"x" => 1}, 5) == 5
+    end
+
+    test "falls back to default for an atom" do
+      assert ReportHelpers.parse_int(:something, 5) == 5
+    end
   end
 end

@@ -224,4 +224,53 @@ defmodule WhisprMessagingWeb.ConversationAuthorizationTest do
       refute ConversationAuthorization.active_member?(ctx.conv.id, Ecto.UUID.generate())
     end
   end
+
+  describe "is_active gating (WHISPR-1507 Copilot review)" do
+    setup do
+      admin_uid = Ecto.UUID.generate()
+      reg_uid = Ecto.UUID.generate()
+
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "gating"},
+          is_active: true
+        })
+
+      {:ok, admin_member} = Conversations.add_conversation_member(conv.id, admin_uid)
+      {:ok, _reg_member} = Conversations.add_conversation_member(conv.id, reg_uid)
+      {:ok, _} = Conversations.set_member_role(admin_member, "admin")
+
+      # Deactivate the regular member (simulates a removal/leave).
+      {:ok, _} = Conversations.remove_conversation_member(conv.id, reg_uid)
+
+      %{conv: conv, admin_uid: admin_uid, reg_uid: reg_uid}
+    end
+
+    test "member?/2 rejects an inactive (removed) member", ctx do
+      refute ConversationAuthorization.member?(ctx.conv.id, ctx.reg_uid)
+    end
+
+    test "user_is_member?/2 rejects an inactive member when the preload exposes is_active",
+         ctx do
+      conv =
+        WhisprMessaging.Repo.preload(ctx.conv, :members, force: true)
+
+      # Sanity: the inactive member is still in the preload but flagged.
+      assert Enum.any?(conv.members, fn m ->
+               m.user_id == ctx.reg_uid and m.is_active == false
+             end)
+
+      refute ConversationAuthorization.user_is_member?(conv, ctx.reg_uid)
+      assert ConversationAuthorization.user_is_member?(conv, ctx.admin_uid)
+    end
+
+    test "can_manage_members?/2 rejects an inactive admin even if their settings still say admin",
+         ctx do
+      # Deactivate the admin too (e.g. they left or were removed).
+      {:ok, _} = Conversations.remove_conversation_member(ctx.conv.id, ctx.admin_uid)
+
+      refute ConversationAuthorization.can_manage_members?(ctx.conv, ctx.admin_uid)
+    end
+  end
 end

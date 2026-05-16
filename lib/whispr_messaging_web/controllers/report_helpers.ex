@@ -71,6 +71,10 @@ defmodule WhisprMessagingWeb.ReportHelpers do
 
   def parse_int(val, _default) when is_integer(val), do: val
 
+  # Catch-all: lists, maps, atoms, etc. — anything not handled above falls
+  # back to the default instead of raising FunctionClauseError.
+  def parse_int(_other, default), do: default
+
   @doc """
   Returns `true` when the provided role is admin or moderator. Used by
   `admin_or_moderator?` after a plug pre-resolution.

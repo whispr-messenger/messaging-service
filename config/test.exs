@@ -59,3 +59,8 @@ config :whispr_messaging, :enforce_direct_contact, false
 config :whispr_messaging,
        :user_service_client,
        WhisprMessaging.Services.MockUserServiceClient
+
+# WHISPR-1507: tests manage background worker lifecycles explicitly via
+# start_supervised!/start_link so the application supervisor should NOT
+# start them automatically. dev/prod default this flag to true.
+config :whispr_messaging, :start_background_workers, false

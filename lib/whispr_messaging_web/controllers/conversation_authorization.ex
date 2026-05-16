@@ -18,7 +18,9 @@ defmodule WhisprMessagingWeb.ConversationAuthorization do
   def user_is_member?(conversation, user_id) do
     case Map.get(conversation, :members) do
       members when is_list(members) ->
-        Enum.any?(members, fn member -> member.user_id == user_id end)
+        Enum.any?(members, fn member ->
+          member.user_id == user_id and Map.get(member, :is_active, true) == true
+        end)
 
       _ ->
         false
@@ -27,28 +29,30 @@ defmodule WhisprMessagingWeb.ConversationAuthorization do
 
   @doc """
   Returns true when `user_id` is an active member of `conversation_id` (DB
-  lookup).
+  lookup). Inactive (removed/left) members are rejected so authorization
+  cannot survive a member removal.
   """
   @spec member?(String.t(), String.t() | nil) :: boolean()
   def member?(_conversation_id, nil), do: false
 
   def member?(conversation_id, user_id) do
     case Conversations.get_conversation_member(conversation_id, user_id) do
-      nil -> false
-      _ -> true
+      %{is_active: true} -> true
+      _ -> false
     end
   end
 
   @doc """
-  Returns true when `user_id` has `admin` or `owner` role on `conversation`.
-  Anonymous callers (nil) are rejected.
+  Returns true when `user_id` has `admin` or `owner` role on `conversation`
+  AND is still an active member. Anonymous callers (nil) and inactive
+  members are rejected.
   """
   @spec can_manage_members?(map(), String.t() | nil) :: boolean()
   def can_manage_members?(_conversation, nil), do: false
 
   def can_manage_members?(conversation, user_id) do
     case Conversations.get_conversation_member(conversation.id, user_id) do
-      %{settings: settings} ->
+      %{is_active: true, settings: settings} ->
         role = Map.get(settings || %{}, "role", "member")
         role in ["admin", "owner"]
 
