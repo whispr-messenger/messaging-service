@@ -256,7 +256,9 @@ defmodule WhisprMessagingWeb.MessageControllerExtrasTest do
         build_conn()
         |> authenticated_conn(ctx.user1_id)
         |> json_conn()
-        |> get(~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages?before_timestamp=#{now}")
+        |> get(
+          ~p"/messaging/api/v1/conversations/#{ctx.conversation.id}/messages?before_timestamp=#{now}"
+        )
 
       assert conn.status == 200
     end

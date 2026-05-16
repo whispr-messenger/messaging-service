@@ -211,6 +211,5 @@ defmodule WhisprMessaging.JwksCacheTest do
         assert {:error, :not_loaded} = JwksCache.get_signing_key("test-kid-1")
       end
     end
-
   end
 end

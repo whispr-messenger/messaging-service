@@ -159,7 +159,8 @@ defmodule WhisprMessaging.ConversationsExtrasTest do
     end
 
     test "returns an empty list when no match" do
-      assert Conversations.search_conversations("xyz-no-match-#{System.unique_integer()}", 5) == []
+      assert Conversations.search_conversations("xyz-no-match-#{System.unique_integer()}", 5) ==
+               []
     end
   end
 

@@ -208,7 +208,6 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
 
       assert response["error"] == "Report not found"
     end
-
   end
 
   describe "GET /messaging/api/v1/reports/stats (admin)" do

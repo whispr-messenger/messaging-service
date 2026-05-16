@@ -83,7 +83,8 @@ defmodule WhisprMessagingWeb.UserSocketTest do
     end
 
     test "rejects with :jwks_not_loaded when JwksCache has no key for the kid" do
-      with_mock JwksCache, [:passthrough], get_signing_key: fn _kid -> {:error, :not_loaded} end do
+      with_mock JwksCache, [:passthrough],
+        get_signing_key: fn _kid -> {:error, :not_loaded} end do
         token = build_kid_token("unknown-kid")
 
         assert :error = UserSocket.connect(%{"token" => token}, %Phoenix.Socket{}, %{})

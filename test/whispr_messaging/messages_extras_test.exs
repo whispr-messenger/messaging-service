@@ -323,7 +323,12 @@ defmodule WhisprMessaging.MessagesExtrasTest do
       {u1, _u2, conv} = setup_two_user_conv()
 
       assert {:ok, msg} =
-               Messages.create_text_message(conv.id, u1, "encrypted", System.unique_integer([:positive]))
+               Messages.create_text_message(
+                 conv.id,
+                 u1,
+                 "encrypted",
+                 System.unique_integer([:positive])
+               )
 
       assert msg.message_type == "text"
     end

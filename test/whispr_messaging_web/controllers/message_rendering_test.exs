@@ -60,9 +60,7 @@ defmodule WhisprMessagingWeb.MessageRenderingTest do
       ]
 
       out =
-        MessageRendering.render_message(
-          Map.put(build_message(), :delivery_statuses, statuses)
-        )
+        MessageRendering.render_message(Map.put(build_message(), :delivery_statuses, statuses))
 
       assert out["deliveryStatus"] == "delivered"
     end
@@ -131,7 +129,10 @@ defmodule WhisprMessagingWeb.MessageRenderingTest do
 
     test "ignores zero or negative ttl_seconds" do
       assert MessageRendering.resolve_ttl_seconds(%{"ttl_seconds" => 0}) == %{"ttl_seconds" => 0}
-      assert MessageRendering.resolve_ttl_seconds(%{"ttl_seconds" => -10}) == %{"ttl_seconds" => -10}
+
+      assert MessageRendering.resolve_ttl_seconds(%{"ttl_seconds" => -10}) == %{
+               "ttl_seconds" => -10
+             }
     end
 
     test "no-op for unrelated params" do

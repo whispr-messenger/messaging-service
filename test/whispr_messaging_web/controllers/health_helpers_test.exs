@@ -22,10 +22,11 @@ defmodule WhisprMessagingWeb.HealthHelpersTest do
     end
 
     test "measures a slow call (>= 5 ms)" do
-      result = HealthHelpers.measure_check(fn ->
-        Process.sleep(5)
-        :ok
-      end)
+      result =
+        HealthHelpers.measure_check(fn ->
+          Process.sleep(5)
+          :ok
+        end)
 
       assert result.duration_ms >= 5
     end

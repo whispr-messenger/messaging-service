@@ -91,8 +91,7 @@ defmodule WhisprMessagingWeb.SwaggerDefinitionsTest do
     {WhisprMessagingWeb.ConversationController,
      ~w(index show create update delete search archived archive unarchive pin unpin
         get_member_settings update_member_settings)a},
-    {WhisprMessagingWeb.ConversationMemberController,
-     ~w(index create delete update_role leave)a},
+    {WhisprMessagingWeb.ConversationMemberController, ~w(index create delete update_role leave)a},
     {WhisprMessagingWeb.MessageController, ~w(index show create update delete)a},
     {WhisprMessagingWeb.AttachmentController, ~w(upload download show delete)a},
     {WhisprMessagingWeb.ReportController, ~w(create index show queue stats resolve)a},
