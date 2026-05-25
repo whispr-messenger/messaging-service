@@ -2,6 +2,7 @@ defmodule WhisprMessagingWeb.UserSocketTest do
   use ExUnit.Case, async: true
 
   import Phoenix.ChannelTest
+  import ExUnit.CaptureLog
 
   alias WhisprMessagingWeb.UserSocket
 
@@ -45,12 +46,86 @@ defmodule WhisprMessagingWeb.UserSocketTest do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # WHISPR-1240 — logs structures sur les rejets d'auth WS
+  # ---------------------------------------------------------------------------
+
+  describe "ws_auth_rejected logs (WHISPR-1240)" do
+    test "logue ws_auth_rejected avec reason=missing quand le token est absent" do
+      log =
+        capture_log(fn ->
+          assert :error == connect(UserSocket, %{})
+        end)
+
+      assert log =~ "ws_auth_rejected"
+      assert log =~ "missing"
+    end
+
+    test "logue ws_auth_rejected avec reason=missing quand le token est vide" do
+      log =
+        capture_log(fn ->
+          assert :error == connect(UserSocket, %{"token" => ""})
+        end)
+
+      assert log =~ "ws_auth_rejected"
+      assert log =~ "missing"
+    end
+
+    test "logue ws_auth_rejected avec reason=malformed quand le kid est absent du header" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT"})
+
+      log =
+        capture_log(fn ->
+          assert :error == connect(UserSocket, %{"token" => token})
+        end)
+
+      assert log =~ "ws_auth_rejected"
+      assert log =~ "malformed"
+    end
+
+    test "logue ws_auth_rejected avec reason=malformed quand le kid est vide" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => ""})
+
+      log =
+        capture_log(fn ->
+          assert :error == connect(UserSocket, %{"token" => token})
+        end)
+
+      assert log =~ "ws_auth_rejected"
+      assert log =~ "malformed"
+    end
+
+    test "logue ws_auth_rejected avec reason=jwks_unavailable quand kid inconnu du cache" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => "kid-inconnu"})
+
+      log =
+        capture_log(fn ->
+          assert :error == connect(UserSocket, %{"token" => token})
+        end)
+
+      assert log =~ "ws_auth_rejected"
+      assert log =~ "jwks_unavailable"
+    end
+
+    test "le log ne contient jamais le token JWT" do
+      token = forge_jwt(%{"alg" => "ES256", "typ" => "JWT", "kid" => "kid-inconnu"})
+
+      log =
+        capture_log(fn ->
+          connect(UserSocket, %{"token" => token})
+        end)
+
+      # Le token lui-meme (ou ses segments) ne doit pas apparaitre dans le log
+      refute log =~ token
+    end
+  end
+
   # Construit un JWT structurellement valide (3 segments base64url) avec un
   # header arbitraire. Le payload et la signature sont des placeholders ;
   # on s'arrete avant la verification cryptographique dans ces tests.
-  defp forge_jwt(header_map) do
+  defp forge_jwt(header_map, payload_map \\ %{"sub" => "user-1"}) do
     header = header_map |> Jason.encode!() |> Base.url_encode64(padding: false)
-    payload = %{"sub" => "user-1"} |> Jason.encode!() |> Base.url_encode64(padding: false)
+    payload = payload_map |> Jason.encode!() |> Base.url_encode64(padding: false)
     signature = Base.url_encode64("fake-sig", padding: false)
     "#{header}.#{payload}.#{signature}"
   end

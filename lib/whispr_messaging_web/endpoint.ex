@@ -20,6 +20,8 @@ defmodule WhisprMessagingWeb.Endpoint do
   # Shared WebSocket options — single source of truth for both mounts.
   # `check_origin` is resolved at runtime via {Mod, Fun, Args} so prod can
   # reuse the CORS allowlist (WHISPR-839) while dev/test stay permissive.
+  # `connect_info` expose peer_data (IP client) et x_headers (User-Agent,
+  # X-Forwarded-For) au UserSocket.connect/3 pour les logs de rejet (WHISPR-1240).
   @ws_opts [
     websocket: [
       timeout: 45_000,
@@ -27,7 +29,8 @@ defmodule WhisprMessagingWeb.Endpoint do
       compress: true,
       check_origin: {__MODULE__, :ws_check_origin, []}
     ],
-    longpoll: false
+    longpoll: false,
+    connect_info: [:peer_data, :x_headers]
   ]
 
   socket "/socket", WhisprMessagingWeb.UserSocket, @ws_opts
