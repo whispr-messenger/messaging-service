@@ -112,10 +112,17 @@ jobs:
       #     (les message bodies sont binaires E2EE, pas de champ :decimal côté
       #     API publique). À retirer dès qu'une release ecto supporte decimal
       #     3.x ; suivi sur ticket Jira dédié.
+      #
+      #   GHSA-g2wm-735q-3f56 — cowlib <= 2.16.1 : Cookie Request Header
+      #     Injection via cow_cookie:cookie/1. Severity low. Aucun patch
+      #     disponible a ce jour (toutes les versions cowlib sont affectees).
+      #     Ce service ne genere pas de cookies depuis cowlib directement
+      #     (Phoenix gere les Set-Cookie via Plug.Conn). A retirer des qu'un
+      #     fix upstream cowlib est publie.
       - name: Run mix_audit
         run: |
           set -o pipefail
-          mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v 2>&1 | tee mix-audit-results.txt
+          mix deps.audit --ignore-advisory-ids GHSA-rhv4-8758-jx7v,GHSA-g2wm-735q-3f56 2>&1 | tee mix-audit-results.txt
 
       - name: Upload mix_audit results
         if: always()
