@@ -99,6 +99,9 @@ defmodule WhisprMessagingWeb.Router do
     post "/conversations/:id/pin", ConversationController, :pin
     delete "/conversations/:id/pin", ConversationController, :unpin
 
+    # E2EE toggle par conversation (WHISPR-1484)
+    patch "/conversations/:id/e2ee", ConversationController, :update_e2ee
+
     # Conversation archive / unarchive (WHISPR-466)
     post "/conversations/:id/archive", ConversationController, :archive
     delete "/conversations/:id/archive", ConversationController, :unarchive

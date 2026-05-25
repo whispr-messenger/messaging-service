@@ -988,6 +988,58 @@ defmodule WhisprMessagingWeb.ConversationController do
     end
   end
 
+  @doc """
+  Bascule E2EE sur une conversation directe.
+  PATCH /api/v1/conversations/:id/e2ee
+
+  Body: {"e2ee_enabled": true|false}
+  Erreur 400 si conversation de type group.
+  Erreur 403 si l'utilisateur n'est pas membre.
+  """
+  def update_e2ee(conn, %{"id" => conversation_id} = params) do
+    user_id = conn.assigns[:user_id]
+
+    if is_nil(user_id) do
+      conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
+    else
+      e2ee_enabled = Map.get(params, "e2ee_enabled")
+
+      if is_nil(e2ee_enabled) do
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "e2ee_enabled is required"})
+      else
+        with {:ok, conversation} <- Conversations.get_conversation(conversation_id),
+             true <- Conversations.user_is_member?(conversation_id, user_id),
+             {:ok, updated} <-
+               Conversations.update_e2ee(conversation, %{e2ee_enabled: e2ee_enabled}) do
+          json(conn, %{
+            data: %{
+              conversation_id: conversation_id,
+              e2ee_enabled: updated.e2ee_enabled
+            }
+          })
+        else
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
+
+          false ->
+            conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            errors =
+              Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+                Enum.reduce(opts, msg, fn {k, v}, acc ->
+                  String.replace(acc, "%{#{k}}", to_string(v))
+                end)
+              end)
+
+            conn |> put_status(:bad_request) |> json(%{errors: errors})
+        end
+      end
+    end
+  end
+
   # Private rendering functions
 
   defp render_conversations(conversations, authorization) do
