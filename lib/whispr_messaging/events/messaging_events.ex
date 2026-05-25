@@ -51,6 +51,7 @@ defmodule WhisprMessaging.Events.MessagingEvents do
         }
         |> maybe_put("sent_at", encode_datetime(Map.get(message, :sent_at)))
         |> maybe_put("message_type", Map.get(message, :message_type))
+        |> maybe_put("sender_name", Keyword.get(opts, :sender_name))
 
       publish_json(@new_message_channel, payload, message.conversation_id)
     end

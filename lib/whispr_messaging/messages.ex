@@ -90,7 +90,14 @@ defmodule WhisprMessaging.Messages do
   defp default_new_message_dispatcher(%Message{conversation_id: conversation_id} = message) do
     Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
       members = Conversations.list_conversation_members(conversation_id)
-      MessagingEvents.publish_new_message(message, members)
+
+      sender_name =
+        case UserService.get_display_name(message.sender_id) do
+          {:ok, name} -> name
+          _ -> nil
+        end
+
+      MessagingEvents.publish_new_message(message, members, sender_name: sender_name)
     end)
   end
 
