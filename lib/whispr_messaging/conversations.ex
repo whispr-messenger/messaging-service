@@ -75,6 +75,26 @@ defmodule WhisprMessaging.Conversations do
   end
 
   @doc """
+  Active ou desactive E2EE sur une conversation.
+  Delegue la validation (groupe interdit) au changeset Conversation.e2ee_changeset/2.
+  """
+  def update_e2ee(%Conversation{} = conversation, attrs) do
+    conversation
+    |> Conversation.e2ee_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Verifie qu'un user est membre actif d'une conversation.
+  """
+  def user_is_member?(conversation_id, user_id) do
+    case get_conversation_member(conversation_id, user_id) do
+      %{is_active: true} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
   Deactivates a conversation (soft delete).
   """
   def deactivate_conversation(%Conversation{} = conversation) do
