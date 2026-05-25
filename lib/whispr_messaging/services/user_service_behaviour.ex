@@ -47,4 +47,14 @@ defmodule WhisprMessaging.Services.UserServiceBehaviour do
   @callback get_privacy_settings(user_id :: String.t()) ::
               {:ok, %{required(:read_receipts) => boolean(), optional(atom()) => any()}}
               | {:error, term()}
+
+  @doc """
+  Renvoie le nom d'affichage d'un utilisateur ("Prenom Nom" ou username)
+  via `GET /internal/users/:id/display-name` cote user-service.
+
+  Politique fail-open : en cas d'erreur les appelants doivent fallback
+  sur `nil` et ne pas bloquer la livraison du message.
+  """
+  @callback get_display_name(user_id :: String.t()) ::
+              {:ok, String.t()} | {:error, term()}
 end

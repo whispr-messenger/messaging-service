@@ -94,6 +94,39 @@ defmodule WhisprMessaging.Services.HttpUserServiceClient do
   end
 
   @doc """
+  Recupere le nom d'affichage d'un utilisateur via
+  `GET /internal/users/:id/display-name`. Renvoie `{:ok, display_name}` en cas
+  de succes, `{:error, _}` sinon (fail-open : l'appelant doit fallback sur nil).
+  """
+  @impl true
+  def get_display_name(user_id) do
+    user = String.trim(to_string(user_id))
+    url = UserService.internal_base_url() <> "/users/" <> URI.encode(user) <> "/display-name"
+
+    :get
+    |> Finch.build(url, build_headers())
+    |> Finch.request(WhisprMessaging.Finch, receive_timeout: timeout_ms())
+    |> handle_display_name_response()
+  end
+
+  defp handle_display_name_response({:ok, %Finch.Response{status: 200, body: body}}) do
+    case Jason.decode(body) do
+      {:ok, %{"displayName" => name}} when is_binary(name) -> {:ok, name}
+      _ -> {:error, :invalid_response}
+    end
+  end
+
+  defp handle_display_name_response({:ok, %Finch.Response{status: 404}}),
+    do: {:error, :not_found}
+
+  defp handle_display_name_response({:ok, %Finch.Response{status: status}})
+       when status in [401, 403],
+       do: {:error, :unauthorized}
+
+  defp handle_display_name_response({:ok, %Finch.Response{}}), do: {:error, :transient}
+  defp handle_display_name_response({:error, _}), do: {:error, :transient}
+
+  @doc """
   Recupere les flags de privacy d'un utilisateur via
   `GET /internal/users/:id/privacy`. Renvoie `{:ok, %{read_receipts: bool, ...}}`
   en cas de succes.

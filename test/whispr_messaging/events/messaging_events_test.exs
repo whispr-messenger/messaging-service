@@ -113,6 +113,26 @@ defmodule WhisprMessaging.Events.MessagingEventsTest do
       refute Map.has_key?(payload, "sent_at")
       refute Map.has_key?(payload, "message_type")
     end
+
+    test "includes sender_name when provided via opts" do
+      message = %{id: "m", conversation_id: "c", sender_id: "s"}
+
+      assert :ok =
+               MessagingEvents.publish_new_message(message, [%{user_id: "a"}],
+                 sender_name: "Alice B"
+               )
+
+      assert_receive {:redis_publish, _channel, json}
+      assert Jason.decode!(json)["sender_name"] == "Alice B"
+    end
+
+    test "omits sender_name when not provided" do
+      message = %{id: "m", conversation_id: "c", sender_id: "s"}
+
+      assert :ok = MessagingEvents.publish_new_message(message, [%{user_id: "a"}])
+      assert_receive {:redis_publish, _channel, json}
+      refute Map.has_key?(Jason.decode!(json), "sender_name")
+    end
   end
 
   describe "publish_message_read/4" do

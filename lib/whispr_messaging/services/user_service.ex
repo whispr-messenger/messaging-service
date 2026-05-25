@@ -80,6 +80,16 @@ defmodule WhisprMessaging.Services.UserService do
   defp handle_check_response({:error, _reason}), do: {:error, :request_failed}
 
   @doc """
+  Recupere le nom d'affichage d'un utilisateur (fail-open).
+
+  Renvoie `{:ok, display_name}` ou `{:error, _}`.
+  Les appelants doivent fallback sur `nil` en cas d'erreur.
+  """
+  def get_display_name(user_id) do
+    client().get_display_name(user_id)
+  end
+
+  @doc """
   Verifie l'existence d'un utilisateur.
 
   Delegue au module configure dans
