@@ -211,9 +211,13 @@ defmodule WhisprMessagingWeb.Router do
   # WHISPR-845 — endpoints de diagnostic detaille, gated par le shared
   # internal token. Les probes k8s utilisent /live et /ready (publics),
   # donc gate ici ne casse rien cote infra.
+  # WHISPR-1243 — force-disconnect WS par user_id, meme pipeline interne.
   scope "/messaging/api/v1", WhisprMessagingWeb do
     pipe_through :internal_api
 
     get "/health/detailed", HealthController, :detailed
+
+    # Force-ferme toutes les sessions WebSocket actives d'un user (ban, reset mdp, compromission).
+    delete "/admin/users/:user_id/socket", AdminSocketController, :disconnect
   end
 end
