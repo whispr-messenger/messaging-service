@@ -2,8 +2,10 @@ defmodule WhisprMessaging.Messages.Message do
   @moduledoc """
   Ecto schema for messages in conversations.
 
-  Messages are the core communication units in the messaging system.
-  Content is stored encrypted (BYTEA) as per E2E encryption requirements.
+  Messages sont les unites de communication du systeme.
+  E2EE est opt-in par conversation : `content_format` vaut "plaintext" par
+  defaut ou "olm_v1" pour un message chiffre Olm. Dans ce cas `ciphertext`
+  est renseigne et `content` est nil — le serveur ne stocke jamais les cles.
   """
 
   use Ecto.Schema
@@ -18,11 +20,17 @@ defmodule WhisprMessaging.Messages.Message do
 
   @message_types ~w(text media system)
 
+  @content_formats ~w(plaintext olm_v1)
+
   schema "messages" do
     field :sender_id, :binary_id
     field :message_type, :string
-    # Encrypted content as BYTEA
+    # Contenu plaintext (BYTEA) — nil pour les messages E2EE (olm_v1)
     field :content, :binary
+    # Ciphertext Olm — nil pour les messages plaintext
+    field :ciphertext, :binary
+    # Format du contenu : "plaintext" | "olm_v1"
+    field :content_format, :string, default: "plaintext"
     field :metadata, :map, default: %{}
     field :client_random, :integer
     field :sent_at, :utc_datetime
@@ -57,6 +65,8 @@ defmodule WhisprMessaging.Messages.Message do
       :forwarded_from_id,
       :message_type,
       :content,
+      :ciphertext,
+      :content_format,
       :metadata,
       :client_random,
       :sent_at,
@@ -64,9 +74,11 @@ defmodule WhisprMessaging.Messages.Message do
       :signature,
       :sender_public_key
     ])
-    |> validate_required([:conversation_id, :sender_id, :message_type, :content, :client_random])
-    |> validate_expires_at()
+    |> validate_required([:conversation_id, :sender_id, :message_type, :client_random])
     |> validate_inclusion(:message_type, @message_types)
+    |> validate_inclusion(:content_format, @content_formats)
+    |> validate_content_or_ciphertext()
+    |> validate_expires_at()
     |> validate_content_size()
     |> validate_metadata()
     |> put_sent_at_if_empty()
@@ -78,8 +90,18 @@ defmodule WhisprMessaging.Messages.Message do
 
   @doc """
   Changeset for editing a message.
+  L'edition d'un message E2EE (olm_v1) est interdite : le ciphertext est
+  immutable cote serveur, le client devra renvoyer un nouveau message.
   """
-  def edit_changeset(message, new_content, metadata \\ %{}) do
+  def edit_changeset(message, new_content, metadata \\ %{})
+
+  def edit_changeset(%__MODULE__{content_format: "olm_v1"}, _new_content, _metadata) do
+    %__MODULE__{}
+    |> change(%{})
+    |> add_error(:content, "cannot edit an E2EE message")
+  end
+
+  def edit_changeset(message, new_content, metadata) do
     message
     |> cast(
       %{
@@ -300,22 +322,47 @@ defmodule WhisprMessaging.Messages.Message do
     end
   end
 
+  # Valide que le bon champ est fourni selon content_format.
+  # plaintext -> require content
+  # olm_v1   -> require ciphertext (content doit rester nil)
+  defp validate_content_or_ciphertext(changeset) do
+    format = get_field(changeset, :content_format) || "plaintext"
+
+    case format do
+      "olm_v1" ->
+        changeset
+        |> validate_required([:ciphertext])
+
+      _ ->
+        changeset
+        |> validate_required([:content])
+    end
+  end
+
   defp validate_content_size(%Ecto.Changeset{} = changeset) do
     max_size = Application.get_env(:whispr_messaging, :messages)[:max_content_size] || 65_536
+    # Le ciphertext Olm a ~40 bytes d'overhead vs plaintext
+    max_ciphertext_size = max_size + 128
 
-    case get_field(changeset, :content) do
+    changeset
+    |> check_field_size(:content, max_size)
+    |> check_field_size(:ciphertext, max_ciphertext_size)
+  end
+
+  defp check_field_size(changeset, field, max_size) do
+    case get_field(changeset, field) do
       nil ->
         changeset
 
-      content when is_binary(content) ->
-        if byte_size(content) <= max_size do
+      value when is_binary(value) ->
+        if byte_size(value) <= max_size do
           changeset
         else
-          add_error(changeset, :content, "exceeds maximum size of #{max_size} bytes")
+          add_error(changeset, field, "exceeds maximum size of #{max_size} bytes")
         end
 
       _ ->
-        add_error(changeset, :content, "must be binary data")
+        add_error(changeset, field, "must be binary data")
     end
   end
 

@@ -25,6 +25,8 @@ defmodule WhisprMessaging.Conversations.Conversation do
     field :is_active, :boolean, default: true
     field :invite_token, :binary_id
     field :invite_expires_at, :utc_datetime
+    # E2EE opt-in — false par defaut, settable via PATCH /conversations/:id/e2ee
+    field :e2ee_enabled, :boolean, default: false
 
     has_many :members, ConversationMember, foreign_key: :conversation_id
     has_many :messages, Message, foreign_key: :conversation_id
@@ -62,6 +64,22 @@ defmodule WhisprMessaging.Conversations.Conversation do
     conversation
     |> cast(attrs, [:invite_token, :invite_expires_at])
     |> unique_constraint(:invite_token, name: :conversations_invite_token_index)
+  end
+
+  @doc """
+  Changeset pour activer ou desactiver E2EE sur une conversation.
+  E2EE n'est autorise que sur les conversations directes (1v1).
+  """
+  def e2ee_changeset(%__MODULE__{type: "group"} = conversation, _attrs) do
+    conversation
+    |> change(%{})
+    |> add_error(:e2ee_enabled, "E2EE is only supported on direct conversations")
+  end
+
+  def e2ee_changeset(conversation, attrs) do
+    conversation
+    |> cast(attrs, [:e2ee_enabled])
+    |> validate_required([:e2ee_enabled])
   end
 
   @doc """

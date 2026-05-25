@@ -9,6 +9,7 @@ defmodule WhisprMessaging.Messages do
   import Ecto.Query, warn: false
 
   alias WhisprMessaging.Conversations
+  alias WhisprMessaging.Conversations.Conversation
   alias WhisprMessaging.Events.MessagingEvents
   alias WhisprMessaging.Services.UserService
 
@@ -152,11 +153,15 @@ defmodule WhisprMessaging.Messages do
       from(m in Message,
         join: cm in WhisprMessaging.Conversations.ConversationMember,
         on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+        # Exclure les conversations E2EE — le ciphertext ne doit pas etre indexe
+        join: c in Conversation,
+        on: c.id == m.conversation_id,
         left_join: umd in UserMessageDeletion,
         on: umd.message_id == m.id and umd.user_id == ^user_id,
         where:
           ilike(fragment("encode(?, 'escape')", m.content), ^like_query) and
             m.is_deleted == false,
+        where: c.e2ee_enabled == false,
         where: is_nil(umd.id),
         order_by: [desc: m.inserted_at],
         limit: ^limit,
@@ -342,12 +347,22 @@ defmodule WhisprMessaging.Messages do
 
   @doc """
   Searches messages by metadata content, excluding messages the user
-  has individually deleted.
+  has individually deleted. Retourne [] si la conversation est E2EE
+  (le contenu chiffre ne doit pas etre indexe).
   """
   def search_messages(conversation_id, search_term, user_id \\ nil) do
-    Message.search_messages_query(conversation_id, search_term)
-    |> exclude_user_deletions(user_id)
-    |> Repo.all()
+    case Conversations.get_conversation(conversation_id) do
+      {:ok, %{e2ee_enabled: true}} ->
+        []
+
+      {:ok, _conversation} ->
+        Message.search_messages_query(conversation_id, search_term)
+        |> exclude_user_deletions(user_id)
+        |> Repo.all()
+
+      _ ->
+        []
+    end
   end
 
   @doc """

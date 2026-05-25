@@ -15,6 +15,7 @@ defmodule WhisprMessaging.ConversationServer do
 
   alias WhisprMessaging.{Conversations, Messages}
   alias WhisprMessaging.Events.MessagingEvents
+  alias WhisprMessaging.Messages.Serializer
   alias WhisprMessaging.Moderation.Sanctions
   alias WhisprMessaging.Services.{NotificationService, UserService}
   # alias WhisprMessaging.Conversations.{Conversation, ConversationMember}
@@ -766,59 +767,9 @@ defmodule WhisprMessaging.ConversationServer do
     end)
   end
 
-  defp safe_binary_content(nil), do: nil
-
-  defp safe_binary_content(content) when is_binary(content) do
-    if String.valid?(content), do: content, else: Base.encode64(content)
-  end
-
-  defp safe_binary_content(content), do: to_string(content)
-
   @doc false
   def serialize_message(message) do
-    alias WhisprMessaging.Messages.DeliveryStatus
-    alias WhisprMessaging.Messages.Message
-
-    base = %{
-      id: message.id,
-      conversation_id: message.conversation_id,
-      sender_id: message.sender_id,
-      reply_to_id: message.reply_to_id,
-      message_type: message.message_type,
-      content: safe_binary_content(message.content),
-      metadata: message.metadata,
-      client_random: message.client_random,
-      sent_at: message.sent_at,
-      edited_at: message.edited_at,
-      is_deleted: message.is_deleted,
-      delete_for_everyone: message.delete_for_everyone
-    }
-
-    result =
-      case message do
-        %{delivery_statuses: statuses} when is_list(statuses) ->
-          Map.put(base, :delivery_status, DeliveryStatus.compute_aggregate_status(statuses))
-
-        _ ->
-          Map.put(base, :delivery_status, "sent")
-      end
-
-    result =
-      case message do
-        %{reply_to: %Message{} = parent} ->
-          Map.put(result, :reply_to, %{
-            id: parent.id,
-            sender_id: parent.sender_id,
-            content: safe_binary_content(parent.content),
-            message_type: parent.message_type,
-            is_deleted: parent.is_deleted
-          })
-
-        _ ->
-          result
-      end
-
-    camelize_keys(result)
+    Serializer.serialize(message)
   end
 
   defp serialize_member(member) do
