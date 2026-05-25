@@ -70,6 +70,9 @@ defmodule WhisprMessaging.Application do
       # Calls relay — bridges calls-service Redis events to user channels
       WhisprMessaging.Workers.CallsSubscriber,
 
+      # Stream consumer user.registered — projection locale des utilisateurs (WHISPR-951)
+      WhisprMessaging.Workers.UserRegisteredStreamConsumer,
+
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
     ]
