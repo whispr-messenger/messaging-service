@@ -31,10 +31,13 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    case get_user_id(conn) do
-      {:ok, user_id} ->
+    case get_user_claims(conn) do
+      {:ok, user_id, device_id} ->
         Logger.metadata(user_id: user_id)
-        assign(conn, :user_id, user_id)
+
+        conn
+        |> assign(:user_id, user_id)
+        |> assign(:device_id, device_id)
 
       {:error, :unauthorized} ->
         conn
@@ -45,11 +48,13 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   # Private helpers
   # ---------------------------------------------------------------------------
 
-  defp get_user_id(conn) do
+  defp get_user_claims(conn) do
     # 1. Trusted gateway header (already authenticated upstream)
     case get_req_header(conn, "x-user-id") do
       [user_id | _] when user_id != "" ->
-        {:ok, user_id}
+        # Pas de device_id via gateway header — nil accepté (TOFU par user_id seul)
+        device_id = conn |> get_req_header("x-device-id") |> List.first()
+        {:ok, user_id, device_id}
 
       _ ->
         # 2. Bearer JWT
@@ -64,9 +69,14 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   # In the test environment, accept tokens prefixed with "test_token_" followed
-  # by the user-id.  This avoids the need for a real JWKS endpoint during tests.
+  # by the user-id, optionally "<user_id>:<device_id>".
   if Mix.env() == :test do
-    defp verify_jwt("test_token_" <> user_id) when user_id != "", do: {:ok, user_id}
+    defp verify_jwt("test_token_" <> rest) when rest != "" do
+      case String.split(rest, ":", parts: 2) do
+        [user_id, device_id] -> {:ok, user_id, device_id}
+        [user_id] -> {:ok, user_id, nil}
+      end
+    end
   end
 
   defp verify_jwt(token) do
@@ -75,7 +85,8 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
          {:ok, pem} <- JwksCache.get_signing_key(kid),
          {:ok, claims} <- validate_token(token, pem),
          {:ok, user_id} <- extract_sub(claims) do
-      {:ok, user_id}
+      device_id = extract_device_id(claims)
+      {:ok, user_id, device_id}
     else
       {:error, :missing_kid} ->
         Logger.warning("JWT rejete : header sans kid",
@@ -135,4 +146,9 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
   end
 
   defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
+
+  # Extrait le device_id depuis les claims JWT (claim `did` ou `device_id`).
+  defp extract_device_id(%{"did" => did}) when is_binary(did) and did != "", do: did
+  defp extract_device_id(%{"device_id" => did}) when is_binary(did) and did != "", do: did
+  defp extract_device_id(_), do: nil
 end

@@ -24,8 +24,13 @@ defmodule WhisprMessagingWeb.UserSocket do
     meta = extract_conn_meta(connect_info)
 
     case verify_jwt(token) do
-      {:ok, user_id} ->
-        {:ok, assign(socket, :user_id, user_id)}
+      {:ok, user_id, device_id} ->
+        socket =
+          socket
+          |> assign(:user_id, user_id)
+          |> assign(:device_id, device_id)
+
+        {:ok, socket}
 
       {:error, reason} ->
         # user_id partiel : si le sub est lisible malgre l'echec (ex: signature invalide),
@@ -142,7 +147,13 @@ defmodule WhisprMessagingWeb.UserSocket do
 
   # JWT verification — same logic as WhisprMessagingWeb.Plugs.Authenticate
   if Mix.env() == :test do
-    defp verify_jwt("test_token_" <> user_id) when user_id != "", do: {:ok, user_id}
+    defp verify_jwt("test_token_" <> rest) when rest != "" do
+      # Format de test : "test_token_<user_id>" ou "test_token_<user_id>:<device_id>"
+      case String.split(rest, ":", parts: 2) do
+        [user_id, device_id] -> {:ok, user_id, device_id}
+        [user_id] -> {:ok, user_id, nil}
+      end
+    end
   end
 
   defp verify_jwt(token) do
@@ -150,7 +161,8 @@ defmodule WhisprMessagingWeb.UserSocket do
          {:ok, pem} <- JwksCache.get_signing_key(kid),
          {:ok, claims} <- validate_token(token, pem),
          {:ok, user_id} <- extract_sub(claims) do
-      {:ok, user_id}
+      device_id = extract_device_id(claims)
+      {:ok, user_id, device_id}
     else
       {:error, :missing_kid} -> {:error, :missing_kid}
       {:error, :not_loaded} -> {:error, :jwks_not_loaded}
@@ -197,4 +209,10 @@ defmodule WhisprMessagingWeb.UserSocket do
 
   defp extract_sub(%{"sub" => sub}) when is_binary(sub) and sub != "", do: {:ok, sub}
   defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
+
+  # Extrait le device_id depuis les claims JWT (claim `did` ou `device_id`).
+  # Nil si absent : les tokens sans claim device tombent en TOFU par user_id seul.
+  defp extract_device_id(%{"did" => did}) when is_binary(did) and did != "", do: did
+  defp extract_device_id(%{"device_id" => did}) when is_binary(did) and did != "", do: did
+  defp extract_device_id(_), do: nil
 end

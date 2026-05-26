@@ -24,7 +24,8 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
       "content" => content,
       "conversation_id" => conversation_id,
       "client_random" => client_random,
-      "sender_id" => Ecto.UUID.generate()
+      "sender_id" => Ecto.UUID.generate(),
+      "device_id" => Ecto.UUID.generate()
     }
 
     signed_data = SignatureVerifier.build_signed_data(base_attrs)
@@ -47,36 +48,87 @@ defmodule WhisprMessaging.Messages.SignatureVerifierTest do
       attrs = build_attrs(public_key, private_key)
       assert :ok = SignatureVerifier.verify(attrs)
 
-      # Key should now be registered
+      # La clé doit être enregistrée pour le couple (user_id, device_id)
       sender_id = attrs["sender_id"]
-      assert Repo.exists?(from k in SenderPublicKey, where: k.user_id == ^sender_id)
+      device_id = attrs["device_id"]
+
+      assert Repo.exists?(
+               from k in SenderPublicKey,
+                 where: k.user_id == ^sender_id and k.device_id == ^device_id
+             )
     end
 
     test "returns :ok when using a previously registered key" do
       {public_key, private_key} = generate_key_pair()
       sender_id = Ecto.UUID.generate()
-      attrs = build_attrs(public_key, private_key, %{"sender_id" => sender_id})
+      device_id = Ecto.UUID.generate()
 
-      # First message registers the key
+      attrs =
+        build_attrs(public_key, private_key, %{"sender_id" => sender_id, "device_id" => device_id})
+
+      # Premier message enregistre la clé
       assert :ok = SignatureVerifier.verify(attrs)
 
-      # Second message with same key should also pass
-      attrs2 = build_attrs(public_key, private_key, %{"sender_id" => sender_id})
+      # Second message avec la même clé et le même device : ok
+      attrs2 =
+        build_attrs(public_key, private_key, %{"sender_id" => sender_id, "device_id" => device_id})
+
       assert :ok = SignatureVerifier.verify(attrs2)
     end
 
-    test "rejects an untrusted key when a different key is already registered" do
+    test "rejects an untrusted key when a different key is already registered for the same device" do
       {pub1, priv1} = generate_key_pair()
       {pub2, priv2} = generate_key_pair()
       sender_id = Ecto.UUID.generate()
+      device_id = Ecto.UUID.generate()
 
-      # Register first key
-      attrs1 = build_attrs(pub1, priv1, %{"sender_id" => sender_id})
+      # Enregistre la première clé pour ce device
+      attrs1 = build_attrs(pub1, priv1, %{"sender_id" => sender_id, "device_id" => device_id})
       assert :ok = SignatureVerifier.verify(attrs1)
 
-      # Try with a different key — should be rejected
-      attrs2 = build_attrs(pub2, priv2, %{"sender_id" => sender_id})
+      # Même device, clé différente — rejeté
+      attrs2 = build_attrs(pub2, priv2, %{"sender_id" => sender_id, "device_id" => device_id})
       assert {:error, :untrusted_public_key} = SignatureVerifier.verify(attrs2)
+    end
+
+    test "TOFU per-device : deux devices du même user ont des clés indépendantes" do
+      {pub1, priv1} = generate_key_pair()
+      {pub2, priv2} = generate_key_pair()
+      sender_id = Ecto.UUID.generate()
+      device_a = Ecto.UUID.generate()
+      device_b = Ecto.UUID.generate()
+
+      # Device A enregistre pub1
+      attrs_a = build_attrs(pub1, priv1, %{"sender_id" => sender_id, "device_id" => device_a})
+      assert :ok = SignatureVerifier.verify(attrs_a)
+
+      # Device B enregistre pub2 (clé différente) sans conflit
+      attrs_b = build_attrs(pub2, priv2, %{"sender_id" => sender_id, "device_id" => device_b})
+      assert :ok = SignatureVerifier.verify(attrs_b)
+
+      # Device A avec sa propre clé : toujours ok
+      attrs_a2 = build_attrs(pub1, priv1, %{"sender_id" => sender_id, "device_id" => device_a})
+      assert :ok = SignatureVerifier.verify(attrs_a2)
+    end
+
+    test "rotation de device : nouveau device_id accepté même après key-regen" do
+      {_pub_old, _priv_old} = generate_key_pair()
+      {pub_new, priv_new} = generate_key_pair()
+      sender_id = Ecto.UUID.generate()
+      old_device = Ecto.UUID.generate()
+      new_device = Ecto.UUID.generate()
+
+      # Nouveau device avec nouvelle clé : enregistré sans blocage
+      attrs =
+        build_attrs(pub_new, priv_new, %{"sender_id" => sender_id, "device_id" => new_device})
+
+      assert :ok = SignatureVerifier.verify(attrs)
+
+      # L'ancien device n'est pas impacté (pas d'entrée pour old_device dans ce test)
+      refute Repo.exists?(
+               from k in SenderPublicKey,
+                 where: k.user_id == ^sender_id and k.device_id == ^old_device
+             )
     end
 
     test "returns {:error, :invalid_signature} for a tampered content" do

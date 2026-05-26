@@ -16,6 +16,7 @@ defmodule WhisprMessaging.Messages.SenderPublicKey do
 
   schema "sender_public_keys" do
     field :user_id, :binary_id
+    field :device_id, :binary_id
     field :public_key, :string
 
     timestamps()
@@ -23,8 +24,8 @@ defmodule WhisprMessaging.Messages.SenderPublicKey do
 
   def changeset(struct, attrs) do
     struct
-    |> cast(attrs, [:user_id, :public_key])
+    |> cast(attrs, [:user_id, :device_id, :public_key])
     |> validate_required([:user_id, :public_key])
-    |> unique_constraint(:user_id)
+    |> unique_constraint([:user_id, :device_id])
   end
 end

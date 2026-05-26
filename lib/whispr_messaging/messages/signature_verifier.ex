@@ -33,6 +33,10 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   not required (both fields absent — backward-compatible mode).
 
   Returns `{:error, reason}` on verification failure.
+
+  Le TOFU est maintenant per-device : la clé de confiance est liée au couple
+  `(user_id, device_id)`. Si `device_id` est nil (token sans claim `did`),
+  on tombe en mode TOFU par user_id seul pour rétrocompat.
   """
   @spec verify(map()) :: :ok | {:error, atom()}
   def verify(attrs) do
@@ -50,22 +54,24 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
 
       true ->
         sender_id = attrs["sender_id"] || attrs[:sender_id]
-        do_verify(attrs, signature_b64, public_key_b64, sender_id)
+        device_id = attrs["device_id"] || attrs[:device_id]
+        do_verify(attrs, signature_b64, public_key_b64, sender_id, device_id)
     end
   end
 
-  defp do_verify(attrs, signature_b64, public_key_b64, sender_id) do
+  defp do_verify(attrs, signature_b64, public_key_b64, sender_id, device_id) do
     with {:ok, signature} <- decode_base64(signature_b64, :signature),
          {:ok, public_key} <- decode_base64(public_key_b64, :public_key),
          :ok <- validate_key_length(public_key),
          :ok <- validate_signature_length(signature),
-         :ok <- verify_trusted_key(sender_id, public_key_b64),
+         :ok <- verify_trusted_key(sender_id, device_id, public_key_b64),
          signed_data <- build_signed_data(attrs) do
       if :crypto.verify(:eddsa, :none, signed_data, signature, [public_key, :ed25519]) do
         :ok
       else
         Logger.warning("Message signature verification failed",
           sender_id: sender_id,
+          device_id: device_id,
           domain: :signature
         )
 
@@ -79,41 +85,61 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   end
 
   @doc false
-  def verify_trusted_key(nil, _public_key_b64), do: :ok
+  def verify_trusted_key(nil, _device_id, _public_key_b64), do: :ok
 
-  def verify_trusted_key(sender_id, public_key_b64) do
+  def verify_trusted_key(sender_id, device_id, public_key_b64) do
     stored_key =
-      from(k in SenderPublicKey, where: k.user_id == ^sender_id, select: k.public_key)
+      from(k in SenderPublicKey,
+        where: k.user_id == ^sender_id and k.device_id == ^device_id,
+        select: k.public_key
+      )
       |> Repo.one()
 
     case stored_key do
-      # No key registered yet — TOFU: register this key
+      # Pas de clé enregistrée pour ce couple (user, device) — TOFU : on enregistre
       nil ->
-        register_key(sender_id, public_key_b64)
+        register_key(sender_id, device_id, public_key_b64)
 
-      # Provided key matches the trusted key
+      # Clé connue et identique
       ^public_key_b64 ->
         :ok
 
-      # Provided key differs from the trusted key — reject
+      # Clé différente de celle connue pour ce device — rejet
       _ ->
-        Logger.warning("Untrusted public key", sender_id: sender_id, domain: :signature)
+        Logger.warning("Untrusted public key",
+          sender_id: sender_id,
+          device_id: device_id,
+          domain: :signature
+        )
+
         {:error, :untrusted_public_key}
     end
   end
 
-  defp register_key(sender_id, public_key_b64) do
+  defp register_key(sender_id, device_id, public_key_b64) do
     case %SenderPublicKey{}
-         |> SenderPublicKey.changeset(%{user_id: sender_id, public_key: public_key_b64})
+         |> SenderPublicKey.changeset(%{
+           user_id: sender_id,
+           device_id: device_id,
+           public_key: public_key_b64
+         })
          |> Repo.insert() do
       {:ok, _} ->
-        Logger.info("Public key registered (TOFU)", sender_id: sender_id, domain: :signature)
+        Logger.info("Public key registered (TOFU)",
+          sender_id: sender_id,
+          device_id: device_id,
+          domain: :signature
+        )
+
         :ok
 
       {:error, _changeset} ->
-        # Race condition: another request registered a key first — verify it matches
+        # Race condition : un autre process a enregistré la clé en premier — on vérifie
         stored =
-          from(k in SenderPublicKey, where: k.user_id == ^sender_id, select: k.public_key)
+          from(k in SenderPublicKey,
+            where: k.user_id == ^sender_id and k.device_id == ^device_id,
+            select: k.public_key
+          )
           |> Repo.one()
 
         if stored == public_key_b64, do: :ok, else: {:error, :untrusted_public_key}

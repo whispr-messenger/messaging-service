@@ -122,11 +122,14 @@ defmodule WhisprMessagingWeb.MessageController do
     message_params = params["message"] || Map.drop(params, ["id"])
     user_id = conn.assigns[:user_id]
 
+    device_id = conn.assigns[:device_id]
+
     # Ensure conversation_id and sender_id are set
     params_with_conv =
       message_params
       |> Map.put("conversation_id", conversation_id)
       |> Map.put_new("sender_id", user_id)
+      |> then(fn p -> if device_id, do: Map.put(p, "device_id", device_id), else: p end)
       |> resolve_ttl_seconds()
 
     if is_nil(user_id) do
