@@ -222,5 +222,8 @@ defmodule WhisprMessagingWeb.Router do
 
     # Force-ferme toutes les sessions WebSocket actives d'un user (ban, reset mdp, compromission).
     delete "/admin/users/:user_id/socket", AdminSocketController, :disconnect
+
+    # Etat E2EE d'une conversation — consomme par media-service (defense in depth).
+    get "/internal/conversations/:id/e2ee-status", InternalConversationController, :e2ee_status
   end
 end
