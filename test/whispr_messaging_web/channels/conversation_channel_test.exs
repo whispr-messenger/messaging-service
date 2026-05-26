@@ -19,7 +19,8 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{"test" => true},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     # Add both users as members

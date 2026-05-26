@@ -10,7 +10,8 @@ defmodule WhisprMessaging.ConversationServerTest do
       Conversations.create_conversation(%{
         type: "group",
         metadata: %{"name" => "Test Group"},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     # Create test users

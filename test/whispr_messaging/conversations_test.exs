@@ -246,7 +246,12 @@ defmodule WhisprMessaging.ConversationsTest do
       other_id = Ecto.UUID.generate()
 
       {:ok, conv} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
       {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
@@ -300,7 +305,12 @@ defmodule WhisprMessaging.ConversationsTest do
       other_id = Ecto.UUID.generate()
 
       {:ok, conv} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
       {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)
@@ -336,7 +346,12 @@ defmodule WhisprMessaging.ConversationsTest do
       other_id = Ecto.UUID.generate()
 
       {:ok, conv} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       {:ok, _} = Conversations.add_conversation_member(conv.id, user_id)
       {:ok, _} = Conversations.add_conversation_member(conv.id, other_id)

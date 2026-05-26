@@ -23,7 +23,8 @@ defmodule WhisprMessaging.Workers.ScheduledMessageWorkerTest do
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
