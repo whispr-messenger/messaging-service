@@ -67,7 +67,8 @@ defmodule WhisprMessaging.DataCase do
     default_attrs = %{
       type: "direct",
       metadata: %{"test" => true},
-      is_active: true
+      is_active: true,
+      e2ee_enabled: false
     }
 
     attrs = Map.merge(default_attrs, attrs)

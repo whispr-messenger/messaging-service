@@ -212,6 +212,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       {:error, :sanctioned} ->
         {:reply, {:error, %{reason: "sanctioned"}}, socket}
 
+      {:error, :plaintext_not_allowed_on_e2ee_conversation} ->
+        {:reply, {:error, %{reason: "plaintext_not_allowed_on_e2ee_conversation"}}, socket}
+
       {:error, reason}
       when reason in [
              :invalid_signature,

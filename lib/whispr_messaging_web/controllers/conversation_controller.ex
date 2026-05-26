@@ -989,12 +989,14 @@ defmodule WhisprMessagingWeb.ConversationController do
   end
 
   @doc """
-  Bascule E2EE sur une conversation directe.
+  Upgrade E2EE irreversible (Option Z).
   PATCH /api/v1/conversations/:id/e2ee
 
-  Body: {"e2ee_enabled": true|false}
-  Erreur 400 si conversation de type group.
-  Erreur 403 si l'utilisateur n'est pas membre.
+  Body: {"enable": true}
+  - Idempotent : si deja true -> 204 sans erreur.
+  - Downgrade (enable: false) -> 400 :e2ee_downgrade_forbidden.
+  - Membre authentifie requis.
+  - Broadcast WS "e2ee_enabled" a tous les membres apres upgrade.
   """
   def update_e2ee(conn, %{"id" => conversation_id} = params) do
     user_id = conn.assigns[:user_id]
@@ -1002,29 +1004,33 @@ defmodule WhisprMessagingWeb.ConversationController do
     if is_nil(user_id) do
       conn |> put_status(:unauthorized) |> json(%{error: "Unauthorized"})
     else
-      e2ee_enabled = Map.get(params, "e2ee_enabled")
+      enable = Map.get(params, "enable")
 
-      if is_nil(e2ee_enabled) do
+      if is_nil(enable) do
         conn
         |> put_status(:bad_request)
-        |> json(%{error: "e2ee_enabled is required"})
+        |> json(%{error: "enable is required"})
       else
         with {:ok, conversation} <- Conversations.get_conversation(conversation_id),
              true <- Conversations.user_is_member?(conversation_id, user_id),
              {:ok, updated} <-
-               Conversations.update_e2ee(conversation, %{e2ee_enabled: e2ee_enabled}) do
-          json(conn, %{
-            data: %{
-              conversation_id: conversation_id,
-              e2ee_enabled: updated.e2ee_enabled
-            }
-          })
+               Conversations.enable_e2ee(conversation, %{"enable" => enable}) do
+          if updated.e2ee_enabled and not conversation.e2ee_enabled do
+            broadcast_e2ee_enabled(conversation_id)
+          end
+
+          send_resp(conn, :no_content, "")
         else
           {:error, :not_found} ->
             conn |> put_status(:not_found) |> json(%{error: "Conversation not found"})
 
           false ->
             conn |> put_status(:forbidden) |> json(%{error: "Forbidden"})
+
+          {:error, %Ecto.Changeset{errors: [{_field, {"e2ee_downgrade_forbidden", _}}]}} ->
+            conn
+            |> put_status(:bad_request)
+            |> json(%{error: "e2ee_downgrade_forbidden"})
 
           {:error, %Ecto.Changeset{} = changeset} ->
             errors =
@@ -1038,6 +1044,32 @@ defmodule WhisprMessagingWeb.ConversationController do
         end
       end
     end
+  end
+
+  # Notifie tous les membres de la conv que E2EE vient d'etre active,
+  # pour qu'ils generent / distribuent les sender_keys cote mobile.
+  defp broadcast_e2ee_enabled(conversation_id) do
+    members = Conversations.list_conversation_members(conversation_id)
+
+    payload = %{
+      conversation_id: conversation_id,
+      e2ee_enabled: true,
+      timestamp: DateTime.utc_now()
+    }
+
+    WhisprMessagingWeb.Endpoint.broadcast(
+      "conversation:#{conversation_id}",
+      "e2ee_enabled",
+      payload
+    )
+
+    Enum.each(members, fn member ->
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "user:#{member.user_id}",
+        "e2ee_enabled",
+        payload
+      )
+    end)
   end
 
   # Private rendering functions

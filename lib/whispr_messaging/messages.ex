@@ -50,7 +50,8 @@ defmodule WhisprMessaging.Messages do
   """
   def create_message(attrs \\ %{}) do
     # Verify signature before persisting (no DB write on failure)
-    with :ok <- SignatureVerifier.verify(attrs) do
+    with :ok <- SignatureVerifier.verify(attrs),
+         :ok <- validate_e2ee_policy(attrs) do
       changeset = Message.changeset(%Message{}, attrs)
 
       with :ok <- validate_reply_to(changeset) do
@@ -67,6 +68,31 @@ defmodule WhisprMessaging.Messages do
             error
         end
       end
+    end
+  end
+
+  # Valide que le message respecte la politique E2EE de la conversation.
+  # Conv e2ee_enabled=true  -> ciphertext obligatoire, content_format="olm_v1", pas de plaintext.
+  # Conv e2ee_enabled=false -> comportement actuel, pas de contrainte supplementaire.
+  # On fail-open sur erreur DB (conversation non trouvee) pour ne pas bloquer l'envoi.
+  defp validate_e2ee_policy(attrs) do
+    conversation_id =
+      attrs[:conversation_id] || attrs["conversation_id"]
+
+    case Conversations.get_conversation(conversation_id) do
+      {:ok, %Conversation{e2ee_enabled: true}} ->
+        format = attrs[:content_format] || attrs["content_format"] || "plaintext"
+        ciphertext = attrs[:ciphertext] || attrs["ciphertext"]
+
+        if format == "olm_v1" and not is_nil(ciphertext) and ciphertext != "" do
+          :ok
+        else
+          {:error, :plaintext_not_allowed_on_e2ee_conversation}
+        end
+
+      _ ->
+        # conv plaintext ou non trouvee -> pas de contrainte
+        :ok
     end
   end
 
