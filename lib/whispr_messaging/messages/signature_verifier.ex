@@ -88,12 +88,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
   def verify_trusted_key(nil, _device_id, _public_key_b64), do: :ok
 
   def verify_trusted_key(sender_id, device_id, public_key_b64) do
-    stored_key =
-      from(k in SenderPublicKey,
-        where: k.user_id == ^sender_id and k.device_id == ^device_id,
-        select: k.public_key
-      )
-      |> Repo.one()
+    stored_key = fetch_stored_key(sender_id, device_id)
 
     case stored_key do
       # Pas de clé enregistrée pour ce couple (user, device) — TOFU : on enregistre
@@ -116,6 +111,24 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
     end
   end
 
+  # Ecto interdit `k.device_id == ^nil` (ArgumentError unsafe comparison).
+  # On branche selon la nullite du device_id pour utiliser is_nil/1 le cas echeant.
+  defp fetch_stored_key(sender_id, nil) do
+    from(k in SenderPublicKey,
+      where: k.user_id == ^sender_id and is_nil(k.device_id),
+      select: k.public_key
+    )
+    |> Repo.one()
+  end
+
+  defp fetch_stored_key(sender_id, device_id) do
+    from(k in SenderPublicKey,
+      where: k.user_id == ^sender_id and k.device_id == ^device_id,
+      select: k.public_key
+    )
+    |> Repo.one()
+  end
+
   defp register_key(sender_id, device_id, public_key_b64) do
     case %SenderPublicKey{}
          |> SenderPublicKey.changeset(%{
@@ -135,12 +148,7 @@ defmodule WhisprMessaging.Messages.SignatureVerifier do
 
       {:error, _changeset} ->
         # Race condition : un autre process a enregistré la clé en premier — on vérifie
-        stored =
-          from(k in SenderPublicKey,
-            where: k.user_id == ^sender_id and k.device_id == ^device_id,
-            select: k.public_key
-          )
-          |> Repo.one()
+        stored = fetch_stored_key(sender_id, device_id)
 
         if stored == public_key_b64, do: :ok, else: {:error, :untrusted_public_key}
     end
