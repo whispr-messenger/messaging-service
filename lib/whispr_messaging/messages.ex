@@ -608,16 +608,6 @@ defmodule WhisprMessaging.Messages do
   def mark_conversation_read(conversation_id, user_id, timestamp \\ nil) do
     read_time = timestamp || DateTime.utc_now() |> DateTime.truncate(:second)
 
-    # Update delivery statuses for unread messages
-    _query =
-      from ds in DeliveryStatus,
-        join: m in Message,
-        on: m.id == ds.message_id,
-        where: m.conversation_id == ^conversation_id,
-        where: ds.user_id == ^user_id,
-        where: is_nil(ds.read_at),
-        where: not is_nil(ds.delivered_at) or is_nil(ds.delivered_at)
-
     update_query =
       from ds in DeliveryStatus,
         join: m in Message,
