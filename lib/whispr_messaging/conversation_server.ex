@@ -632,18 +632,17 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp notify_offline_members(message, state) do
-    # Get all conversation members from state
     member_ids = Enum.map(state.members, & &1.user_id)
 
-    # Get online users from Presence
-    # Presence keys are strings (user_ids)
+    # MapSet pour la difference : O(n log n) et typesafe (evite le
+    # comportement silencieux de `--` si les types divergent un jour).
     presence_list = Presence.list("conversation:#{state.conversation_id}")
-    online_user_ids = Map.keys(presence_list)
+    online_set = MapSet.new(Map.keys(presence_list))
 
-    # Calculate offline users
-    offline_user_ids = member_ids -- online_user_ids
-    # Remove sender from offline list if present
-    offline_user_ids = List.delete(offline_user_ids, message.sender_id)
+    offline_user_ids =
+      member_ids
+      |> Enum.reject(&MapSet.member?(online_set, &1))
+      |> List.delete(message.sender_id)
 
     unless Enum.empty?(offline_user_ids) do
       Task.Supervisor.start_child(WhisprMessaging.TaskSupervisor, fn ->
@@ -799,11 +798,12 @@ defmodule WhisprMessaging.ConversationServer do
   end
 
   defp perform_cleanup(state) do
-    # Clean up old typing indicators (older than 30 seconds)
-    _now = System.system_time(:second)
-    # This would normally involve checking timestamps, but for simplicity
-    # we'll just clear typing users if they've been typing too long
-    new_state = %{state | typing_users: MapSet.new()}
+    # Annule tous les timers watchdog avant de vider typing_users.
+    # Sans ca, les refs en attente dans typing_timers continuent de
+    # firer apres le reset, envoyant des "stop typing" fantomes et
+    # laissant des refs orphelines dans la map.
+    Enum.each(state.typing_timers, fn {_user_id, ref} -> Process.cancel_timer(ref) end)
+    new_state = %{state | typing_users: MapSet.new(), typing_timers: %{}}
 
     # Update last activity if conversation has been idle
     if DateTime.diff(DateTime.utc_now(), state.last_activity, :minute) > 5 do
