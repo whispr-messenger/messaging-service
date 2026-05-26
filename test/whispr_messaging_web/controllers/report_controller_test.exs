@@ -9,7 +9,12 @@ defmodule WhisprMessagingWeb.ReportControllerTest do
     admin_id = Ecto.UUID.generate()
 
     {:ok, conversation} =
-      Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+      Conversations.create_conversation(%{
+        type: "direct",
+        metadata: %{},
+        is_active: true,
+        e2ee_enabled: false
+      })
 
     Conversations.add_conversation_member(conversation.id, reporter_id)
     Conversations.add_conversation_member(conversation.id, reported_user_id)

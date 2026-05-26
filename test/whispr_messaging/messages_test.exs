@@ -15,7 +15,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{"test" => true},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       # ajoute les membres de test
@@ -247,7 +248,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       sender_id = Ecto.UUID.generate()
@@ -334,14 +336,16 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       {:ok, conversation2} =
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       user_id = Ecto.UUID.generate()
@@ -446,7 +450,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       user1_id = Ecto.UUID.generate()
@@ -588,7 +593,8 @@ defmodule WhisprMessaging.MessagesTest do
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       # ajoute les membres
@@ -709,7 +715,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       user1_id = Ecto.UUID.generate()
@@ -794,7 +801,8 @@ defmodule WhisprMessaging.MessagesTest do
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       # remplace conversation_id par celui de la vraie conversation
@@ -826,7 +834,8 @@ defmodule WhisprMessaging.MessagesTest do
         WhisprMessaging.Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       conversation_id = conversation.id
@@ -855,7 +864,8 @@ defmodule WhisprMessaging.MessagesTest do
         WhisprMessaging.Conversations.create_conversation(%{
           type: "group",
           metadata: %{"name" => "System Group"},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       conversation_id = conversation.id
@@ -880,7 +890,12 @@ defmodule WhisprMessaging.MessagesTest do
   describe "ephemeral messages" do
     setup do
       {:ok, conversation} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       user_id = Ecto.UUID.generate()
       {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
@@ -999,7 +1014,12 @@ defmodule WhisprMessaging.MessagesTest do
   describe "drafts" do
     setup do
       {:ok, conversation} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       user_id = Ecto.UUID.generate()
       {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
@@ -1060,7 +1080,12 @@ defmodule WhisprMessaging.MessagesTest do
   describe "scheduled messages" do
     setup do
       {:ok, conversation} =
-        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
 
       user_id = Ecto.UUID.generate()
       {:ok, _member} = Conversations.add_conversation_member(conversation.id, user_id)
@@ -1178,7 +1203,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       user_id = Ecto.UUID.generate()
@@ -1259,7 +1285,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       user1_id = Ecto.UUID.generate()
@@ -1321,7 +1348,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
@@ -1330,7 +1358,8 @@ defmodule WhisprMessaging.MessagesTest do
         Conversations.create_conversation(%{
           type: "direct",
           metadata: %{},
-          is_active: true
+          is_active: true,
+          e2ee_enabled: false
         })
 
       {:ok, _} = Conversations.add_conversation_member(foreign_conv.id, other_user_id)

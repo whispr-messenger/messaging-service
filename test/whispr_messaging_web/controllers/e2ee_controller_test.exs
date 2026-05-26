@@ -16,18 +16,21 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
     user2_id = Ecto.UUID.generate()
     outsider_id = Ecto.UUID.generate()
 
+    # Convs avec e2ee_enabled=false pour les tests de la phase 1 (bascule, plaintext, search)
     {:ok, direct_conv} =
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     {:ok, group_conv} =
       Conversations.create_conversation(%{
         type: "group",
         metadata: %{"name" => "Test Group"},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     {:ok, _} = Conversations.add_conversation_member(direct_conv.id, user1_id)
@@ -120,11 +123,11 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
   end
 
   # -----------------------------------------------------------------------
-  # WHISPR-1484 — PATCH /conversations/:id/e2ee
+  # WHISPR-1484 — PATCH /conversations/:id/e2ee (Option Z - upgrade irreversible)
   # -----------------------------------------------------------------------
 
   describe "PATCH /conversations/:id/e2ee (WHISPR-1484)" do
-    test "active E2EE sur une conv directe", %{
+    test "active E2EE sur une conv directe (enable=true)", %{
       direct_conv: conv,
       user1_id: user1_id
     } do
@@ -133,21 +136,20 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
         |> authenticated_conn(user1_id)
         |> json_conn()
         |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{
-          "e2ee_enabled" => true
+          "enable" => true
         })
 
-      assert conn.status == 200
-      body = Jason.decode!(conn.resp_body)
-      assert body["data"]["e2ee_enabled"] == true
+      assert conn.status == 204
 
       updated = Repo.get(Conversations.Conversation, conv.id)
       assert updated.e2ee_enabled == true
     end
 
-    test "desactive E2EE (toggle off)", %{
+    test "downgrade (enable=false) retourne 400 e2ee_downgrade_forbidden", %{
       direct_conv: conv,
       user1_id: user1_id
     } do
+      # D'abord upgrade pour avoir e2ee_enabled=true
       Conversations.update_e2ee(conv, %{e2ee_enabled: true})
 
       conn =
@@ -155,15 +157,15 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
         |> authenticated_conn(user1_id)
         |> json_conn()
         |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{
-          "e2ee_enabled" => false
+          "enable" => false
         })
 
-      assert conn.status == 200
+      assert conn.status == 400
       body = Jason.decode!(conn.resp_body)
-      assert body["data"]["e2ee_enabled"] == false
+      assert body["error"] == "e2ee_downgrade_forbidden"
     end
 
-    test "retourne 400 si e2ee_enabled manquant", %{
+    test "retourne 400 si enable manquant", %{
       direct_conv: conv,
       user1_id: user1_id
     } do
@@ -172,21 +174,6 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
         |> authenticated_conn(user1_id)
         |> json_conn()
         |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{})
-
-      assert conn.status == 400
-    end
-
-    test "retourne 400 pour une conv de groupe", %{
-      group_conv: conv,
-      user1_id: user1_id
-    } do
-      conn =
-        build_conn()
-        |> authenticated_conn(user1_id)
-        |> json_conn()
-        |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{
-          "e2ee_enabled" => true
-        })
 
       assert conn.status == 400
     end
@@ -200,7 +187,7 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
         |> authenticated_conn(outsider_id)
         |> json_conn()
         |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{
-          "e2ee_enabled" => true
+          "enable" => true
         })
 
       assert conn.status == 403
@@ -211,7 +198,7 @@ defmodule WhisprMessagingWeb.E2eeControllerTest do
         build_conn()
         |> json_conn()
         |> patch(~p"/messaging/api/v1/conversations/#{conv.id}/e2ee", %{
-          "e2ee_enabled" => true
+          "enable" => true
         })
 
       assert conn.status == 401

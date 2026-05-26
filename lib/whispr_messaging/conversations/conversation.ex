@@ -25,8 +25,8 @@ defmodule WhisprMessaging.Conversations.Conversation do
     field :is_active, :boolean, default: true
     field :invite_token, :binary_id
     field :invite_expires_at, :utc_datetime
-    # E2EE opt-in — false par defaut, settable via PATCH /conversations/:id/e2ee
-    field :e2ee_enabled, :boolean, default: false
+    # E2EE force par defaut sur les nouvelles convs (decision 2026-05-26)
+    field :e2ee_enabled, :boolean, default: true
 
     has_many :members, ConversationMember, foreign_key: :conversation_id
     has_many :messages, Message, foreign_key: :conversation_id
@@ -48,7 +48,8 @@ defmodule WhisprMessaging.Conversations.Conversation do
       :metadata,
       :is_active,
       :invite_token,
-      :invite_expires_at
+      :invite_expires_at,
+      :e2ee_enabled
     ])
     |> validate_required([:type])
     |> validate_inclusion(:type, @conversation_types)
@@ -67,8 +68,8 @@ defmodule WhisprMessaging.Conversations.Conversation do
   end
 
   @doc """
-  Changeset pour activer ou desactiver E2EE sur une conversation.
-  E2EE n'est autorise que sur les conversations directes (1v1).
+  Changeset pour activer ou desactiver E2EE sur une conversation directe.
+  E2EE reste limite aux conversations directes pour l'ancien endpoint toggle.
   """
   def e2ee_changeset(%__MODULE__{type: "group"} = conversation, _attrs) do
     conversation
@@ -80,6 +81,33 @@ defmodule WhisprMessaging.Conversations.Conversation do
     conversation
     |> cast(attrs, [:e2ee_enabled])
     |> validate_required([:e2ee_enabled])
+  end
+
+  @doc """
+  Changeset pour le upgrade irreversible E2EE (Option Z).
+  Accepte direct ET group. Interdit le downgrade (true -> false).
+  Idempotent si deja a true.
+  """
+  def enable_e2ee_changeset(%__MODULE__{e2ee_enabled: true} = conversation, %{"enable" => true}) do
+    # idempotent — deja active, rien a faire
+    change(conversation, %{})
+  end
+
+  def enable_e2ee_changeset(%__MODULE__{e2ee_enabled: true} = conversation, %{"enable" => false}) do
+    conversation
+    |> change(%{})
+    |> add_error(:e2ee_enabled, "e2ee_downgrade_forbidden")
+  end
+
+  def enable_e2ee_changeset(conversation, %{"enable" => true}) do
+    conversation
+    |> change(%{e2ee_enabled: true})
+  end
+
+  def enable_e2ee_changeset(conversation, _attrs) do
+    conversation
+    |> change(%{})
+    |> add_error(:enable, "must be true to upgrade E2EE — downgrade is forbidden")
   end
 
   @doc """

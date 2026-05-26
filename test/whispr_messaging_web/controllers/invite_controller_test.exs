@@ -20,7 +20,8 @@ defmodule WhisprMessagingWeb.InviteControllerTest do
       Conversations.create_conversation(%{
         type: "group",
         metadata: %{"name" => "Invite test group"},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     admin_settings =

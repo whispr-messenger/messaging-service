@@ -165,6 +165,11 @@ defmodule WhisprMessagingWeb.MessageController do
           |> put_status(:forbidden)
           |> json(%{error: "Unauthorized"})
 
+        {:error, :plaintext_not_allowed_on_e2ee_conversation} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "plaintext_not_allowed_on_e2ee_conversation"})
+
         {:error, reason}
         when reason in [
                :invalid_signature,

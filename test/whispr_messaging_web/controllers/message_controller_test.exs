@@ -15,7 +15,8 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{"test" => true},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     # Add members
@@ -825,7 +826,7 @@ defmodule WhisprMessagingWeb.MessageControllerTest do
         })
 
       {:ok, target} =
-        Conversations.create_conversation(%{type: "direct", is_active: true})
+        Conversations.create_conversation(%{type: "direct", is_active: true, e2ee_enabled: false})
 
       {:ok, _} = Conversations.add_conversation_member(target.id, user1_id)
       {:ok, _} = Conversations.add_conversation_member(target.id, user2_id)

@@ -11,7 +11,8 @@ defmodule WhisprMessagingWeb.SanctionControllerTest do
       Conversations.create_conversation(%{
         type: "group",
         metadata: %{"name" => "Test"},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     %{admin_id: admin_id, user_id: user_id, conversation: conversation}

@@ -15,7 +15,8 @@ defmodule WhisprMessagingWeb.ReactionControllerTest do
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{"test" => true},
-        is_active: true
+        is_active: true,
+        e2ee_enabled: false
       })
 
     {:ok, _m1} = Conversations.add_conversation_member(conversation.id, user1_id)

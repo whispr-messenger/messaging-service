@@ -22,11 +22,13 @@ defmodule WhisprMessaging.Conversations do
   # Conversation CRUD operations
 
   @doc """
-  Creates a new conversation.
+  Creates a new conversation. E2EE active par defaut si non specifie.
   """
   def create_conversation(attrs \\ %{}) do
+    attrs_with_default = Map.put_new(attrs, :e2ee_enabled, true)
+
     %Conversation{}
-    |> Conversation.changeset(attrs)
+    |> Conversation.changeset(attrs_with_default)
     |> Repo.insert()
   end
 
@@ -81,6 +83,17 @@ defmodule WhisprMessaging.Conversations do
   def update_e2ee(%Conversation{} = conversation, attrs) do
     conversation
     |> Conversation.e2ee_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Upgrade irreversible E2EE (Option Z) — false -> true uniquement.
+  Idempotent si deja true. Refuse le downgrade avec :e2ee_downgrade_forbidden.
+  Accepte direct ET group.
+  """
+  def enable_e2ee(%Conversation{} = conversation, attrs) do
+    conversation
+    |> Conversation.enable_e2ee_changeset(attrs)
     |> Repo.update()
   end
 
