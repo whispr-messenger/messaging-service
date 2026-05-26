@@ -805,11 +805,6 @@ defmodule WhisprMessaging.ConversationServer do
     Enum.each(state.typing_timers, fn {_user_id, ref} -> Process.cancel_timer(ref) end)
     new_state = %{state | typing_users: MapSet.new(), typing_timers: %{}}
 
-    # Update last activity if conversation has been idle
-    if DateTime.diff(DateTime.utc_now(), state.last_activity, :minute) > 5 do
-      Logger.debug("Conversation idle for 5+ minutes")
-    end
-
     new_state
   end
 

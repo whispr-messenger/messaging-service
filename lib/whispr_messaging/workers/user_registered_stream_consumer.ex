@@ -91,7 +91,10 @@ defmodule WhisprMessaging.Workers.UserRegisteredStreamConsumer do
         send(self(), :consume_loop)
 
       {:error, reason} ->
-        Logger.error("[UserRegisteredStreamConsumer] XREADGROUP echoue: #{inspect(reason)}")
+        Logger.debug(
+          "[UserRegisteredStreamConsumer] XREADGROUP timeout (normal): #{inspect(reason)}"
+        )
+
         Process.send_after(self(), :consume_loop, @error_backoff_ms)
     end
 
