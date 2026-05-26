@@ -178,6 +178,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
 
     reply_to_id = Map.get(payload, "reply_to_id")
 
+    device_id = socket.assigns[:device_id]
+
     message_attrs =
       %{
         conversation_id: conversation_id,
@@ -188,6 +190,7 @@ defmodule WhisprMessagingWeb.ConversationChannel do
         metadata: metadata
       }
       |> maybe_put(:reply_to_id, reply_to_id)
+      |> maybe_put(:device_id, device_id)
       |> maybe_put("signature", Map.get(payload, "signature"))
       |> maybe_put("sender_public_key", Map.get(payload, "sender_public_key"))
 
