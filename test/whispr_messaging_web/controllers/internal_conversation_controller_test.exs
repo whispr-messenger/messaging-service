@@ -21,7 +21,9 @@ defmodule WhisprMessagingWeb.InternalConversationControllerTest do
       Conversations.create_conversation(%{
         type: "direct",
         metadata: %{},
-        is_active: true
+        is_active: true,
+        # e2ee_enabled=true par defaut depuis PR #132 - forcer false pour ce test plaintext
+        e2ee_enabled: false
       })
 
     {:ok, e2ee_conv} =
