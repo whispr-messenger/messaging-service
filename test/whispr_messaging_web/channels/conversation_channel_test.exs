@@ -869,4 +869,93 @@ defmodule WhisprMessagingWeb.ConversationChannelTest do
       assert Process.alive?(channel_pid)
     end
   end
+
+  # Le serializer WS doit propager ciphertext et content_format pour que les
+  # autres clients puissent dechiffrer un message E2EE. Sans ca, un message
+  # olm_v1 etait persiste cote serveur mais le ciphertext ne sortait jamais
+  # du serveur.
+  describe "E2EE WS serialization" do
+    setup %{socket: socket, conversation: conversation, user_id: user_id} do
+      {:ok, _, socket} =
+        subscribe_and_join(
+          socket,
+          ConversationChannel,
+          "conversation:#{conversation.id}"
+        )
+
+      # Ciphertext binaire non-UTF8 pour forcer le passage par Base.encode64
+      # dans safe_binary_content (un blob Olm reel est rarement du texte
+      # valide).
+      raw_ciphertext = <<255, 254, 0, 1, 2, 200, 201>>
+
+      {:ok, message} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content_format: "olm_v1",
+          ciphertext: raw_ciphertext,
+          client_random: 71_001
+        })
+
+      %{socket: socket, message: message, raw_ciphertext: raw_ciphertext}
+    end
+
+    test "edit reply renvoie ciphertext et contentFormat pour un message E2EE existant", %{
+      socket: socket,
+      conversation: conversation,
+      user_id: user_id
+    } do
+      # On envoie d'abord un message plaintext qu'on va editer (l'edition
+      # de olm_v1 est interdite par le schema), juste pour verifier que la
+      # serialisation expose les nouveaux champs sur tous les retours.
+      {:ok, plain_msg} =
+        Messages.create_message(%{
+          conversation_id: conversation.id,
+          sender_id: user_id,
+          message_type: "text",
+          content: "before edit",
+          client_random: 71_002
+        })
+
+      edit_attrs = %{
+        "message_id" => plain_msg.id,
+        "content" => "after edit",
+        "metadata" => %{}
+      }
+
+      ref = push(socket, "edit_message", edit_attrs)
+
+      assert_reply ref, :ok, %{message: edited}
+      assert Map.has_key?(edited, "ciphertext")
+      assert edited["contentFormat"] == "plaintext"
+      assert edited["content"] == "after edit"
+
+      assert_broadcast "message_edited", %{message: broadcast_msg}
+      assert Map.has_key?(broadcast_msg, "ciphertext")
+      assert broadcast_msg["contentFormat"] == "plaintext"
+    end
+
+    test "delete reply expose ciphertext et contentFormat pour un message olm_v1", %{
+      socket: socket,
+      message: message,
+      raw_ciphertext: raw_ciphertext
+    } do
+      # On simule la suppression d'un message E2EE et on verifie que la
+      # serialisation du retour inclut bien le ciphertext encode et le
+      # content_format.
+      delete_attrs = %{
+        "message_id" => message.id,
+        "delete_for_everyone" => true
+      }
+
+      ref = push(socket, "delete_message", delete_attrs)
+
+      assert_reply ref, :ok, %{message: serialized}
+      assert serialized["contentFormat"] == "olm_v1"
+      # ciphertext binaire non-UTF8 sort en Base64 (cf safe_binary_content).
+      assert is_binary(serialized["ciphertext"])
+      assert serialized["ciphertext"] == Base.encode64(raw_ciphertext)
+    end
+  end
 end

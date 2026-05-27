@@ -585,6 +585,9 @@ defmodule WhisprMessagingWeb.ConversationChannel do
   defp serialize_message(%Message{} = message) do
     alias WhisprMessaging.Messages.DeliveryStatus
 
+    # E2EE: on expose ciphertext + content_format pour que les autres clients
+    # puissent dechiffrer. Le serveur ne fait que router le ciphertext Olm, il
+    # ne le manipule pas. content reste nil pour les messages olm_v1.
     base = %{
       id: message.id,
       conversation_id: message.conversation_id,
@@ -592,6 +595,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       reply_to_id: message.reply_to_id,
       message_type: message.message_type,
       content: safe_binary_content(message.content),
+      ciphertext: safe_binary_content(message.ciphertext),
+      content_format: message.content_format,
       metadata: message.metadata,
       client_random: message.client_random,
       sent_at: message.sent_at,
@@ -628,6 +633,8 @@ defmodule WhisprMessagingWeb.ConversationChannel do
       id: parent.id,
       sender_id: parent.sender_id,
       content: safe_binary_content(parent.content),
+      ciphertext: safe_binary_content(parent.ciphertext),
+      content_format: parent.content_format,
       message_type: parent.message_type,
       is_deleted: parent.is_deleted
     }

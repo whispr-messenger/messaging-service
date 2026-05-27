@@ -111,6 +111,50 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       refute Map.has_key?(rendered_group, "memberUserIds")
     end
 
+    # Le client mobile utilise e2eeEnabled comme source de verite pour router
+    # le pipeline plaintext / olm_v1. On expose la valeur sur chaque item du
+    # listing pour eviter un re-fetch par conversation.
+    test "exposes e2eeEnabled on each conversation in the listing", %{
+      user1_id: user1_id,
+      user2_id: user2_id
+    } do
+      {:ok, conv_e2ee} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: true
+        })
+
+      {:ok, conv_plain} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
+
+      Conversations.add_conversation_member(conv_e2ee.id, user1_id)
+      Conversations.add_conversation_member(conv_e2ee.id, user2_id)
+      Conversations.add_conversation_member(conv_plain.id, user1_id)
+      Conversations.add_conversation_member(conv_plain.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations")
+        |> json_response(200)
+
+      rendered_e2ee = Enum.find(response["data"], fn c -> c["id"] == conv_e2ee.id end)
+      rendered_plain = Enum.find(response["data"], fn c -> c["id"] == conv_plain.id end)
+
+      assert rendered_e2ee["e2eeEnabled"] == true
+      assert rendered_plain["e2eeEnabled"] == false
+    end
+
     test "supports filtering by type", %{user1_id: user1_id} do
       # Create direct and group conversations
       {:ok, direct_conv} =
@@ -491,6 +535,33 @@ defmodule WhisprMessagingWeb.ConversationControllerTest do
       assert response["data"]["id"] == conversation.id
       assert response["data"]["type"] == "direct"
       assert response["data"]["isActive"] == true
+    end
+
+    # Source de verite e2ee_enabled pour le client mobile : la reponse de
+    # show doit toujours porter le flag pour router le pipeline crypto sans
+    # re-fetch.
+    test "exposes e2eeEnabled in the show response", %{user1_id: user1_id, user2_id: user2_id} do
+      {:ok, conversation} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: true
+        })
+
+      Conversations.add_conversation_member(conversation.id, user1_id)
+      Conversations.add_conversation_member(conversation.id, user2_id)
+
+      conn =
+        build_conn()
+        |> authenticated_conn(user1_id)
+        |> json_conn()
+
+      response =
+        get(conn, ~p"/messaging/api/v1/conversations/#{conversation.id}")
+        |> json_response(200)
+
+      assert response["data"]["e2eeEnabled"] == true
     end
 
     test "returns 404 for non-existent conversation", %{user1_id: user1_id} do
