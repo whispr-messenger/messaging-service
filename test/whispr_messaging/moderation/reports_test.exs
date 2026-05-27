@@ -37,6 +37,24 @@ defmodule WhisprMessaging.Moderation.ReportsTest do
       assert report.evidence != %{}
     end
 
+    test "ne capture pas le plaintext quand la conv est E2EE", ctx do
+      e2ee_conv = create_test_conversation(%{e2ee_enabled: true})
+      msg = create_test_e2ee_message(e2ee_conv.id, ctx.reported_user_id)
+
+      attrs = %{
+        reporter_id: ctx.reporter_id,
+        reported_user_id: ctx.reported_user_id,
+        conversation_id: e2ee_conv.id,
+        message_id: msg.id,
+        category: "spam"
+      }
+
+      assert {:ok, report} = Reports.create_report(attrs)
+      # les cles sont stringifiees apres le round-trip Postgres JSONB
+      assert report.evidence["content_snapshot"] == nil
+      assert report.evidence["is_e2ee"] == true || report.evidence[:is_e2ee] == true
+    end
+
     test "rejects self-reporting", ctx do
       attrs = %{
         reporter_id: ctx.reporter_id,

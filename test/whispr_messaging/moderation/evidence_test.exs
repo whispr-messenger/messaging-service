@@ -39,6 +39,25 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
       assert snapshot.conversation_context.total_messages >= 1
       assert is_binary(snapshot.captured_at)
       assert snapshot.metadata.capture_version == "2.0"
+      # conv non-E2EE : contenu serialise, flag false
+      assert snapshot.reported_message.is_e2ee == false
+      assert snapshot.metadata.e2ee_protected == false
+    end
+
+    test "ne capture pas le contenu sur une conv E2EE", ctx do
+      e2ee_conv = create_test_conversation(%{e2ee_enabled: true})
+      msg = create_test_e2ee_message(e2ee_conv.id, ctx.reported_user_id)
+
+      {:ok, snapshot} = Evidence.capture_full_context(msg.id, e2ee_conv.id)
+
+      assert snapshot.reported_message.content == nil
+      assert snapshot.reported_message.is_e2ee == true
+      assert snapshot.metadata.e2ee_protected == true
+
+      Enum.each(snapshot.surrounding_messages, fn m ->
+        assert m.content == nil
+        assert m.is_e2ee == true
+      end)
     end
 
     test "returns error for non-existent message", ctx do
@@ -57,6 +76,18 @@ defmodule WhisprMessaging.Moderation.EvidenceTest do
       assert snapshot.reported_message.id == ctx.message.id
       assert snapshot.surrounding_messages == []
       assert snapshot.metadata.minimal == true
+      assert snapshot.reported_message.is_e2ee == false
+    end
+
+    test "ne capture pas le contenu sur un message E2EE (capture_minimal)", ctx do
+      e2ee_conv = create_test_conversation(%{e2ee_enabled: true})
+      msg = create_test_e2ee_message(e2ee_conv.id, ctx.reported_user_id)
+
+      {:ok, snapshot} = Evidence.capture_minimal(msg.id)
+
+      assert snapshot.reported_message.content == nil
+      assert snapshot.reported_message.is_e2ee == true
+      assert snapshot.metadata.e2ee_protected == true
     end
 
     test "returns error for non-existent message" do

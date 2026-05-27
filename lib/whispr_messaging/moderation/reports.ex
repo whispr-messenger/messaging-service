@@ -9,8 +9,9 @@ defmodule WhisprMessaging.Moderation.Reports do
   import Ecto.Query
   import WhisprMessaging.Moderation.Helpers, only: [tap_ok: 2, redis_publish: 2]
 
+  alias WhisprMessaging.Conversations.Conversation
   alias WhisprMessaging.Messages
-  alias WhisprMessaging.Moderation.Report
+  alias WhisprMessaging.Moderation.{Evidence, Report}
   alias WhisprMessaging.Repo
 
   require Logger
@@ -203,21 +204,30 @@ defmodule WhisprMessaging.Moderation.Reports do
   defp build_evidence(nil), do: %{}
 
   defp build_evidence(message_id) do
-    case Messages.get_message(message_id) do
-      {:ok, message} ->
-        %{
-          message_id: message.id,
-          sender_id: message.sender_id,
-          conversation_id: message.conversation_id,
-          message_type: message.message_type,
-          content_snapshot: if(message.content, do: Base.encode64(message.content), else: nil),
-          metadata: message.metadata,
-          sent_at: message.sent_at && DateTime.to_iso8601(message.sent_at),
-          captured_at: DateTime.utc_now() |> DateTime.to_iso8601()
-        }
+    with {:ok, message} <- Messages.get_message(message_id),
+         conversation <- Repo.get(Conversation, message.conversation_id) do
+      e2ee = conversation != nil && conversation.e2ee_enabled
 
-      _ ->
-        %{message_id: message_id, error: "message_not_found"}
+      content_snapshot =
+        cond do
+          e2ee -> nil
+          message.content -> message.content |> Base.encode64() |> Evidence.redact_string()
+          true -> nil
+        end
+
+      %{
+        message_id: message.id,
+        sender_id: message.sender_id,
+        conversation_id: message.conversation_id,
+        message_type: message.message_type,
+        content_snapshot: content_snapshot,
+        is_e2ee: e2ee,
+        metadata: message.metadata,
+        sent_at: message.sent_at && DateTime.to_iso8601(message.sent_at),
+        captured_at: DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+    else
+      _ -> %{message_id: message_id, error: "message_not_found"}
     end
   end
 
