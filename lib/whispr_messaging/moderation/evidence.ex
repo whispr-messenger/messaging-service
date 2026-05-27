@@ -8,6 +8,7 @@ defmodule WhisprMessaging.Moderation.Evidence do
 
   import Ecto.Query
 
+  alias WhisprMessaging.Conversations.Conversation
   alias WhisprMessaging.Messages.Message
   alias WhisprMessaging.Moderation.Report
   alias WhisprMessaging.Repo
@@ -58,17 +59,21 @@ defmodule WhisprMessaging.Moderation.Evidence do
     )
 
     with {:ok, reported_msg} <- fetch_message(message_id),
+         {:ok, conversation} <- fetch_conversation(conversation_id),
          surrounding <- fetch_surrounding_messages(message_id, conversation_id),
          context <- build_conversation_context(conversation_id) do
+      e2ee = conversation.e2ee_enabled
+
       snapshot = %{
-        reported_message: serialize_message(reported_msg),
-        surrounding_messages: Enum.map(surrounding, &serialize_message/1),
+        reported_message: serialize_message(reported_msg, e2ee),
+        surrounding_messages: Enum.map(surrounding, &serialize_message(&1, e2ee)),
         conversation_context: context,
         captured_at: DateTime.utc_now() |> DateTime.to_iso8601(),
         metadata: %{
           context_window: @context_window,
           total_surrounding: Enum.count(surrounding),
-          capture_version: "2.0"
+          capture_version: "2.0",
+          e2ee_protected: e2ee
         }
       }
 
@@ -82,19 +87,18 @@ defmodule WhisprMessaging.Moderation.Evidence do
   """
   @spec capture_minimal(String.t()) :: {:ok, map()} | {:error, term()}
   def capture_minimal(message_id) do
-    case fetch_message(message_id) do
-      {:ok, message} ->
-        snapshot = %{
-          reported_message: serialize_message(message),
-          surrounding_messages: [],
-          captured_at: DateTime.utc_now() |> DateTime.to_iso8601(),
-          metadata: %{capture_version: "2.0", minimal: true}
-        }
+    with {:ok, message} <- fetch_message(message_id),
+         {:ok, conversation} <- fetch_conversation(message.conversation_id) do
+      e2ee = conversation.e2ee_enabled
 
-        {:ok, snapshot}
+      snapshot = %{
+        reported_message: serialize_message(message, e2ee),
+        surrounding_messages: [],
+        captured_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+        metadata: %{capture_version: "2.0", minimal: true, e2ee_protected: e2ee}
+      }
 
-      error ->
-        error
+      {:ok, snapshot}
     end
   end
 
@@ -316,6 +320,13 @@ defmodule WhisprMessaging.Moderation.Evidence do
     end
   end
 
+  defp fetch_conversation(conversation_id) do
+    case Repo.get(Conversation, conversation_id) do
+      nil -> {:error, :conversation_not_found}
+      conversation -> {:ok, conversation}
+    end
+  end
+
   defp fetch_surrounding_messages(message_id, conversation_id) do
     # Get the reported message's timestamp for ordering context
     case fetch_message(message_id) do
@@ -370,13 +381,35 @@ defmodule WhisprMessaging.Moderation.Evidence do
     }
   end
 
-  defp serialize_message(message) do
+  # quand e2ee=true : pas de plaintext lisible cote serveur, on n'enregistre rien
+  defp serialize_message(message, true = _e2ee) do
     %{
       id: message.id,
       sender_id: message.sender_id,
       conversation_id: message.conversation_id,
       message_type: message.message_type,
-      content: if(message.content, do: Base.encode64(message.content), else: nil),
+      content: nil,
+      is_e2ee: true,
+      metadata: message.metadata,
+      inserted_at: NaiveDateTime.to_iso8601(message.inserted_at)
+    }
+  end
+
+  # conv plaintext : on redacte les patterns sensibles (emails, numeros)
+  defp serialize_message(message, false = _e2ee) do
+    safe_content =
+      case message.content do
+        nil -> nil
+        raw -> raw |> Base.encode64() |> redact_string()
+      end
+
+    %{
+      id: message.id,
+      sender_id: message.sender_id,
+      conversation_id: message.conversation_id,
+      message_type: message.message_type,
+      content: safe_content,
+      is_e2ee: false,
       metadata: message.metadata,
       inserted_at: NaiveDateTime.to_iso8601(message.inserted_at)
     }

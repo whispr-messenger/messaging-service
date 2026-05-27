@@ -108,6 +108,28 @@ defmodule WhisprMessaging.DataCase do
   end
 
   @doc """
+  Creates a valid E2EE test message (olm_v1 + ciphertext) pour les convs e2ee_enabled=true.
+  """
+  def create_test_e2ee_message(conversation_id, sender_id, attrs \\ %{}) do
+    default_attrs = %{
+      conversation_id: conversation_id,
+      sender_id: sender_id,
+      message_type: "text",
+      content_format: "olm_v1",
+      ciphertext: Base.encode64("encrypted-test-payload"),
+      client_random: System.unique_integer([:positive]),
+      metadata: %{"test" => true}
+    }
+
+    attrs = Map.merge(default_attrs, attrs)
+
+    case WhisprMessaging.Messages.create_message(attrs) do
+      {:ok, message} -> message
+      {:error, reason} -> raise "Failed to create test E2EE message: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
   Waits for a condition to be true with timeout.
   """
   def wait_until(fun, timeout \\ 1000) do
