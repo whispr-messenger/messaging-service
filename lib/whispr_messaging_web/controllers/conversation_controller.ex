@@ -1105,6 +1105,9 @@ defmodule WhisprMessagingWeb.ConversationController do
     # without an Authorization header.
     metadata = MediaClient.presign_metadata_urls(conversation.metadata, authorization)
 
+    # e2ee_enabled est expose pour que le client puisse l'utiliser comme source
+    # de verite et router le pipeline plaintext / olm_v1 cote front sans devoir
+    # re-fetcher /conversations a chaque message.
     camelize_keys(%{
       id: conversation.id,
       type: conversation.type,
@@ -1112,6 +1115,7 @@ defmodule WhisprMessagingWeb.ConversationController do
       external_group_id: conversation.external_group_id,
       metadata: metadata,
       is_active: conversation.is_active,
+      e2ee_enabled: conversation.e2ee_enabled,
       is_pinned: Map.get(settings, "is_pinned", false),
       is_archived: Map.get(settings, "is_archived", false),
       is_muted: Map.get(settings, "is_muted", false),
@@ -1307,6 +1311,7 @@ defmodule WhisprMessagingWeb.ConversationController do
             externalGroupId(:string, "External group identifier")
             metadata(:object, "Additional metadata")
             isActive(:boolean, "Whether the conversation is active")
+            e2eeEnabled(:boolean, "Whether end-to-end encryption is enabled on the conversation")
             isArchived(:boolean, "Whether archived for the authenticated user")
             isPinned(:boolean, "Whether pinned for the authenticated user")
             isMuted(:boolean, "Whether muted for the authenticated user")
@@ -1333,6 +1338,7 @@ defmodule WhisprMessagingWeb.ConversationController do
             externalGroupId(:string, "External group identifier")
             metadata(:object, "Additional metadata")
             isActive(:boolean, "Whether the conversation is active")
+            e2eeEnabled(:boolean, "Whether end-to-end encryption is enabled on the conversation")
             isArchived(:boolean, "Whether archived for the authenticated user")
             isPinned(:boolean, "Whether pinned for the authenticated user")
             isMuted(:boolean, "Whether muted for the authenticated user")
