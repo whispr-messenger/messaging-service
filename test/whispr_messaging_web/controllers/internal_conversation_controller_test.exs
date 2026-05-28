@@ -96,4 +96,60 @@ defmodule WhisprMessagingWeb.InternalConversationControllerTest do
       assert conn.status == 404
     end
   end
+
+  describe "GET /messaging/api/v1/internal/conversations/:id/members/:user_id" do
+    test "retourne 404 sans le header x-internal-token", %{direct_conv: conv} do
+      user_id = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/internal/conversations/#{conv.id}/members/#{user_id}")
+
+      assert conn.status == 404
+    end
+
+    test "retourne is_member=true pour un membre actif", %{direct_conv: conv} do
+      user_id = Ecto.UUID.generate()
+      {:ok, _member} = Conversations.add_conversation_member(conv.id, user_id)
+
+      resp =
+        build_conn()
+        |> json_conn()
+        |> with_internal_token()
+        |> get(~p"/messaging/api/v1/internal/conversations/#{conv.id}/members/#{user_id}")
+        |> json_response(200)
+
+      assert resp["is_member"] == true
+      assert resp["conversation_id"] == conv.id
+      assert resp["user_id"] == user_id
+    end
+
+    test "retourne is_member=false pour un non-membre", %{direct_conv: conv} do
+      user_id = Ecto.UUID.generate()
+
+      resp =
+        build_conn()
+        |> json_conn()
+        |> with_internal_token()
+        |> get(~p"/messaging/api/v1/internal/conversations/#{conv.id}/members/#{user_id}")
+        |> json_response(200)
+
+      assert resp["is_member"] == false
+    end
+
+    test "retourne is_member=false pour une conversation inexistante" do
+      unknown_id = Ecto.UUID.generate()
+      user_id = Ecto.UUID.generate()
+
+      resp =
+        build_conn()
+        |> json_conn()
+        |> with_internal_token()
+        |> get(~p"/messaging/api/v1/internal/conversations/#{unknown_id}/members/#{user_id}")
+        |> json_response(200)
+
+      assert resp["is_member"] == false
+    end
+  end
 end

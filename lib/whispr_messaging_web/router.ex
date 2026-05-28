@@ -231,5 +231,12 @@ defmodule WhisprMessagingWeb.Router do
 
     # Etat E2EE d'une conversation — consomme par media-service (defense in depth).
     get "/internal/conversations/:id/e2ee-status", InternalConversationController, :e2ee_status
+
+    # Membership courant d'un user dans une conversation — consomme par
+    # media-service pour autoriser le download d'un media par les membres
+    # actuels (un membre qui rejoint apres l'upload doit y avoir acces).
+    get "/internal/conversations/:id/members/:user_id",
+        InternalConversationController,
+        :member_status
   end
 end

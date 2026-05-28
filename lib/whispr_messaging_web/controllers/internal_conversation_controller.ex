@@ -36,4 +36,26 @@ defmodule WhisprMessagingWeb.InternalConversationController do
         |> json(%{error: "not_found"})
     end
   end
+
+  @doc """
+  Indique si un user est membre actif d'une conversation.
+
+  GET /messaging/api/v1/internal/conversations/:id/members/:user_id
+
+  Reponse 200 : {"conversation_id": "<uuid>", "user_id": "<uuid>", "is_member": true|false}
+
+  Utilise par media-service pour autoriser le download d'un media attache a
+  une conversation par les membres COURANTS (et pas seulement le snapshot
+  shared_with fige au moment de l'upload). Un membre qui rejoint un groupe
+  apres l'envoi d'un media doit pouvoir le telecharger.
+  """
+  def member_status(conn, %{"id" => conversation_id, "user_id" => user_id}) do
+    is_member = Conversations.user_is_member?(conversation_id, user_id)
+
+    json(conn, %{
+      conversation_id: conversation_id,
+      user_id: user_id,
+      is_member: is_member
+    })
+  end
 end
