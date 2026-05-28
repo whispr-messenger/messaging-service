@@ -722,7 +722,10 @@ defmodule WhisprMessagingWeb.MessageController do
             user_id: r.recipient_user_id,
             device_id: r.recipient_device_id,
             nonce: r.nonce,
-            box: r.box
+            box: r.box,
+            # The resharer's public key — the client opens a reshare packet
+            # with this, NOT the envelope's original sender key.
+            identity_key: r.resharer_identity_key
           }
         end)
 

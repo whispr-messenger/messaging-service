@@ -1168,12 +1168,14 @@ defmodule WhisprMessaging.Messages do
           nonce: a["nonce"] || a[:nonce],
           box: a["box"] || a[:box],
           resharer_device_id: resharer_device_id,
+          resharer_identity_key: a["resharer_identity_key"] || a[:resharer_identity_key],
           inserted_at: now
         }
       end)
       |> Enum.reject(fn r ->
         is_nil(r.message_id) or is_nil(r.recipient_user_id) or
-          is_nil(r.recipient_device_id) or is_nil(r.nonce) or is_nil(r.box)
+          is_nil(r.recipient_device_id) or is_nil(r.nonce) or is_nil(r.box) or
+          is_nil(r.resharer_identity_key)
       end)
 
     case rows do
@@ -1213,7 +1215,8 @@ defmodule WhisprMessaging.Messages do
             recipient_user_id: r.recipient_user_id,
             recipient_device_id: r.recipient_device_id,
             nonce: r.nonce,
-            box: r.box
+            box: r.box,
+            resharer_identity_key: r.resharer_identity_key
           }
         )
         |> Repo.all()
