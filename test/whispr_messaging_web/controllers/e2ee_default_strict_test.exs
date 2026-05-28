@@ -33,7 +33,8 @@ defmodule WhisprMessagingWeb.E2eeDefaultStrictTest do
         e2ee_enabled: false
       })
 
-    # Conv groupe sans e2ee_enabled explicite — doit defaulter a true
+    # Conv groupe sans e2ee_enabled explicite — defaulte a false (demo 2026-05-27)
+    # L user peut opt-in via PATCH /e2ee avec enable=true
     {:ok, group_conv_e2ee} =
       Conversations.create_conversation(%{
         type: "group",
@@ -78,11 +79,10 @@ defmodule WhisprMessagingWeb.E2eeDefaultStrictTest do
       assert reloaded.e2ee_enabled == true
     end
 
-    test "une conv groupe sans e2ee_enabled est creee avec e2ee_enabled=true", %{
-      group_conv_e2ee: conv
-    } do
+    test "une conv groupe sans e2ee_enabled est creee avec e2ee_enabled=false (decision demo 2026-05-27)",
+         %{group_conv_e2ee: conv} do
       reloaded = Repo.get!(Conversation, conv.id)
-      assert reloaded.e2ee_enabled == true
+      assert reloaded.e2ee_enabled == false
     end
 
     test "une conv creee avec e2ee_enabled=false reste a false (backcompat anciennes convs)", %{

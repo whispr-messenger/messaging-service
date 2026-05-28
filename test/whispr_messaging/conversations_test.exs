@@ -18,6 +18,49 @@ defmodule WhisprMessaging.ConversationsTest do
       assert conversation.type == "group"
       assert conversation.metadata["name"] == "Test Group"
     end
+
+    # e2ee default par type (decision demo 2026-05-27)
+    test "conv directe sans e2ee_enabled explicite -> e2ee_enabled true" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{type: "direct", metadata: %{}, is_active: true})
+
+      assert conv.e2ee_enabled == true
+    end
+
+    test "conv groupe sans e2ee_enabled explicite -> e2ee_enabled false" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Demo Group"},
+          is_active: true
+        })
+
+      assert conv.e2ee_enabled == false
+    end
+
+    test "conv groupe avec e2ee_enabled: true explicite -> e2ee_enabled true (override)" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "Encrypted Group"},
+          is_active: true,
+          e2ee_enabled: true
+        })
+
+      assert conv.e2ee_enabled == true
+    end
+
+    test "conv directe avec e2ee_enabled: false explicite -> e2ee_enabled false (override)" do
+      {:ok, conv} =
+        Conversations.create_conversation(%{
+          type: "direct",
+          metadata: %{},
+          is_active: true,
+          e2ee_enabled: false
+        })
+
+      assert conv.e2ee_enabled == false
+    end
   end
 
   describe "add_conversation_member/2" do

@@ -22,15 +22,26 @@ defmodule WhisprMessaging.Conversations do
   # Conversation CRUD operations
 
   @doc """
-  Creates a new conversation. E2EE active par defaut si non specifie.
+  Creates a new conversation.
+
+  Default e2ee_enabled selon le type si non fourni explicitement :
+  - direct -> true
+  - group  -> false (multi-device Olm Pairwise pas scale, opt-in via bouton cadenas)
   """
   def create_conversation(attrs \\ %{}) do
-    attrs_with_default = Map.put_new(attrs, :e2ee_enabled, true)
+    default_e2ee = e2ee_default_for_type(attrs)
+    attrs_with_default = Map.put_new(attrs, :e2ee_enabled, default_e2ee)
 
     %Conversation{}
     |> Conversation.changeset(attrs_with_default)
     |> Repo.insert()
   end
+
+  # Retourne le default e2ee_enabled selon le type de conversation.
+  # Les atoms et strings sont acceptes car les appelants utilisent les deux.
+  defp e2ee_default_for_type(%{type: "group"}), do: false
+  defp e2ee_default_for_type(%{type: :group}), do: false
+  defp e2ee_default_for_type(_), do: true
 
   @doc """
   Gets a single conversation by id.
