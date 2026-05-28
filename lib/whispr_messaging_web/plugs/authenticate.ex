@@ -147,7 +147,11 @@ defmodule WhisprMessagingWeb.Plugs.Authenticate do
 
   defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
 
-  # Extrait le device_id depuis les claims JWT (claim `did` ou `device_id`).
+  # Extrait le device_id depuis les claims JWT. L'auth-service actuel emet
+  # `deviceId` (camelCase) en preprod selfhost ; les anciens tokens utilisent
+  # `did` ou `device_id`. On accepte les trois pour rester compatible le
+  # temps qu'un seul format soit retenu.
+  defp extract_device_id(%{"deviceId" => did}) when is_binary(did) and did != "", do: did
   defp extract_device_id(%{"did" => did}) when is_binary(did) and did != "", do: did
   defp extract_device_id(%{"device_id" => did}) when is_binary(did) and did != "", do: did
   defp extract_device_id(_), do: nil

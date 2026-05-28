@@ -128,6 +128,12 @@ defmodule WhisprMessagingWeb.Router do
     # Message search — must come before /messages/:id
     get "/messages/search", MessageController, :search
 
+    # E2EE key_packet reshare — literal path before /messages/:id.
+    # Used when the user's other devices publish per-message keys for a
+    # newly-registered device that wasn't a recipient when the messages
+    # were originally encrypted.
+    post "/messages/reshares", ReshareController, :create
+
     get "/messages/:id", MessageController, :show
     put "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete

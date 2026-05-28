@@ -54,6 +54,7 @@ defmodule WhisprMessagingWeb.MessageController do
     before_timestamp = params["before"]
     search_term = params["search"]
     user_id = conn.assigns[:user_id]
+    device_id = conn.assigns[:device_id]
 
     if is_nil(user_id) do
       conn
@@ -72,8 +73,23 @@ defmodule WhisprMessagingWeb.MessageController do
           end
           |> WhisprMessaging.Repo.preload([:delivery_statuses, :reply_to])
 
+        # E2EE re-share fan-in: for the caller device, pull any extra
+        # key_packets that the user's other devices have published so a
+        # freshly-registered device can decrypt historical envelopes.
+        reshares_by_message =
+          case device_id do
+            nil ->
+              %{}
+
+            _ ->
+              messages
+              |> Enum.map(& &1.id)
+              |> Messages.list_reshares_for_device(device_id)
+              |> Enum.group_by(& &1.message_id)
+          end
+
         json(conn, %{
-          data: render_messages(messages),
+          data: render_messages(messages, reshares_by_message),
           meta:
             camelize_keys(%{
               count: length(messages),
@@ -692,8 +708,28 @@ defmodule WhisprMessagingWeb.MessageController do
 
   # Private rendering functions
 
-  defp render_messages(messages) do
-    Enum.map(messages, &render_message/1)
+  defp render_messages(messages, reshares_by_message \\ %{}) do
+    Enum.map(messages, fn m ->
+      base = Serializer.serialize(m)
+      packets = Map.get(reshares_by_message, m.id, [])
+
+      # Always include the key so the client doesn't have to deal with a
+      # camelKey-vs-snake_key fallback — an empty array is the natural
+      # neutral value.
+      reshare =
+        Enum.map(packets, fn r ->
+          %{
+            user_id: r.recipient_user_id,
+            device_id: r.recipient_device_id,
+            nonce: r.nonce,
+            box: r.box
+          }
+        end)
+
+      base
+      |> Map.put(:reshare_key_packets, reshare)
+      |> Map.put("reshare_key_packets", reshare)
+    end)
   end
 
   defp render_message(message) do

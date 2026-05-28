@@ -19,6 +19,7 @@ defmodule WhisprMessaging.Messages do
     MessageAttachment,
     MessageDraft,
     MessageReaction,
+    MessageReshare,
     PinnedMessage,
     ScheduledMessage,
     SignatureVerifier,
@@ -1131,5 +1132,88 @@ defmodule WhisprMessaging.Messages do
   def list_pinned_messages(conversation_id) do
     PinnedMessage.by_conversation_query(conversation_id)
     |> Repo.all()
+  end
+
+  # ──────────────────────────────────────────────────────────────────────
+  # E2EE key-packet re-share
+  #
+  # When a new device of an existing user joins the network, every prior
+  # message lacks a key_packet for it. The user's other (already trusted)
+  # devices fix this by locally decrypting each message's per-message key,
+  # re-encrypting it with the new device's identity_key, and POSTing the
+  # opaque packet here. The server only stores the packets; it never sees
+  # plaintext message content nor the per-message key.
+  # ──────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Bulk-upsert reshare packets produced by `resharer_device_id`.
+
+  Each entry in `attrs_list` must include `message_id`,
+  `recipient_user_id`, `recipient_device_id`, `nonce`, `box`. The
+  `resharer_device_id` is taken from the authenticated caller and copied
+  in here so the caller can't spoof it. `on_conflict: :nothing` makes the
+  endpoint idempotent — a re-share script can run repeatedly without
+  blowing up on the unique (message_id, recipient_device_id) constraint.
+  """
+  def insert_reshares(resharer_device_id, attrs_list) when is_list(attrs_list) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    rows =
+      attrs_list
+      |> Enum.map(fn a ->
+        %{
+          message_id: a["message_id"] || a[:message_id],
+          recipient_user_id: a["recipient_user_id"] || a[:recipient_user_id],
+          recipient_device_id: a["recipient_device_id"] || a[:recipient_device_id],
+          nonce: a["nonce"] || a[:nonce],
+          box: a["box"] || a[:box],
+          resharer_device_id: resharer_device_id,
+          inserted_at: now
+        }
+      end)
+      |> Enum.reject(fn r ->
+        is_nil(r.message_id) or is_nil(r.recipient_user_id) or
+          is_nil(r.recipient_device_id) or is_nil(r.nonce) or is_nil(r.box)
+      end)
+
+    case rows do
+      [] ->
+        {:ok, 0}
+
+      _ ->
+        {count, _} =
+          Repo.insert_all(MessageReshare, rows,
+            on_conflict: :nothing,
+            conflict_target: [:message_id, :recipient_device_id]
+          )
+
+        {:ok, count}
+    end
+  end
+
+  @doc """
+  Returns the reshare packets addressed to `device_id` for the given
+  message ids. Used by the read path to splice an extra
+  `reshare_key_packets` list into the envelope rendered for the
+  recipient device.
+  """
+  def list_reshares_for_device(device_id, message_ids) when is_list(message_ids) do
+    case message_ids do
+      [] ->
+        []
+
+      _ ->
+        from(r in MessageReshare,
+          where: r.recipient_device_id == ^device_id and r.message_id in ^message_ids,
+          select: %{
+            message_id: r.message_id,
+            recipient_user_id: r.recipient_user_id,
+            recipient_device_id: r.recipient_device_id,
+            nonce: r.nonce,
+            box: r.box
+          }
+        )
+        |> Repo.all()
+    end
   end
 end
