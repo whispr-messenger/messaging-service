@@ -182,9 +182,11 @@ defmodule WhisprMessaging.Conversations.Conversation do
   Query to get conversation with members preloaded.
   """
   def with_members_query(conversation_id) do
+    active_members = from(m in ConversationMember, where: m.is_active == true)
+
     from c in __MODULE__,
       where: c.id == ^conversation_id,
-      preload: [:members]
+      preload: [members: ^active_members]
   end
 
   @doc """

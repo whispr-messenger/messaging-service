@@ -80,6 +80,23 @@ defmodule WhisprMessaging.Conversations.ConversationMember do
   end
 
   @doc """
+  Changeset for re-activating a previously-removed member (re-invite).
+  A prior membership row may still exist with `is_active: false`; the
+  `(conversation_id, user_id)` unique index forbids inserting a second
+  row, so re-invites reactivate the existing one and refresh its
+  `joined_at` / settings instead.
+  """
+  def reactivate_changeset(member, settings) do
+    member
+    |> cast(%{is_active: true, joined_at: DateTime.utc_now(), settings: settings}, [
+      :is_active,
+      :joined_at,
+      :settings
+    ])
+    |> validate_settings()
+  end
+
+  @doc """
   Query to find active members of a conversation.
   """
   def active_members_query(conversation_id) do

@@ -240,8 +240,23 @@ defmodule WhisprMessaging.Conversations do
   def add_conversation_member(conversation_id, user_id, settings \\ nil) do
     member_settings = settings || ConversationMember.default_settings()
 
-    ConversationMember.create_member(conversation_id, user_id, member_settings)
-    |> Repo.insert()
+    case get_conversation_member(conversation_id, user_id) do
+      %ConversationMember{is_active: true} = existing ->
+        # Already an active member — nothing to do, return idempotently.
+        {:ok, existing}
+
+      %ConversationMember{} = existing ->
+        # Re-invite: a prior membership row exists but was deactivated.
+        # Reactivating avoids violating the (conversation_id, user_id)
+        # unique index that a fresh insert would hit.
+        existing
+        |> ConversationMember.reactivate_changeset(member_settings)
+        |> Repo.update()
+
+      nil ->
+        ConversationMember.create_member(conversation_id, user_id, member_settings)
+        |> Repo.insert()
+    end
   end
 
   @doc """
