@@ -1196,8 +1196,11 @@ defmodule WhisprMessaging.Messages do
   message ids. Used by the read path to splice an extra
   `reshare_key_packets` list into the envelope rendered for the
   recipient device.
+
+  Argument order is `(message_ids, device_id)` so it composes with the
+  natural pipe coming out of `messages |> Enum.map(& &1.id)`.
   """
-  def list_reshares_for_device(device_id, message_ids) when is_list(message_ids) do
+  def list_reshares_for_device(message_ids, device_id) when is_list(message_ids) do
     case message_ids do
       [] ->
         []
