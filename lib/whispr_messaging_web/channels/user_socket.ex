@@ -210,9 +210,16 @@ defmodule WhisprMessagingWeb.UserSocket do
   defp extract_sub(%{"sub" => sub}) when is_binary(sub) and sub != "", do: {:ok, sub}
   defp extract_sub(_), do: {:error, "missing or invalid sub claim"}
 
-  # Extrait le device_id depuis les claims JWT (claim `did` ou `device_id`).
+  # Extrait le device_id depuis les claims JWT. L'auth-service actuel emet
+  # `deviceId` (camelCase) — notamment dans le ws-token court (/tokens/ws-token,
+  # payload `{sub, deviceId, ...}`) ; les anciens tokens utilisent `did` ou
+  # `device_id`. On accepte les trois, comme le plug HTTP Authenticate, sinon
+  # `socket.assigns.device_id` reste nil et tout ciblage par appareil casse.
   # Nil si absent : les tokens sans claim device tombent en TOFU par user_id seul.
-  defp extract_device_id(%{"did" => did}) when is_binary(did) and did != "", do: did
-  defp extract_device_id(%{"device_id" => did}) when is_binary(did) and did != "", do: did
-  defp extract_device_id(_), do: nil
+  # Public uniquement pour le unit test (comme valid_aud?/1).
+  @doc false
+  def extract_device_id(%{"deviceId" => did}) when is_binary(did) and did != "", do: did
+  def extract_device_id(%{"did" => did}) when is_binary(did) and did != "", do: did
+  def extract_device_id(%{"device_id" => did}) when is_binary(did) and did != "", do: did
+  def extract_device_id(_), do: nil
 end

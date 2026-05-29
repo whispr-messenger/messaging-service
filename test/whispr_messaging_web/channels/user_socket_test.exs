@@ -138,6 +138,25 @@ defmodule WhisprMessagingWeb.UserSocketTest do
     end
   end
 
+  describe "extract_device_id/1" do
+    # Le ws-token emis par auth-service (/tokens/ws-token) porte le device sous
+    # la clef `deviceId` (camelCase). Si on ne l'accepte pas, socket.assigns.device_id
+    # reste nil et tout ciblage par appareil (ex: device_revoked) casse silencieusement.
+    test "accepts the camelCase deviceId claim emitted by the ws-token" do
+      assert UserSocket.extract_device_id(%{"deviceId" => "dev-1"}) == "dev-1"
+    end
+
+    test "still accepts the legacy did and device_id claims" do
+      assert UserSocket.extract_device_id(%{"did" => "dev-2"}) == "dev-2"
+      assert UserSocket.extract_device_id(%{"device_id" => "dev-3"}) == "dev-3"
+    end
+
+    test "returns nil when no device claim is present or it is blank" do
+      assert UserSocket.extract_device_id(%{"sub" => "user-1"}) == nil
+      assert UserSocket.extract_device_id(%{"deviceId" => ""}) == nil
+    end
+  end
+
   describe "valid_aud?/1 (WHISPR-1214)" do
     test "accepts nil — current access tokens carry no aud claim" do
       assert UserSocket.valid_aud?(nil)

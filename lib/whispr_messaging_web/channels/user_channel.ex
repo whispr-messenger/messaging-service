@@ -14,6 +14,12 @@ defmodule WhisprMessagingWeb.UserChannel do
 
   require Logger
 
+  # On intercepte `device_revoked` pour ne fermer que la socket de l'appareil
+  # cible. Le broadcast part vers `user:<id>` (tous les appareils du user), mais
+  # seule la connexion dont `assigns.device_id` correspond se ferme — les autres
+  # appareils restent connectes. Cf DeviceRevokedStreamConsumer.
+  intercept ["device_revoked"]
+
   @impl true
   def join("user:" <> user_id, _payload, socket) do
     # Verify user can only join their own channel
@@ -23,6 +29,21 @@ defmodule WhisprMessagingWeb.UserChannel do
       {:ok, %{user_id: user_id}, socket}
     else
       {:error, %{reason: "unauthorized"}}
+    end
+  end
+
+  # Appareil revoque depuis les reglages : on pousse l'event au client cible
+  # puis on coupe sa socket. Les autres appareils du meme user ignorent le
+  # broadcast (device_id different).
+  @impl true
+  def handle_out("device_revoked", payload, socket) do
+    target_device_id = Map.get(payload, :device_id) || Map.get(payload, "device_id")
+
+    if target_device_id && target_device_id == socket.assigns[:device_id] do
+      push(socket, "device_revoked", %{})
+      {:stop, :shutdown, socket}
+    else
+      {:noreply, socket}
     end
   end
 

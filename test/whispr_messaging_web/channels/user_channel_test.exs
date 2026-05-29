@@ -29,12 +29,14 @@ defmodule WhisprMessagingWeb.UserChannelTest do
     {:ok, _} = Conversations.add_conversation_member(conversation.id, user_id)
     {:ok, _} = Conversations.add_conversation_member(conversation.id, other_id)
 
-    socket = socket(UserSocket, "user_socket:#{user_id}", %{user_id: user_id})
+    device_id = "device-#{Ecto.UUID.generate()}"
+    socket = socket(UserSocket, "user_socket:#{user_id}", %{user_id: user_id, device_id: device_id})
 
     %{
       socket: socket,
       user_id: user_id,
       other_id: other_id,
+      device_id: device_id,
       conversation: conversation
     }
   end
@@ -50,6 +52,32 @@ defmodule WhisprMessagingWeb.UserChannelTest do
     test "rejects joining another user's channel", ctx do
       assert {:error, %{reason: "unauthorized"}} =
                subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.other_id}")
+    end
+  end
+
+  describe "device_revoked" do
+    test "pushes the event and closes the socket when the device matches", ctx do
+      {:ok, _, _socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "user:#{ctx.user_id}",
+        "device_revoked",
+        %{device_id: ctx.device_id}
+      )
+
+      assert_push "device_revoked", %{}
+    end
+
+    test "ignores the broadcast when the device_id targets another device", ctx do
+      {:ok, _, _socket} = subscribe_and_join(ctx.socket, UserChannel, "user:#{ctx.user_id}")
+
+      WhisprMessagingWeb.Endpoint.broadcast(
+        "user:#{ctx.user_id}",
+        "device_revoked",
+        %{device_id: "some-other-device"}
+      )
+
+      refute_push "device_revoked", %{}
     end
   end
 

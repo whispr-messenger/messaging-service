@@ -73,6 +73,9 @@ defmodule WhisprMessaging.Application do
       # Stream consumer user.registered — projection locale des utilisateurs (WHISPR-951)
       WhisprMessaging.Workers.UserRegisteredStreamConsumer,
 
+      # Stream consumer device.revoked — ferme la socket de l'appareil revoque
+      WhisprMessaging.Workers.DeviceRevokedStreamConsumer,
+
       # Phoenix Endpoint
       WhisprMessagingWeb.Endpoint
     ]
