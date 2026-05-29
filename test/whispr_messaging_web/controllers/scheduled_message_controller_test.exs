@@ -148,6 +148,50 @@ defmodule WhisprMessagingWeb.ScheduledMessageControllerTest do
       assert body["data"] == []
       assert body["meta"]["count"] == 0
     end
+
+    test "filters by conversation_id when the query param is present", ctx do
+      {:ok, other_conversation} =
+        Conversations.create_conversation(%{
+          type: "group",
+          metadata: %{"name" => "other conv"},
+          is_active: true,
+          e2ee_enabled: false
+        })
+
+      {:ok, _} = Conversations.add_conversation_member(other_conversation.id, ctx.user_id)
+
+      {:ok, _} =
+        Messages.schedule_message(%{
+          conversation_id: ctx.conversation.id,
+          sender_id: ctx.user_id,
+          content: "in conv 1",
+          message_type: "text",
+          client_random: System.unique_integer([:positive]),
+          scheduled_at: DateTime.utc_now() |> DateTime.add(3600, :second)
+        })
+
+      {:ok, _} =
+        Messages.schedule_message(%{
+          conversation_id: other_conversation.id,
+          sender_id: ctx.user_id,
+          content: "in conv 2",
+          message_type: "text",
+          client_random: System.unique_integer([:positive]),
+          scheduled_at: DateTime.utc_now() |> DateTime.add(3600, :second)
+        })
+
+      body =
+        build_conn()
+        |> authenticated_conn(ctx.user_id)
+        |> json_conn()
+        |> get(~p"/messaging/api/v1/messages/scheduled?conversation_id=#{ctx.conversation.id}")
+        |> json_response(200)
+
+      assert body["meta"]["count"] == 1
+      assert [msg] = body["data"]
+      assert msg["conversationId"] == ctx.conversation.id
+      assert msg["content"] == "in conv 1"
+    end
   end
 
   describe "DELETE /messaging/api/v1/messages/scheduled/:id" do

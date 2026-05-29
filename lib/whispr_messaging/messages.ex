@@ -1027,10 +1027,18 @@ defmodule WhisprMessaging.Messages do
   end
 
   @doc """
-  Lists pending scheduled messages for a sender.
+  Lists pending scheduled messages for a sender, optionally scoped to a
+  conversation when `conversation_id` is provided.
   """
-  def list_scheduled_messages(sender_id) do
+  def list_scheduled_messages(sender_id, conversation_id \\ nil)
+
+  def list_scheduled_messages(sender_id, nil) do
     ScheduledMessage.pending_by_sender_query(sender_id)
+    |> Repo.all()
+  end
+
+  def list_scheduled_messages(sender_id, conversation_id) do
+    ScheduledMessage.pending_by_sender_and_conversation_query(sender_id, conversation_id)
     |> Repo.all()
   end
 

@@ -95,15 +95,16 @@ defmodule WhisprMessagingWeb.ScheduledMessageController do
   Lists pending scheduled messages for the current user.
   GET /api/v1/messages/scheduled
   """
-  def index(conn, _params) do
+  def index(conn, params) do
     user_id = conn.assigns[:user_id]
+    conversation_id = params["conversation_id"]
 
     if is_nil(user_id) do
       conn
       |> put_status(:unauthorized)
       |> json(%{error: "Unauthorized"})
     else
-      messages = Messages.list_scheduled_messages(user_id)
+      messages = Messages.list_scheduled_messages(user_id, conversation_id)
 
       json(conn, %{
         data: Enum.map(messages, &render_scheduled_message/1),

@@ -115,6 +115,14 @@ defmodule WhisprMessaging.Messages.ScheduledMessage do
       order_by: [asc: sm.scheduled_at]
   end
 
+  @doc """
+  Query for pending scheduled messages for a user, scoped to a conversation.
+  """
+  def pending_by_sender_and_conversation_query(sender_id, conversation_id) do
+    from sm in pending_by_sender_query(sender_id),
+      where: sm.conversation_id == ^conversation_id
+  end
+
   defp validate_scheduled_at_future(%Ecto.Changeset{} = changeset) do
     case get_field(changeset, :scheduled_at) do
       nil ->
